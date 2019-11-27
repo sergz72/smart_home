@@ -1,0 +1,18 @@
+{
+  "port": 59999,
+  "numLines": 2,
+  "width": 5,
+  "fontSize": 8,
+  "fontWidth": 6,
+  "keyFileName": "key.dat",
+  "smartHomeAddress": "192.168.1.1:60001",
+  "smartHomeCommand": "/sensor_data?data_type=env",
+  "max44009": { "deviceName": "/dev/i2c-1", "address": 74, "min": 6, "max": 8 },
+  "holdTime": 2,
+  "devices": [
+    { "name": "clock", "priority": 0, "lineStart": 0, "numLines": 1 },
+    { "name": "env", "priority": 0, "lineStart": 1, "numLines": 1 },
+    { "name": "LCMeter", "priority": 1, "lineStart": 1, "numLines": 1 },
+    { "name": "Oven", "priority": 1, "lineStart": 0, "numLines": 2 }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "RFDevices": [
+    { "ClassName": "CC1101", "DeviceName": "CC1101", "ConfigFileName": "cc1101Config.json" }
+  ],
+  "PollInterval": 300,
+  "RetryCount": 4,
+  "keyFileName": "key.dat",
+  "smartHomeKeyFileName": "smartHomeKey.dat",
+  "smartHomeAddress": "192.168.1.1:60001",
+  "smartHomeCommand": "/sensor_data?data_type=env",
+  "sensorDataURL": "http://192.168.1.1:60000/sensor_data/",
+  "Devices": [
+    { "Name": "TempHumiSensorDascha",
+      "Class": "TempHumiSensor",
+      "RFDeviceName": "CC1101",
+      "TXPower": -20,
+      "Address": [1],
+      "Parameters" : { "SensorDataKeyN": "Северная сторона дома", "SensorDataKeyW": "Западная сторона дома" },
+      "EnvSensorName": "dascha_int",
+      "EleSensorName": "dascha_ele",
+      "Active": true
+    }
+  ]
+}
+    

@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">SmartHome</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_filters">Filters</string>
+    <string name="title_activity_settings">Settings</string>
+
+    <string name="env_sensors">Environmental sensors</string>
+    <string name="ele_sensors">Electrical sensors</string>
+    <string name="temp">Temperature</string>
+    <string name="humi">Humidity</string>
+    <string name="pres">Pressure</string>
+    <string name="time">Time</string>
+    <string name="home">Home page</string>
+    <string name="volt">Voltage</string>
+    <string name="vbat">Battery voltage</string>
+    <string name="vcc">Power supply voltage</string>
+
+    <!-- Strings related to Settings -->
+
+    <string name="pref_title_server_name">Server name</string>
+
+</resources>

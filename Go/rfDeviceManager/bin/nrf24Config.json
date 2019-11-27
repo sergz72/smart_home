@@ -1,0 +1,10 @@
+{
+  "DeviceName": "/dev/spidev0.0",
+  "CEGpioName": "GPIO22",
+  "IRQGpioName": "GPIO25",
+  "TwoCRCBytes": true,
+  "RXAddress": [0, 0, 0],
+  "Channel": 0,
+  "DataRate": "NRF24DataRate250K", 
+  "TXPower": -18
+}

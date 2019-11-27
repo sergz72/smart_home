@@ -1,0 +1,22 @@
+{
+  "port": 59998,
+  "logLevel": "debug",
+  "logFileName": "/var/log/kern.log",
+//  "displayUrl": "http://localhost:59999/show",
+  "devices": [
+    { "name": "LCMeter", "vid": "0403", "pid": "6015", "serial": "DAXET9WC",
+      "speed": 9600, "parameters": { "c": 17000 } },
+    { "name": "Oven", "vid": "0403", "pid": "6001", "serial": "A900azbd",
+      "speed": 115200, "parameters": { "u1": 3.347, "r1": 906, "r0": 942, "a": 3.81E-3, "b": -6.02E-7 } },
+    { "name": "DrillIronC", "vid": "0403", "pid": "6015", "serial": "DA00GR6H",
+      "speed": 115200, "parameters": {
+      "ironProfiles": [
+        { "title": "Паяльник Pb Free", "heaterID":  1, "adder": -1300, "multiplier": 10, "dualTemperatureEnable": true },
+        { "title": "Паяльник", "heaterID":  2, "adder": 0, "multiplier": 4.17, "dualTemperatureEnable": false },
+        { "title": "Термопинцет", "heaterID":  2, "adder": 0, "multiplier": 4.17, "dualTemperatureEnable": false },
+        { "title": "Оловоотсос", "heaterID":  3, "adder": 308, "multiplier": 3.45, "dualTemperatureEnable": false }
+      ]}
+    },
+    { "name": "Generator_ad9833", "vid": "0403", "pid": "6001", "serial": "A900at3R", "speed": 230400 }
+  ]
+}
