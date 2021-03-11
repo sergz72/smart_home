@@ -2,20 +2,20 @@ package smart_home.smarthome
 
 import android.content.Context
 import android.os.Bundle
-import android.support.v7.widget.LinearLayoutManager
-import android.support.v7.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 
 import smart_home.smarthome.entities.SensorData
 
-class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, "data_type=all") {
+class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, null, "all") {
     private var mSensorsView: RecyclerView? = null
     private var mSensorsViewAdapter: SensorsViewAdapter? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
-                              savedInstanceState: Bundle?): View? {
+                              savedInstanceState: Bundle?): View {
         val rootView = super.onCreateView(inflater, container, savedInstanceState)
         mSensorsView = rootView!!.findViewById(R.id.sensors_view)
         mSensorsView!!.hasFixedSize()
@@ -26,7 +26,7 @@ class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, "data_type
         return rootView
     }
 
-    override fun onAttach(context: Context?) {
+    override fun onAttach(context: Context) {
         mSensorsViewAdapter = SensorsViewAdapter(this.resources)
         super.onAttach(context)
     }

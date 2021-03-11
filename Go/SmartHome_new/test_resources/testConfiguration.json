@@ -1,0 +1,10 @@
+{
+    "DataFolder": "testFolder",
+    "KeyFileName": "key.dat",
+    "PortNumber": 59999,
+    "CompressionType": "bz",
+    "BackupInterval": 60,
+    "AggregationHour": 6,
+    "RawDataDays": 30,
+    "FetchConfiguration": { "KeyFileName": "fetchKey.dat", "Interval": 5, "Timeout": 10, "Retries": 3, "Addresses": ["192.168.1.14:60001", "192.168.1.18:60001", "192.168.1.19:60001"] }
+}

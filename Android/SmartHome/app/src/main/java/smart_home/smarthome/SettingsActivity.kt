@@ -3,30 +3,37 @@ package smart_home.smarthome
 import android.app.Activity
 import android.content.SharedPreferences
 import android.os.Bundle
-import android.preference.PreferenceActivity
-import android.preference.PreferenceFragment
+import android.view.MenuItem
+import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.PreferenceFragmentCompat
 
-class SettingsActivity : PreferenceActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
+class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
     private var mResult: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val fragment = PreferencesFragment()
-        fragment.setListener(this)
-        fragmentManager.beginTransaction().replace(android.R.id.content, fragment).commit()
+        setContentView(R.layout.settings_activity)
+        if (savedInstanceState == null) {
+            val fragment = SettingsFragment()
+            fragment.setListener(this)
+            supportFragmentManager
+                .beginTransaction()
+                .replace(R.id.settings, fragment)
+                .commit()
+        }
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
     }
 
-    class PreferencesFragment : PreferenceFragment() {
+    class SettingsFragment : PreferenceFragmentCompat() {
         private var mListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
         fun setListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
             mListener = listener
         }
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             preferenceManager.sharedPreferencesName = MainActivity.PREFS_NAME
-            addPreferencesFromResource(R.xml.pref_general)
+            setPreferencesFromResource(R.xml.pref_general, rootKey)
         }
 
         override fun onResume() {
@@ -54,5 +61,15 @@ class SettingsActivity : PreferenceActivity(), SharedPreferences.OnSharedPrefere
     override fun onBackPressed() {
         setResult(mResult)
         finish()
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            android.R.id.home -> {
+                onBackPressed()
+                return true
+            }
+        }
+        return super.onOptionsItemSelected(item)
     }
 }

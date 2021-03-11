@@ -1,0 +1,44 @@
+[
+  {
+    "Id": 1,
+    "Name": "cabinet_int",
+    "DataType": "env",
+    "LocationId": 1
+  },
+  {
+    "Id": 2,
+    "Name": "cabinet_ext",
+    "DataType": "env",
+    "LocationId": 2
+  },
+  {
+    "Id": 3,
+    "Name": "garderob_int",
+    "DataType": "env",
+    "LocationId": 3
+  },
+  {
+    "Id": 4,
+    "Name": "garderob_ext",
+    "DataType": "env",
+    "LocationId": 4
+  },
+  {
+    "Id": 5,
+    "Name": "garderob_ele",
+    "DataType": "ele",
+    "LocationId": 3
+  },
+  {
+    "Id": 6,
+    "Name": "dascha_int",
+    "DataType": "env",
+    "LocationId": 5
+  },
+  {
+    "Id": 7,
+    "Name": "dascha_ele",
+    "DataType": "ele",
+    "LocationId": 5
+  }
+]

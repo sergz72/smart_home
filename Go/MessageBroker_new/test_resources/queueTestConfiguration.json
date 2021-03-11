@@ -1,0 +1,6 @@
+{
+    "KeyFileName": "key2.dat",
+    "InPort": 60001,
+    "OutPort": 60002,
+    "QueueParameters": { "Size": 5, "ExpirationTime": "2m", "MaxResponseSize": 3 }
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "Id": 2,
+    "Name": "Северная сторона дома",
+    "LocationType": "ext"
+  },
+  {
+    "Id": 1,
+    "Name": "Кабинет",
+    "LocationType": "fl2"
+  },
+  {
+    "Id": 3,
+    "Name": "Гардероб",
+    "LocationType": "fl2"
+  },
+  {
+    "Id": 4,
+    "Name": "Западная сторона дома",
+    "LocationType": "ext"
+  },
+  {
+    "Id": 5,
+    "Name": "Комната Даши",
+    "LocationType": "fl2"
+  },
+  {
+    "Id": 6,
+    "Name": "Спальня",
+    "LocationType": "fl2"
+  },
+  {
+    "Id": 7,
+    "Name": "Туалет 2 этаж",
+    "LocationType": "fl2"
+  },
+  {
+    "Id": 8,
+    "Name": "Комната Игоря",
+    "LocationType": "fl1"
+  },
+  {
+    "Id": 9,
+    "Name": "Гостинная",
+    "LocationType": "fl1"
+  },
+  {
+    "Id": 10,
+    "Name": "Кухня",
+    "LocationType": "fl1"
+  },
+  {
+    "Id": 11,
+    "Name": "Коридор",
+    "LocationType": "fl1"
+  },
+  {
+    "Id": 12,
+    "Name": "Туалет 1 этаж",
+    "LocationType": "fl1"
+  }
+]

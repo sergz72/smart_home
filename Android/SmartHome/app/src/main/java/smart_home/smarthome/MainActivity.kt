@@ -7,18 +7,20 @@ import android.gesture.Gesture
 import android.gesture.GestureOverlayView
 import android.graphics.Point
 import android.os.Bundle
-import android.support.design.widget.NavigationView
-import android.support.v4.view.GravityCompat
-import android.support.v4.widget.DrawerLayout
-import android.support.v7.app.ActionBarDrawerToggle
-import android.support.v7.app.AppCompatActivity
-import android.support.v7.widget.Toolbar
-import android.view.*
+import android.view.Menu
+import android.view.MenuItem
+import androidx.appcompat.app.ActionBarDrawerToggle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
+import com.google.android.material.navigation.NavigationView
 
-class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener, GestureOverlayView.OnGesturePerformedListener {
+class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener, IGraphParameters {
     companion object {
         const val PREFS_NAME = "SmartHome"
         private const val SETTINGS = 1
+        private const val FILTERS  = 2
         private const val PAGE_MAX = 2
 
         fun alert(activity: Activity, message: String?) {
@@ -31,26 +33,24 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     }
 
     private var pageId: Int = 0
+    private var filters: FiltersActivity.Data = FiltersActivity.Data()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        val toolbar = findViewById<View>(R.id.toolbar) as Toolbar
+        val toolbar = findViewById<Toolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
 
-        val drawer = findViewById<View>(R.id.drawer_layout) as DrawerLayout
+        val drawer = findViewById<DrawerLayout>(R.id.drawer_layout)
         val toggle = ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close)
         drawer.addDrawerListener(toggle)
         toggle.syncState()
 
-        val navigationView = findViewById<View>(R.id.nav_view) as NavigationView
+        val navigationView = findViewById<NavigationView>(R.id.nav_view)
         navigationView.setNavigationItemSelectedListener(this)
 
-        val gestureView = findViewById<View>(R.id.gestures) as GestureOverlayView
-        gestureView.addOnGesturePerformedListener(this)
-
-        SmartHomeService.setupKey(resources.openRawResource(R.raw.key))
+        SmartHomeService.setupKeyAndContext(resources.openRawResource(R.raw.key), this)
 
         try {
             updateServer()
@@ -68,7 +68,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     }
 
     override fun onBackPressed() {
-        val drawer = findViewById<View>(R.id.drawer_layout) as DrawerLayout
+        val drawer = findViewById<DrawerLayout>(R.id.drawer_layout)
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START)
         } else {
@@ -80,6 +80,13 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.main, menu)
         return true
+    }
+
+    private fun refreshFragment() {
+        val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        if (fragment != null && fragment is ISmartHomeData) {
+            (fragment as ISmartHomeData).refresh()
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -95,10 +102,13 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                 return true
             }
             R.id.action_refresh -> {
-                val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
-                if (fragment != null && fragment is ISmartHomeData) {
-                    (fragment as ISmartHomeData).refresh()
-                }
+                refreshFragment()
+                return true
+            }
+            R.id.action_filters -> {
+                val intent = Intent(this, FiltersActivity::class.java)
+                intent.putExtra("data", filters)
+                startActivityForResult(intent, FILTERS)
                 return true
             }
         }
@@ -116,8 +126,8 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         }
         when (pageId) {
             0 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, HomePageFragment()).commit()
-            1 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EnvSensorsFragment()).commit()
-            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment()).commit()
+            1 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EnvSensorsFragment(this)).commit()
+            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment(this)).commit()
         }
     }
 
@@ -131,42 +141,35 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             R.id.nav_ele -> openPage(2)
         }
 
-        val drawer = findViewById<View>(R.id.drawer_layout) as DrawerLayout
+        val drawer = findViewById<DrawerLayout>(R.id.drawer_layout)
         drawer.closeDrawer(GravityCompat.START)
         return true
     }
 
-    override fun onGesturePerformed(overlay: GestureOverlayView, gesture: Gesture) {
-        val strokes = gesture.strokes
-        if (strokes.size == 1) {
-            val display = windowManager.defaultDisplay
-            val size = Point()
-            display.getSize(size)
-            val width = size.x
-            val height = size.y
-            val gestureWidth = gesture.boundingBox.width()
-            if (gesture.length <= gestureWidth * 1.3 && gestureWidth >= width / 2 && gesture.boundingBox.height() <= height / 10) {
-                val points = strokes[0].points
-                val startX = points[0]
-                val endX = points[points.size - 2]
-                if (startX < endX) {
-                    openPage(pageId - 1)
-                } else {
-                    openPage(pageId + 1)
+    override fun onActivityResult(requestCodeIn: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCodeIn, resultCode, data)
+        var requestCode = requestCodeIn
+        requestCode = requestCode and 0xFFFF
+        if (resultCode == Activity.RESULT_OK) {
+        when (requestCode) {
+            SETTINGS -> {
+                try {
+                    updateServer()
+                } catch (e: Exception) {
+                    alert(this, e.message)
+                }
+            }
+            FILTERS -> {
+                if (data != null) {
+                    filters = data.getParcelableExtra("data")!!
+                    refreshFragment()
                 }
             }
         }
+        }
     }
 
-    override fun onActivityResult(requestCodeIn: Int, resultCode: Int, data: Intent?) {
-        var requestCode = requestCodeIn
-        requestCode = requestCode and 0xFFFF
-        if (requestCode == SETTINGS && resultCode == Activity.RESULT_OK) {
-            try {
-                updateServer()
-            } catch (e: Exception) {
-                alert(this, e.message)
-            }
-        }
+    override fun getData(): FiltersActivity.Data {
+        return filters
     }
 }

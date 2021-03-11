@@ -1,38 +1,34 @@
 package smart_home.smarthome
 
-import android.os.AsyncTask
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import java.io.InputStream
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.UnknownHostException
+import java.net.*
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
-class SmartHomeService<T>: AsyncTask<SmartHomeService.Callback<T>, Void, Unit>() {
+class SmartHomeService<T> {
     companion object {
+        private val executor: Executor = Executors.newSingleThreadExecutor()
         private lateinit var mAddress: InetAddress
         private var mPort: Int = 0
+        private lateinit var context: Context
 
-        fun setupKey(keyStream: InputStream) {
+        fun setupKeyAndContext(keyStream: InputStream, ctx: Context) {
             Aes.setKey(keyStream.readBytes())
+            context = ctx
         }
 
         fun setupServer(serverAddress: String, port: Int) {
-            mAddress = getInetAddressByName(serverAddress)
+            getInetAddressByName(serverAddress)
             mPort = port
         }
 
-        private fun getInetAddressByName(name: String): InetAddress {
-            val task = object : AsyncTask<String, Void, InetAddress?>() {
-
-                override fun doInBackground(vararg params: String): InetAddress? {
-                    try {
-                        return InetAddress.getByName(params[0])
-                    } catch (e: UnknownHostException) {
-                        return null
-                    }
-                }
+        private fun getInetAddressByName(name: String) {
+            executor.execute{
+                mAddress = InetAddress.getByName(name)
             }
-            return task.execute(name).get() ?: throw UnknownHostException()
         }
     }
 
@@ -50,34 +46,60 @@ class SmartHomeService<T>: AsyncTask<SmartHomeService.Callback<T>, Void, Unit>()
         return this
     }
 
-    override fun doInBackground(vararg params: Callback<T>) {
-        if (params.size == 1 && mRequest != null) {
-            val callback = params[0]
-            val socket = DatagramSocket()
-            val bytes = Aes.encode(mRequest!!)
-            val packet = DatagramPacket(bytes, bytes.size, mAddress, mPort)
-            val receiveData = ByteArray(65507)
-            try {
-                socket.send(packet)
-                val inPacket = DatagramPacket(receiveData, receiveData.size)
-                socket.soTimeout = 10000 // 10 seconds
-                socket.receive(inPacket)
-                val body = Aes.decode(inPacket.data, inPacket.length)
-                if (callback.isString()) {
-                    @Suppress("UNCHECKED_CAST")
-                    callback.onResponse(body as T)
-                } else {
-                    if (body.isEmpty() || (body[0] != '{' && body[0] != '[')) {
-                        callback.onFailure(null, body)
-                    } else {
-                        callback.onResponse(callback.deserialize(body))
+    fun doInBackground(callback: Callback<T>) {
+        if (mRequest != null) {
+            executor.execute {
+                val socket = DatagramSocket()
+                val bytes = Aes.encode(mRequest!!)
+                val packet = DatagramPacket(bytes, bytes.size, mAddress, mPort)
+                val receiveData = ByteArray(65507)
+                try {
+                    val inPacket = DatagramPacket(receiveData, receiveData.size)
+                    var exc: SocketTimeoutException? = null
+                    socket.soTimeout = if (isWifiConnected()) 2000 else 7000 // 2 seconds
+                    for (retry in 1..3) {
+                        socket.send(packet)
+                        try {
+                            socket.receive(inPacket)
+                            exc = null
+                        } catch (e: SocketTimeoutException) {
+                            exc = e
+                            continue
+                        }
+                        break
                     }
+                    if (exc == null) {
+                        val body = Aes.decode(inPacket.data, inPacket.length)
+                        if (callback.isString()) {
+                            @Suppress("UNCHECKED_CAST")
+                            callback.onResponse(body as T)
+                        } else {
+                            if (body.isEmpty() || (body[0] != '{' && body[0] != '[')) {
+                                callback.onFailure(null, body)
+                            } else {
+                                callback.onResponse(callback.deserialize(body))
+                            }
+                        }
+                    } else {
+                        callback.onFailure(exc, null)
+                    }
+                } catch (e: Exception) {
+                    callback.onFailure(e, null)
+                } finally {
+                    socket.close()
                 }
-            } catch (e: Exception) {
-                callback.onFailure(e, null)
-            } finally {
-                socket.close()
             }
         }
+    }
+
+    private fun isWifiConnected(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+        if (cm is ConnectivityManager) {
+            val n = cm.activeNetwork ?: return false
+            val cp = cm.getNetworkCapabilities(n)
+            return cp != null && cp.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        }
+
+        return true
     }
 }

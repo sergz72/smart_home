@@ -23,7 +23,18 @@ data class SensorData(@SerializedName("locationName") override val seriesColumnD
     }
 
     override fun getData(dataName: String): Double? {
-        return data[dataName] as Double?
+        if (dataName.startsWith("Max") || dataName.startsWith("Min") || dataName.startsWith("Avg")) {
+            val v = data[dataName.substring(3)]
+            if (v is Map<*,*>) {
+                val vv = v[dataName.substring(0, 3)]
+                if (vv is Double?) {
+                    return vv
+                }
+            }
+            return 0.0
+        }
+        val v = data[dataName]
+        return v as Double?
     }
 
     fun getDataPresentation(resources: Resources): String {

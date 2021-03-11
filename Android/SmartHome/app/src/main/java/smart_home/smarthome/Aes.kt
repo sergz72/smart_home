@@ -1,5 +1,6 @@
 package smart_home.smarthome
 
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -9,9 +10,12 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-
 object Aes {
-    lateinit var mKey: SecretKeySpec
+    enum class CompressionTypes {
+        GZIP, BZIP
+    }
+    private val compressionType = CompressionTypes.BZIP
+    private lateinit var mKey: SecretKeySpec
 
     fun setKey(key: ByteArray) {
         mKey = SecretKeySpec(key, "AES")
@@ -35,14 +39,27 @@ object Aes {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         val parameterSpec = GCMParameterSpec(128, iv)
         cipher.init(Cipher.DECRYPT_MODE, mKey, parameterSpec)
-        return unzip(cipher.doFinal(encoded))
+        return uncompress(cipher.doFinal(encoded))
+    }
+
+    private fun uncompress(data: ByteArray): String {
+        return when (compressionType) {
+            CompressionTypes.GZIP -> unzip(data)
+            CompressionTypes.BZIP -> unbzip(data)
+        }
+    }
+
+    private fun unbzip(decoded: ByteArray): String {
+        val inStream = BZip2CompressorInputStream(ByteArrayInputStream(decoded))
+        inStream.use {
+            return inStream.readBytes().toString(Charsets.UTF_8)
+        }
     }
 
     private fun unzip(decoded: ByteArray): String {
         val inStream = GZIPInputStream(ByteArrayInputStream(decoded))
         inStream.use {
-            val string = inStream.readBytes().toString(Charsets.UTF_8)
-            return string
+            return inStream.readBytes().toString(Charsets.UTF_8)
         }
     }
 }

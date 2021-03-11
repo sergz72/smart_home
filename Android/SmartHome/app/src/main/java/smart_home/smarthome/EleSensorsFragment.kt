@@ -4,9 +4,11 @@ import android.view.View
 import com.androidplot.xy.XYPlot
 import smart_home.smarthome.entities.SensorData
 
-class EleSensorsFragment : SensorsFragment(R.layout.fragment_ele_sensors, "data_type=ele&period=24") {
+class EleSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fragment_ele_sensors, params, "ele") {
     override fun showResults(results: List<SensorData>) {
-        val plot = view!!.findViewById<View>(R.id.plot_voltage) as XYPlot
-        Graph.buildGraph(plot, results, "v", true)
+        if (params!!.getData().mUsePeriod) {
+            val plot = requireView().findViewById<View>(R.id.plot_voltage) as XYPlot
+            Graph.buildGraph(plot, results, "v", true, false, 2, 2)
+        }
     }
 }

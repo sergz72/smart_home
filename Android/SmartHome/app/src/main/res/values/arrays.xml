@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="filterTypeNames">
+        <item>Period</item>
+        <item>Dates</item>
+    </string-array>
+    <string-array name="filterTypeValues">
+        <item>Period</item>
+        <item>Dates</item>
+    </string-array>
+    <string-array name="periodNames">
+        <item>One day</item>
+        <item>Two days</item>
+        <item>Week</item>
+        <item>Two weeks</item>
+        <item>Month</item>
+    </string-array>
+    <integer-array name="periodValues">
+        <item>24</item>
+        <item>48</item>
+        <item>168</item>
+        <item>336</item>
+        <item>720</item>
+    </integer-array>
+</resources>

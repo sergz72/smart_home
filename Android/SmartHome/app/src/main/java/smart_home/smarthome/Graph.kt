@@ -1,41 +1,51 @@
 package smart_home.smarthome
 
 import android.graphics.Color
-
 import com.androidplot.ui.DynamicTableModel
 import com.androidplot.ui.TableOrder
-import com.androidplot.xy.BoundaryMode
-import com.androidplot.xy.LineAndPointFormatter
-import com.androidplot.xy.OrderedXYSeries
-import com.androidplot.xy.StepMode
-import com.androidplot.xy.XYGraphWidget
-import com.androidplot.xy.XYPlot
-import com.androidplot.xy.XYSeries
-
+import com.androidplot.xy.*
+import smart_home.smarthome.entities.SensorData
 import java.text.FieldPosition
 import java.text.Format
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
-
-import smart_home.smarthome.entities.SensorData
+import java.time.Duration
 import java.util.*
+
 
 object Graph {
 
     private val FORMATTERS = arrayOf(LineAndPointFormatter(Color.RED, Color.GREEN, Color.TRANSPARENT, null),
-                                     LineAndPointFormatter(Color.YELLOW, Color.BLUE, Color.TRANSPARENT, null),
-                                     LineAndPointFormatter(Color.CYAN, Color.MAGENTA, Color.TRANSPARENT, null),
-                                     LineAndPointFormatter(Color.BLACK, Color.valueOf(128f, 0f, 128f).toArgb(), Color.TRANSPARENT, null),
-                                     LineAndPointFormatter(Color.GREEN, Color.CYAN, Color.TRANSPARENT, null),
-                                     LineAndPointFormatter(Color.BLUE, Color.YELLOW, Color.TRANSPARENT, null))
+            LineAndPointFormatter(Color.YELLOW, Color.BLUE, Color.TRANSPARENT, null),
+            LineAndPointFormatter(Color.CYAN, Color.MAGENTA, Color.TRANSPARENT, null),
+            LineAndPointFormatter(Color.BLACK, Color.valueOf(128f, 0f, 128f).toArgb(), Color.TRANSPARENT, null),
+            LineAndPointFormatter(Color.GREEN, Color.CYAN, Color.TRANSPARENT, null),
+            LineAndPointFormatter(Color.BLUE, Color.YELLOW, Color.TRANSPARENT, null))
 
-    private val FORMATTER = SimpleDateFormat("HH:mm", Locale.US)
+    private val FORMATTER = SimpleDateFormat("dd.MM HH:mm", Locale.US)
+    private val DAY_FORMATTER = SimpleDateFormat("dd.MM", Locale.US)
+    private val HOUR_FORMATTER = SimpleDateFormat("HH:mm", Locale.US)
 
     private val LABEL_FORMATTER = object : Format() {
         override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
             val time = (obj as Number).toLong()
             val date = Date(time)
-            return toAppendTo.append(FORMATTER.format(date))
+            if (date.hours != 0 || date.minutes != 0) {
+                return toAppendTo.append(FORMATTER.format(date))
+            }
+            return toAppendTo.append(DAY_FORMATTER.format(date))
+        }
+
+        override fun parseObject(source: String, pos: ParsePosition): Any? {
+            return null
+        }
+    }
+
+    private val LABEL_HOUR_FORMATTER = object : Format() {
+        override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
+            val time = (obj as Number).toLong()
+            val date = Date(time)
+            return toAppendTo.append(HOUR_FORMATTER.format(date))
         }
 
         override fun parseObject(source: String, pos: ParsePosition): Any? {
@@ -49,7 +59,7 @@ object Graph {
         }
     }
 
-    private class GraphDataSeries internal constructor(private val mData: List<IGraphData>, private val mDataName: String) : OrderedXYSeries {
+    private class GraphDataSeries constructor(private val mData: List<IGraphData>, private val mDataName: String) : OrderedXYSeries {
 
         override fun size(): Int {
             return mData.size
@@ -74,7 +84,7 @@ object Graph {
 
     private data class SeriesInfo(val mSeries: List<XYSeries>, val mLowerBoundary: Double, val mUpperBoundary: Double)
 
-    private fun convertData(data: List<IGraphData>, dataName: String): List<IGraphData> {
+    private fun convertPrefixData(data: List<IGraphData>, dataName: String): List<IGraphData> {
         val result = ArrayList<IGraphData>()
 
         for (item in data) {
@@ -89,10 +99,41 @@ object Graph {
         return result
     }
 
-    private fun buildSeries(d: List<IGraphData>, dataName: String, isPrefix: Boolean): SeriesInfo {
+    private fun convertSuffixData(data: List<IGraphData>, dataName: String): List<IGraphData> {
+        val result = ArrayList<IGraphData>()
+
+        for (item in data) {
+            for ((key, _) in item.data) {
+                if (key.endsWith(dataName)) {
+                    var location = item.seriesColumnData + ":Max"
+                    var v = item.getData("Max$key")
+                    if (v != null) {
+                        result.add(SensorData.build(location, item.date, dataName, v))
+                    }
+                    location = item.seriesColumnData + ":Min"
+                    v = item.getData("Min$key")
+                    if (v != null) {
+                        result.add(SensorData.build(location, item.date, dataName, v))
+                    }
+                    location = item.seriesColumnData + ":Avg"
+                    v = item.getData("Avg$key")
+                    if (v != null) {
+                        result.add(SensorData.build(location, item.date, dataName, v))
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
+    private fun buildSeries(d: List<IGraphData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean): SeriesInfo {
         var data = d
         if (isPrefix) {
-            data = convertData(data, dataName)
+            data = convertPrefixData(data, dataName)
+        }
+        if (isSuffix) {
+            data = convertSuffixData(data, dataName)
         }
         val series = HashMap<String, MutableList<IGraphData>>()
         var lowerBoundary = java.lang.Double.MAX_VALUE
@@ -128,23 +169,34 @@ object Graph {
         return SeriesInfo(result, lowerBoundary, upperBoundary)
     }
 
-    @JvmOverloads
-    fun buildGraph(plot: XYPlot, data: List<IGraphData>, dataName: String, isPrefix: Boolean = false) {
+    fun buildGraph(plot: XYPlot, data: List<IGraphData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean,
+                   columns: Int, rows: Int) {
         plot.clear()
         if (data.size > 1) {
             val comparator = DateComparator()
             Collections.sort(data, comparator)
-            val seriesInfo = buildSeries(data, dataName, isPrefix)
-            if (!seriesInfo.mSeries.isEmpty()) {
+            val start = data[0].date.toInstant()
+            val end = data[data.size - 1].date.toInstant()
+            val days = Duration.between(start, end).toDays()
+            var multiplier = 1
+            if (days == 2L) {
+                multiplier = 2
+            } else if (days in 3..30L) {
+                multiplier = 12
+            } else if (days > 30L) {
+                multiplier = 24 * days.toInt() / 30
+            }
+            val seriesInfo = buildSeries(data, dataName, isPrefix, isSuffix)
+            if (seriesInfo.mSeries.isNotEmpty()) {
                 var i = 0
                 for (seriesItem in seriesInfo.mSeries) {
                     plot.addSeries(seriesItem, FORMATTERS[i++])
                 }
                 plot.setRangeBoundaries(seriesInfo.mLowerBoundary, seriesInfo.mUpperBoundary, BoundaryMode.FIXED)
                 plot.domainStepMode = StepMode.INCREMENT_BY_VAL
-                plot.domainStepValue = (60 * 60 * 2000).toDouble() // 2 hours
-                plot.graph.getLineLabelStyle(XYGraphWidget.Edge.BOTTOM).format = LABEL_FORMATTER
-                plot.legend.setTableModel(DynamicTableModel(2, 2, TableOrder.ROW_MAJOR))
+                plot.domainStepValue = (60 * 60 * 2000 * multiplier).toDouble()
+                plot.graph.getLineLabelStyle(XYGraphWidget.Edge.BOTTOM).format = if (days < 3L) LABEL_HOUR_FORMATTER else LABEL_FORMATTER
+                plot.legend.setTableModel(DynamicTableModel(columns, rows, TableOrder.ROW_MAJOR))
             }
         }
         plot.redraw()
