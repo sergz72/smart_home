@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Weather App</string>
+    <string name="action_settings">Settings</string>
+    <string name="pref_title_smart_home_server">Smart home server</string>
+    <string name="pref_title_api_server">Weather API server</string>
+    <string name="forecast_icon_description">Forecast</string>
+</resources>

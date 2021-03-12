@@ -1,0 +1,10 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:defaultValue="localhost"
+        android:key="smart_home_server_name"
+        android:summary="Smart home server name"
+        android:singleLine="true"
+        android:title="@string/pref_title_smart_home_server" />
+
+</PreferenceScreen>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="150dp"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/date"
+        android:typeface="monospace"
+        android:textSize="40sp"
+        android:text="00:00"
+        android:textColor="@android:color/holo_green_light"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:id="@+id/temperature"
+        android:typeface="monospace"
+        android:textSize="40sp"
+        android:text="-12.6"
+        android:textColor="@android:color/holo_green_light"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:id="@+id/wind"
+        android:typeface="monospace"
+        android:textSize="20sp"
+        android:text="Wind: 15.3"
+        android:textColor="@android:color/holo_green_light"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:id="@+id/pres"
+        android:typeface="monospace"
+        android:textSize="20sp"
+        android:text="P: ???? hPa"
+        android:textColor="@android:color/holo_green_light"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/forecast_icon_description"/>
+
+</LinearLayout>
