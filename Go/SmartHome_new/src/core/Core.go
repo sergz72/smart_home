@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -24,7 +25,7 @@ func Run(iniFileName string) error {
 
 	//handle CTRL C
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		fmt.Print("Interrupt signal. Sending timer stop event...")
