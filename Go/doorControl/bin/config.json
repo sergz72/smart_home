@@ -1,0 +1,6 @@
+{
+    "DoorGpioName":  "GPIO21",
+    "LightGpioName": "GPIO20",
+    "KeyFile":       "doorControlKey.dat",
+    "UdpPort":       49099
+}

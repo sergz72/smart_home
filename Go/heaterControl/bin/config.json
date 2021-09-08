@@ -1,0 +1,18 @@
+{
+    "Sensor":               {"Name": "BMXX80", "emulated": "true", "tempOffset": "-3.0", "i2cPort": "1"},
+    "GpioName":             "GPIO26",
+    "CheckInterval":        5,
+    "SmartHomeInterval":    20,
+    "Delta":                0.5,
+    "NightTemp":            18.0,
+    "DayTemp":              22.0,
+    "DayStartHour":         8,
+    "DayStartMinute":       0,
+    "DayEndHour":           20,
+    "DayEndMinute":         59,
+    "DayDaysOfWeek":        ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    "Exceptions":           [{"Month": "Sep", "Day": 10},{"Month": "Oct", "Day": 15}],
+    "KeyFile":              "heaterControlKey.dat",
+    "UdpPort":              48199,
+    "SmartHomeUrl":         "test"
+}
