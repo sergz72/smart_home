@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Heater control</string>
+    <string name="setDayTemp">Set day temp</string>
+    <string name="setNightTemp">Set night temp</string>
+    <string name="exit">Exit</string>
+
+    <string name="action_settings">Settings</string>
+    <string name="title_activity_settings">Settings</string>
+    <string name="pref_title_server_name">Server name</string>
+</resources>

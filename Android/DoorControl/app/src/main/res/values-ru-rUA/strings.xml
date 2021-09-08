@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Управление дверью</string>
+    <string name="openTheDoor">Открыть дверь</string>
+    <string name="turnLightOff">Выключить свет</string>
+    <string name="exit">Выход</string>
+
+    <string name="action_settings">Настройки</string>
+    <string name="title_activity_settings">Настройки</string>
+    <string name="pref_title_server_name">Имя сервера</string>
+</resources>
