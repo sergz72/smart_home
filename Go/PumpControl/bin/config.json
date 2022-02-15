@@ -1,0 +1,12 @@
+{
+    "I2cPortName":             "emulator",
+    "GpioName":                "GPIO26",
+    "PressureSensorIsPresent": true,
+    "CheckIntervalMs":         1000,
+    "SmartHomeInterval":       2,
+    "MinPressure":             2.0,
+    "MaxPressure":             2.8,
+    "SmartHomeWatUrl":         "testhttp://localhost:60000/sensor_data/pump",
+    "KeyFile":                 "pumpControlKey.dat",
+    "UdpPort":                 48090
+}
