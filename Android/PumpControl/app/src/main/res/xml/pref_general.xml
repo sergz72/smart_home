@@ -1,0 +1,10 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:defaultValue="localhost"
+        android:key="server_name"
+        android:summary="Host name to connect"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_name" />
+
+</PreferenceScreen>
