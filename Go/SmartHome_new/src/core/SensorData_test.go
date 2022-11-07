@@ -1,53 +1,68 @@
 package core
 
 import (
-	"core/entities"
+	"smartHome/src/core/entities"
 	"testing"
 	"time"
 )
 
 func TestAggregateResults(t *testing.T) {
-	dataMap := make(map[string][]OutSensorData)
-	var sensor1Data []OutSensorData
-	var sensor2Data []OutSensorData
+	var timeData1 []entities.SensorData
+	var timeData2 []entities.SensorData
 	for i := 0; i < 10; i++ {
 		data1 := entities.PropertyMap{
-			Values: make(map[string]float64),
+			Values: make(map[string]int),
 			Stats:  nil,
 		}
 		data2 := entities.PropertyMap{
-			Values: make(map[string]float64),
+			Values: make(map[string]int),
 			Stats:  nil,
 		}
-		data1.Values["temp"] = 5.0 + float64(i)
-		data1.Values["humi"] = 80.0 - float64(i)
-		data1.Values["pres"] = 1020.0 - float64(i*2)
-		data2.Values["vcc"] = 3300.0 + float64(i*20)
-		data2.Values["vbat"] = 4200.0 - float64(i*20)
-
-		sensor1Data = append(sensor1Data, OutSensorData{
-			locationName: "loc1",
-			locationType: "typ1",
-			dataType:     "env",
-			date:         time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			tim:          time.Date(0, 0, 0, 20, i * 5, 0, 0, time.UTC),
-			data:         data1,
+		data1.Values["temp"] = 5 + i
+		data1.Values["humi"] = 80 - i
+		data1.Values["pres"] = 1020 - i*2
+		timeData1 = append(timeData1, entities.SensorData{
+			EventTime: i,
+			Data:      data1,
 		})
-		sensor2Data = append(sensor2Data, OutSensorData{
-			locationName: "loc2",
-			locationType: "typ2",
-			dataType:     "env",
-			date:         time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			tim:          time.Date(0, 0, 0, 20, i * 5 + 1, 0, 0, time.UTC),
-			data:         data2,
+		data2.Values["vcc"] = 3300 + i*20
+		data2.Values["vbat"] = 4200 - i*20
+		timeData2 = append(timeData2, entities.SensorData{
+			EventTime: i,
+			Data:      data2,
 		})
 	}
-	dataMap["sensor1"] = sensor1Data
-	dataMap["sensor2"] = sensor2Data
 
-	result := aggregateResults(dataMap, 3)
-	if len(result) != 6 {
-		t.Errorf("Wrong result: %v", result)
+	sensor1Data := OutSensorData{
+		LocationName: "loc1",
+		LocationType: "typ1",
+		DataType:     "env",
+		timeData:     map[int][]entities.SensorData{1: timeData1},
+	}
+	sensor2Data := OutSensorData{
+		LocationName: "loc2",
+		LocationType: "typ2",
+		DataType:     "ele",
+		timeData:     map[int][]entities.SensorData{1: timeData2},
+	}
+
+	dataMap := map[int]*OutSensorData{1: &sensor1Data, 2: &sensor2Data}
+
+	result := aggregateResults(dataMap, 3, &configuration{})
+	if len(result) != 2 {
+		t.Fatal("Wrong result length")
+	}
+	if len(result[0].TimeData) != 1 {
+		t.Fatal("Wrong result[0].TimeData length")
+	}
+	if len(result[1].TimeData) != 1 {
+		t.Fatal("Wrong result[1].TimeData length")
+	}
+	if len(result[0].TimeData[0].Data) != 3 {
+		t.Fatal("Wrong result[0].TimeData[0].Data length")
+	}
+	if len(result[1].TimeData[0].Data) != 3 {
+		t.Fatal("Wrong result[1].TimeData[0].Data length")
 	}
 }
 
@@ -68,7 +83,7 @@ func TestFromPeriod(t *testing.T) {
 }
 
 func TestFilterSensorData(t *testing.T) {
-	config, err := loadConfiguration("../../test_resources/configuration.json")
+	config, err := loadConfiguration("../../test_resources/testConfiguration.json")
 	if err != nil {
 		t.Errorf("loadConfiguration returned an error: %v", err.Error())
 		return
@@ -80,50 +95,30 @@ func TestFilterSensorData(t *testing.T) {
 		t.Errorf("db.Load returned an error: %v", err.Error())
 		return
 	}
-	filterTest(t, &db, now, 20, 0, 0, "env", 5, "cabinet_int", 96)
-	filterTest(t, &db, now, 20, 0, 0, "ele", 2, "garderob_ele", 8)
-	filterTest(t, &db, now, 20, 0, 0, "all", 7, "cabinet_int", 96)
-	filterTest(t, &db, now, 0, 20210106, 20210107, "all", 7, "cabinet_int", 2)
+	filterTest(t, &db, now, 20, 0, 0, "env", 5, 1, 96)
+	filterTest(t, &db, now, 20, 0, 0, "ele", 2, 5, 8)
+	filterTest(t, &db, now, 20, 0, 0, "all", 7, 1, 96)
+	filterTest(t, &db, now, 0, 20210106, 20210107, "all", 7, 1, 2)
 
 	filterTest(t, &db, time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-		0, 0, 0, "all", 7, "cabinet_int", 1)
+		0, 0, 0, "all", 7, 1, 1)
 }
 
 func filterTest(t *testing.T, db *DB, now time.Time, period int, start int, end int, dataType string,
-	            expectedNumberOfSensors int, sensorName string, expectedNumberOfResults int) {
-	result := filterSensorData(db, period, start, end, dataType, now)
+	expectedNumberOfSensors int, sensorId int, expectedNumberOfResults int) {
+	result := filterSensorData(db, period, start, end, dataType, now, 0)
 	l := len(result)
 	if l != expectedNumberOfSensors {
 		t.Errorf("Wrong result length: %v", l)
 		return
 	}
-	d, ok := result[sensorName]
+	d, ok := result[sensorId]
 	if !ok {
-		t.Errorf("%v sensor must be present", sensorName)
+		t.Errorf("%v sensor must be present", sensorId)
 		return
 	}
-	l = len(d)
+	l = d.length()
 	if l != expectedNumberOfResults {
-		t.Errorf("Wrong result length for %v sensor: %v", sensorName, l)
-	}
-}
-
-func TestOutSensorDataToString(t *testing.T) {
-	vals := make(map[string]float64)
-	vals["humi"] = 100
-	d := OutSensorData{
-		locationName: "loc",
-		locationType: "typ",
-		dataType:     "dt",
-		date:         time.Date(2021, time.February, 3, 0, 0, 0, 0, time.UTC),
-		tim:          time.Date(0, 0, 0, 20, 45, 5, 0, time.UTC),
-		data:         entities.PropertyMap{
-			Values: vals,
-			Stats:  nil,
-		},
-	}
-	s := d.toString()
-	if s != "{\"locationName\": \"loc\", \"locationType\": \"typ\", \"date\": \"2021-02-03 20:45\", \"dataType\": \"dt\", \"data\": {\"humi\":100}}" {
-		t.Errorf("Wrong string value: %v", s)
+		t.Errorf("Wrong result length for %v sensor: %v", sensorId, l)
 	}
 }

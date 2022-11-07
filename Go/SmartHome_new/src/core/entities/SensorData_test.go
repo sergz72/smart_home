@@ -6,7 +6,7 @@ import (
 )
 
 func TestMarshalSensorData(t *testing.T) {
-	vals := make(map[string]float64)
+	vals := make(map[string]int)
 	vals["humi"] = 100
 	sd := []SensorData{{
 		EventTime: 100102,

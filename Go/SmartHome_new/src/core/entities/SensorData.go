@@ -3,43 +3,63 @@ package entities
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 )
 
 type PropertyMap struct {
-	Values map[string]float64
-	Stats  map[string]map[string]float64
+	Values map[string]int
+	Stats  map[string]map[string]int
 }
 
-func (p PropertyMap) ToString() string {
+func (p *PropertyMap) ToString() string {
 	if p.Values != nil {
-		v, _ := json.Marshal(p.Values)
+		v, _ := json.Marshal(convertValues(p.Values))
 		return string(v)
 	}
-	s, _ := json.Marshal(p.Stats)
+	s, _ := json.Marshal(convertStats(p.Stats))
 	return string(s)
+}
+
+func convertStats(stats map[string]map[string]int) map[string]map[string]float64 {
+	result := make(map[string]map[string]float64)
+
+	for k, v := range stats {
+		result[k] = convertValues(v)
+	}
+
+	return result
+}
+
+func convertValues(values map[string]int) map[string]float64 {
+	result := make(map[string]float64)
+
+	for k, v := range values {
+		result[k] = float64(v) / 100
+	}
+
+	return result
 }
 
 func (p *PropertyMap) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &p.Values)
 }
 
-func (p PropertyMap) MarshalJSON() ([]byte, error) {
+func (p *PropertyMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.Values)
 }
 
 func ToPropertyMap(m map[string]interface{}) (PropertyMap, error) {
-	pm := PropertyMap{Values: make(map[string]float64)}
+	pm := PropertyMap{Values: make(map[string]int)}
 
 	for k, v := range m {
 		value, ok := v.(float64)
 		if !ok {
 			return PropertyMap{}, fmt.Errorf(".(float64) conversion failure")
 		}
-		pm.Values[k] = value
+		pm.Values[k] = convertValue(value)
 	}
 
 	return pm, nil
@@ -47,7 +67,7 @@ func ToPropertyMap(m map[string]interface{}) (PropertyMap, error) {
 
 type SensorData struct {
 	EventTime int
-	Data PropertyMap
+	Data      PropertyMap
 }
 
 func ReadSensorDataFromJson(path string) (map[int][]SensorData, error) {
@@ -81,7 +101,7 @@ func ReadSensorDataFromJson(path string) (map[int][]SensorData, error) {
 
 func readSensorData(fileName string) ([]SensorData, error) {
 	var sensorData []SensorData
-	dat, err := ioutil.ReadFile(fileName)
+	dat, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +117,7 @@ func WriteSensorDataToJson(dataFolder string, date int, sensorId int, data []Sen
 		fmt.Printf("json.Marshal error: %v\n", err.Error())
 		return false
 	}
-	datePath := dataFolder + string(os.PathSeparator) + "dates" + string(os.PathSeparator) + strconv.Itoa(date)
+	datePath := dataFolder + string(os.PathSeparator) + "dates_new" + string(os.PathSeparator) + strconv.Itoa(date)
 	if _, err := os.Stat(datePath); os.IsNotExist(err) {
 		err = os.Mkdir(datePath, 0755)
 		if err != nil {
@@ -117,7 +137,7 @@ func WriteSensorDataToJson(dataFolder string, date int, sensorId int, data []Sen
 		}
 		bakFileCreated = true
 	}
-	err = ioutil.WriteFile(fileName, bytes, 0644)
+	err = os.WriteFile(fileName, bytes, 0644)
 	if err != nil {
 		fmt.Printf("File creation error: %v %v\n", fileName, err.Error())
 		return false
@@ -126,4 +146,8 @@ func WriteSensorDataToJson(dataFolder string, date int, sensorId int, data []Sen
 		_ = os.Remove(bakFileName)
 	}
 	return true
+}
+
+func convertValue(v float64) int {
+	return int(math.Round(v * 100))
 }

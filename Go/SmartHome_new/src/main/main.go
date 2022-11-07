@@ -1,14 +1,15 @@
 package main
 
 import (
-	"core"
 	"fmt"
 	"log"
 	"os"
+	"smartHome/src/core"
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	l := len(os.Args)
+	if l != 2 {
 		fmt.Println("Usage: SmartHome_new iniFileName")
 		os.Exit(1)
 	}

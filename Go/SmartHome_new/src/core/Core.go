@@ -40,4 +40,3 @@ func Run(iniFileName string) error {
 
 	return ServerStart(compressionType, &db, config)
 }
-

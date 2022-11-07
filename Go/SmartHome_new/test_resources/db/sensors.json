@@ -40,5 +40,35 @@
     "Name": "dascha_ele",
     "DataType": "ele",
     "LocationId": 5
+  },
+  {
+    "Id": 8,
+    "Name": "zal_int",
+    "DataType": "env",
+    "LocationId": 9
+  },
+  {
+    "Id": 9,
+    "Name": "zal_ext",
+    "DataType": "env",
+    "LocationId": 13
+  },
+  {
+    "Id": 10,
+    "Name": "pump",
+    "DataType": "wat",
+    "LocationId": 13
+  },
+  {
+    "Id": 11,
+    "Name": "sp_int",
+    "DataType": "env",
+    "LocationId": 6
+  },
+  {
+    "Id": 12,
+    "Name": "sp_ele",
+    "DataType": "ele",
+    "LocationId": 6
   }
 ]

@@ -67,7 +67,7 @@ func unzipData(data []byte) ([]byte, error) {
 }
 
 func bunzipData(data []byte) ([]byte, error) {
-  if len(data) <= 74 {
+  if len(data) <= 200 {
     return data, nil
   }
   buf := bytes.NewBuffer(data)

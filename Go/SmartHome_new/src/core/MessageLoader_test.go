@@ -1,67 +1,127 @@
 package core
 
 import (
-  "testing"
-  "time"
+	"crypto/aes"
+	"encoding/binary"
+	"smartHome/src/core/entities"
+	"sync"
+	"testing"
 )
 
-func TestMessageDecoding(t *testing.T) {
-  messages, err := unmarshalResponse([]byte("[{\"messageTime\": \"2020-01-02 15:04\", \"sensorName\": \"test_ee\", \"message\": {\"temp\": 0.1}}]"))
-  if err != nil {
-    t.Fatal(err)
-  }
-  if messages == nil {
-    t.Fatal("nil response")
-  }
-  l := len(messages)
-  if l != 1 {
-    t.Fatalf("wrong messages length: %v", l)
-  }
-  if messages[0].MessageTime != time.Date(2020, 1, 2, 15, 4, 0, 0, time.UTC) {
-    t.Errorf("wrong message time: %v", messages[0].MessageTime)
-  }
-  if messages[0].SensorName != "test_ee" {
-    t.Errorf("wrong sensor name: %v", messages[0].SensorName)
-  }
-  m := messages[0].Message
-  if  len(m.Values) != 1 {
-    t.Errorf("wrong message: %v", messages[0].Message)
-  }
-  v, ok := m.Values["temp"]
-  if !ok {
-    t.Error("temp key must be present")
-  }
-  if v != 0.1 {
-    t.Errorf("wrong temp value: %v", v)
-  }
-  if messages[0].Error != "" {
-    t.Errorf("wrong error: %v", messages[0].Error)
-  }
+var testKey = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+func TestSensorDataLoad16(t *testing.T) {
+	server := Server{
+		deviceKey: testKey,
+		db: &DB{
+			Sensors: map[int]entities.Sensor{
+				1: {
+					Id:            1,
+					DeviceId:      1,
+					DeviceSensors: map[int]string{0: "humi", 1: "temp"},
+				},
+			},
+			SensorDataMap:   make(map[int]map[int][]entities.SensorData),
+			DataToBeSaved:   make(map[int][]int),
+			DeviceToSensors: map[int][]int{1: {1}},
+			mutex:           sync.RWMutex{},
+		},
+		mutex: sync.Mutex{},
+	}
+	var buffer [16]byte
+	binary.LittleEndian.PutUint16(buffer[4:], 1)  // deviceID
+	binary.LittleEndian.PutUint32(buffer[6:], 10) // time
+	buffer[10] = 0x18
+	buffer[11] = 0xFC
+	buffer[12] = 0xFF // -1000
+	buffer[13] = 0xE8
+	buffer[14] = 0x03
+	buffer[15] = 0x00                                                          // 1000
+	binary.LittleEndian.PutUint32(buffer[:], calculateCRC(buffer[:], testKey)) // crc
+	block, err := aes.NewCipher(testKey)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	block.Encrypt(buffer[:], buffer[:])
+
+	if !tryLoadSensorData(&server, buffer[:], 0, false) {
+		t.Fatal("failed to load sensor data")
+	}
+
+	if tryLoadSensorData(&server, buffer[:], 0, false) {
+		t.Fatal("should fail to load sensor data")
+	}
 }
 
-func TestErrorDecoding(t *testing.T) {
-  messages, err := unmarshalResponse([]byte("[{\"messageTime\": \"2020-01-02 15:04\", \"sensorName\": \"test_ee\", \"message\": \"error\"}]"))
-  if err != nil {
-    t.Fatal(err)
-  }
-  if messages == nil {
-    t.Fatal("nil response")
-  }
-  l := len(messages)
-  if l != 1 {
-    t.Fatalf("wrong messages length: %v", l)
-  }
-  if messages[0].MessageTime != time.Date(2020, 1, 2, 15, 4, 0, 0, time.UTC) {
-    t.Errorf("wrong message time: %v", messages[0].MessageTime)
-  }
-  if messages[0].SensorName != "test_ee" {
-    t.Errorf("wrong sensor name: %v", messages[0].SensorName)
-  }
-  m := messages[0].Message
-  if len(m.Values) != 0 {
-    t.Errorf("wrong message: %v", messages[0].Message)
-  }
-  if messages[0].Error != "error" {
-    t.Errorf("wrong error: %v", messages[0].Error)
-  }
+func TestSensorDataLoad32(t *testing.T) {
+	server := Server{
+		deviceKey: testKey,
+		db: &DB{
+			Sensors: map[int]entities.Sensor{
+				1: {
+					Id:            1,
+					DeviceId:      1,
+					DeviceSensors: map[int]string{0: "humi", 1: "temp", 2: "pres", 3: "vcc", 4: "vbat", 5: "vvv"},
+				},
+			},
+			SensorDataMap:   make(map[int]map[int][]entities.SensorData),
+			DataToBeSaved:   make(map[int][]int),
+			DeviceToSensors: map[int][]int{1: {1}},
+			mutex:           sync.RWMutex{},
+		},
+		mutex: sync.Mutex{},
+	}
+	var buffer [32]byte
+	binary.LittleEndian.PutUint16(buffer[4:], 1)   // deviceID
+	binary.LittleEndian.PutUint32(buffer[6:], 10)  // time
+	binary.LittleEndian.PutUint32(buffer[16:], 10) // time
+	buffer[10] = 0x18
+	buffer[11] = 0xFC
+	buffer[12] = 0xFF // -1000
+	buffer[13] = 0xE8
+	buffer[14] = 0x03
+	buffer[15] = 0x00 // 1000
+	buffer[20] = 0x18
+	buffer[21] = 0xFC
+	buffer[22] = 0xFF // -1000
+	buffer[23] = 0xE8
+	buffer[24] = 0x03
+	buffer[25] = 0x00 // 1000
+	buffer[26] = 0x18
+	buffer[27] = 0xFC
+	buffer[28] = 0xFF // -1000
+	buffer[29] = 0xE8
+	buffer[30] = 0x03
+	buffer[31] = 0x00                                                          // 1000
+	binary.LittleEndian.PutUint32(buffer[:], calculateCRC(buffer[:], testKey)) // crc
+	block, err := aes.NewCipher(testKey)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	block.Encrypt(buffer[:], buffer[:])
+	block.Encrypt(buffer[16:], buffer[16:])
+
+	lastDeviceTime[1] = 0
+	if !tryLoadSensorData(&server, buffer[:], 0, false) {
+		t.Fatal("failed to load sensor data")
+	}
+
+	if tryLoadSensorData(&server, buffer[:], 0, false) {
+		t.Fatal("should fail to load sensor data")
+	}
+}
+
+func TestCalculateCRC(t *testing.T) {
+	bytes := make([]byte, 32)
+	dkey := make([]byte, 16)
+	for i := 0; i < 32; i++ {
+		bytes[i] = byte(i)
+	}
+	for i := 0; i < 16; i++ {
+		dkey[i] = byte(i)
+	}
+	crc := calculateCRC(bytes, dkey)
+	if crc != 116093568 {
+		t.Fatal("Incorrect CRC: ", crc)
+	}
 }

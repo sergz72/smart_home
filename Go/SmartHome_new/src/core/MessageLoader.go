@@ -1,210 +1,126 @@
 package core
 
 import (
-	"core/entities"
-	"encoding/json"
-	"errors"
-	"fmt"
+	"bytes"
+	"crypto/aes"
+	"encoding/binary"
 	"log"
-	"strconv"
-	"strings"
+	"smartHome/src/core/entities"
 	"time"
 )
 
-type MessageDate struct {
-	time.Time
+var deviceDataOffsets = []int{10, 13, 20, 23, 26, 29}
+
+var lastDeviceTime map[int]uint32
+
+func init() {
+	lastDeviceTime = make(map[int]uint32)
 }
 
-func (md *MessageDate) UnmarshalJSON(input []byte) error {
-	strInput := string(input)
-	strInput = strings.Trim(strInput, `"`)
-	newTime, err := time.Parse("2006-01-02 15:04", strInput)
-	if err != nil {
-		return err
+func tryLoadSensorData(server *Server, data []byte, timeOffset int, useDeviceTime bool) bool {
+	if server.deviceKey == nil {
+		return false
+	}
+	l := len(data)
+	if l != 16 && l != 32 {
+		return false
 	}
 
-	md.Time = newTime
-
-	return nil
-}
-
-type message struct {
-	MessageTime MessageDate
-	SensorName string
-	Message interface{}
-}
-
-type decodedMessage struct {
-	MessageTime time.Time
-	SensorName string
-	Message entities.PropertyMap
-	Error string
-}
-
-func unmarshalResponse(response []byte) ([]decodedMessage, error) {
-	var messages []message
-
-	err := json.Unmarshal(response, &messages)
+	block, err := aes.NewCipher(server.deviceKey)
 	if err != nil {
-		return nil, err
+		return false
 	}
-
-	decodedMessages := make([]decodedMessage, 0, len(messages))
-
-	for _, m := range messages {
-		message, errorMessage, err := decodeMessage(m.Message)
+	for i := 0; i < l; i += len(server.deviceKey) {
+		block.Decrypt(data[i:], data[i:])
+	}
+	deviceID := int(binary.LittleEndian.Uint16(data[4:]))
+	sensors, ok := server.db.DeviceToSensors[deviceID]
+	if !ok {
+		return false
+	}
+	crc := binary.LittleEndian.Uint32(data)
+	if crc != calculateCRC(data, server.deviceKey) {
+		return false
+	}
+	eventTime := binary.LittleEndian.Uint32(data[6:])
+	if l > 16 {
+		eventTime2 := binary.LittleEndian.Uint32(data[16:])
+		if eventTime != eventTime2 {
+			return false
+		}
+	}
+	if eventTime <= lastDeviceTime[deviceID] {
+		return false
+	}
+	messages := buildMessages(server.db, sensors, data, timeOffset, eventTime, useDeviceTime)
+	if messages == nil {
+		return false
+	}
+	lastDeviceTime[deviceID] = eventTime
+	log.Printf("Received sensor message from device %v timestamp %v", deviceID, eventTime)
+	for k, v := range messages {
+		log.Printf("%v %v", k, v)
+	}
+	for sensorId, message := range messages {
+		err := server.db.saveSensorData(sensorId, *message)
 		if err != nil {
-			return nil, err
-		}
-		decodedMessages = append(decodedMessages, decodedMessage{m.MessageTime.Time, m.SensorName, message, errorMessage})
-	}
-
-	return decodedMessages, nil
-}
-
-func decodeMessage(m interface{}) (entities.PropertyMap, string, error) {
-	switch m.(type) {
-	case string: return entities.PropertyMap{}, m.(string), nil
-	case map[string]interface{}:
-		m, err := entities.ToPropertyMap(m.(map[string]interface{}))
-		return m, "", err
-	}
-    return entities.PropertyMap{}, "", errors.New("unknown datatype")
-}
-
-func getSensorId(db *DB, sensorName string) (int, error) {
-	for _, sensor := range db.Sensors {
-		if sensor.Name == sensorName {
-			return sensor.Id, nil
+			log.Println(err.Error())
 		}
 	}
-	return 0, fmt.Errorf("sensor not found: %s", sensorName)
+	return true
 }
 
-func processAddress(server *Server, timeout time.Duration, address string, key []byte, isSensors bool,
-	                responseProcessor func(*Server, string, []byte) []error) {
-	var response []byte
-	var err error
-	retryCount := server.config.FetchConfiguration.Retries
-	url := "GET /sensor_data/sensors"
-	if !isSensors {
-		server.mutex.Lock()
-		url = "GET /sensor_data/all@" + strconv.FormatInt(server.fetcherTimestamp[address], 10)
-		server.mutex.Unlock()
-	}
-	for {
-		log.Printf("processAddress: URL = %v\n", url)
-		response, err = udpSend(key, address, url, timeout)
-		if err == nil {
+func buildMessages(db *DB, sensors []int, data []byte, timeOffset int, eventTime uint32, useDeviceTime bool) map[int]*decodedMessage {
+	result := make(map[int]*decodedMessage)
+
+	for deviceSensorId, offset := range deviceDataOffsets {
+		realSensorId, dataName := db.GetSensor(sensors, deviceSensorId)
+		if dataName == "" {
 			break
 		}
-		log.Println(err)
-		if retryCount <= 0 {
-			return
+		b := []byte{data[offset], data[offset+1], data[offset+2], 0}
+		if (b[2] & 0x80) != 0 {
+			b[3] = 0xFF
 		}
-		retryCount--
-	}
-
-	errorList := responseProcessor(server, address, response)
-	for _, err := range errorList {
-		log.Println(err)
-	}
-}
-
-func processResponse(server *Server, address string, response []byte) []error {
-	messages, err := unmarshalResponse(response)
-	if err != nil {
-		return []error{err}
-	}
-
-	var result []error
-	for _, message := range messages {
-		sensorId, err := getSensorId(server.db, message.SensorName)
+		var sensorData int32
+		buffer := bytes.NewReader(b)
+		err := binary.Read(buffer, binary.LittleEndian, &sensorData)
 		if err != nil {
-			result = append(result, err)
-			continue
+			log.Println(err.Error())
+			return nil
 		}
-
-		err = server.db.saveSensorData(sensorId, message)
-		if err == nil {
-			f := fromTime(message.MessageTime)
-			server.mutex.Lock()
-			if f > server.fetcherTimestamp[address] {
-				server.fetcherTimestamp[address] = f
-			}
-			server.mutex.Unlock()
-		} else {
-			result = append(result, err)
-		}
-	}
-	return result
-}
-
-func processSensorsResponse(server *Server, address string, response []byte) []error {
-	var sensors []string
-	err := json.Unmarshal(response, &sensors)
-	if err != nil {
-		return []error{err}
-	}
-
-	var result []error
-	var from int64 = 0
-	server.db.mutex.Lock()
-	for _, sensorName := range sensors {
-		sensorId, err := getSensorId(server.db, sensorName)
-		if err != nil {
-			result = append(result, err)
-			continue
-		}
-
-		for k, v := range server.db.SensorDataMap {
-			data, ok := v[sensorId]
-			if ok {
-				for _, d := range data {
-					f := int64(k) * 1000000 + int64(d.EventTime)
-					if f > from {
-						from = f
-					}
-				}
-			}
-		}
-	}
-	server.db.mutex.Unlock()
-
-	if len(result) == 0 {
-		server.mutex.Lock()
-		log.Printf("address: %v, from = %v\n", address, from)
-		server.fetcherTimestamp[address] = from
-		server.mutex.Unlock()
-	}
-
-	return result
-}
-
-func fetcherInit(server *Server, key []byte) {
-	cont := true
-	for cont {
-		cont = false
-		for _, address := range server.config.FetchConfiguration.Addresses {
-			server.mutex.Lock()
-			_, ok := server.fetcherTimestamp[address]
-			server.mutex.Unlock()
-			if !ok {
-				processAddress(server, server.config.FetchConfiguration.timeoutDuration, address, key, true, processSensorsResponse)
-				cont = true
-			}
-		}
-	}
-}
-
-func fetchData(server *Server, key []byte) {
-	for _, address := range server.config.FetchConfiguration.Addresses {
-		server.mutex.Lock()
-		_, ok := server.fetcherTimestamp[address]
-		server.mutex.Unlock()
+		m, ok := result[realSensorId]
 		if ok {
-			processAddress(server, server.config.FetchConfiguration.timeoutDuration, address, key, false, processResponse)
+			m.Message.Values[dataName] = int(sensorData)
+		} else {
+			var t time.Time
+			if useDeviceTime {
+				t = time.Unix(int64(eventTime), 0)
+			} else {
+				t = time.Now().Add(time.Duration(timeOffset) * time.Hour)
+			}
+			m = &decodedMessage{
+				MessageTime: t,
+				Message: entities.PropertyMap{
+					Values: map[string]int{
+						dataName: int(sensorData),
+					},
+				},
+			}
+			result[realSensorId] = m
 		}
 	}
+	return result
 }
 
+func calculateCRC(bytes []byte, dkey []byte) uint32 {
+	var crc uint32
+	var key uint32
+	for i := 0; i < len(dkey); i += 4 {
+		key += binary.LittleEndian.Uint32(dkey[i:])
+	}
+	for i := 4; i < len(bytes); i += 4 {
+		crc += binary.LittleEndian.Uint32(bytes[i:])
+	}
+	return crc * key
+}

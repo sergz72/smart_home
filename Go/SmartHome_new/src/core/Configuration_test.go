@@ -7,7 +7,7 @@ func TestConfigurationLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.DataFolder != "testFolder" {
+	if config.DataFolder != "../../test_resources/db" {
 		t.Fatal("incorrect DataFolder")
 	}
 	if config.KeyFileName != "key.dat" {

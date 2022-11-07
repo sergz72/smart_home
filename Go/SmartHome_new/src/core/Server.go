@@ -4,33 +4,45 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
 type Server struct {
-	key []byte
-	conn *net.UDPConn
-	compressionType int
-	db *DB
-	config *configuration
+	key              []byte
+	deviceKey        []byte
+	conn             *net.UDPConn
+	compressionType  int
+	db               *DB
+	config           *configuration
 	fetcherTimestamp map[string]int64
-	mutex sync.Mutex
+	mutex            sync.Mutex
 }
 
 func ServerStart(_compressionType int, db *DB, config *configuration) error {
-	key, err := ioutil.ReadFile(config.KeyFileName)
+	key, err := os.ReadFile(config.KeyFileName)
 	if err != nil {
 		return err
 	}
 
-	fetchKey, err := ioutil.ReadFile(config.FetchConfiguration.KeyFileName)
-	if err != nil {
-		return err
+	var deviceKey []byte
+	if len(config.DeviceKeyFileName) > 0 {
+		deviceKey, err = os.ReadFile(config.DeviceKeyFileName)
+		if err != nil {
+			return err
+		}
+	}
+
+	var fetchKey []byte
+	if config.FetchConfiguration.Interval > 0 {
+		fetchKey, err = os.ReadFile(config.FetchConfiguration.KeyFileName)
+		if err != nil {
+			return err
+		}
 	}
 
 	addr := net.UDPAddr{Port: config.PortNumber}
@@ -45,12 +57,28 @@ func ServerStart(_compressionType int, db *DB, config *configuration) error {
 		return err
 	}
 
-	server := Server{key, conn, _compressionType, db, config,
-		make(map[string]int64), sync.Mutex{} }
+	server := Server{
+		key:              key,
+		deviceKey:        deviceKey,
+		conn:             conn,
+		compressionType:  _compressionType,
+		db:               db,
+		config:           config,
+		fetcherTimestamp: make(map[string]int64),
+	}
 
 	fmt.Printf("Server started on port %d\n", config.PortNumber)
 
-	go fetcherInit(&server, fetchKey)
+	if config.TcpPortNumber > 0 {
+		err := tcpServerStart(&server)
+		if err != nil {
+			return err
+		}
+	}
+
+	if config.FetchConfiguration.Interval > 0 {
+		go fetcherInit(&server, fetchKey)
+	}
 
 	go TimerTask(&server, fetchKey)
 
@@ -80,11 +108,14 @@ func logRequestBody(requestBody string) {
 
 func handle(server *Server, addr net.Addr, data []byte) {
 	logRequest(addr)
+	if tryLoadSensorData(server, data, server.config.TimeOffset, false) {
+		return
+	}
 	decodedData, err := AesDecode(data, server.key, CompressNone, func(nonce []byte) error {
 		timePart := binary.LittleEndian.Uint64(nonce[len(nonce)-8:]) >> 16
 		millis := uint64(time.Now().UnixNano() / 1000000)
-		if (timePart >= millis && (timePart - millis < 60000)) ||
-			(timePart < millis && (millis - timePart < 60000)) { // 60 seconds
+		if (timePart >= millis && (timePart-millis < 60000)) ||
+			(timePart < millis && (millis-timePart < 60000)) { // 60 seconds
 			return nil
 		}
 		return fmt.Errorf("incorrect nonce")

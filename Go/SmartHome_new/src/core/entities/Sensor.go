@@ -2,19 +2,21 @@ package entities
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 )
 
 type Sensor struct {
-	Id int
-	Name string
-	DataType string
-	LocationId int
+	Id            int
+	Name          string
+	DataType      string
+	LocationId    int
+	DeviceId      int
+	DeviceSensors map[int]string
 }
 
 func ReadSensorsFromJson(path string) (map[int]Sensor, error) {
 	var sensors []Sensor
-	dat, err := ioutil.ReadFile(path)
+	dat, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

@@ -2,41 +2,13 @@ package core
 
 import (
 	"bytes"
-	"core/entities"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"smartHome/src/core/entities"
 	"strconv"
-	"strings"
 	"time"
 )
-
-type OutSensorData struct {
-	locationName string
-	locationType string
-	dataType string
-	date time.Time
-	tim time.Time
-	data entities.PropertyMap
-}
-
-func (d *OutSensorData) toString() string {
-	tim := addTimeToDate(d.date, d.tim)
-	return fmt.Sprintf("{\"locationName\": \"%v\", \"locationType\": \"%v\", \"date\": \"%v\", \"dataType\": \"%v\", \"data\": %v}",
-		d.locationName, d.locationType, tim.Format("2006-01-02 15:04"), d.dataType, d.data.ToString())
-}
-
-func MakeOutSensorData(db *DB, d entities.SensorData, date int, sensorId int) OutSensorData {
-	s := db.Sensors[sensorId]
-	l := db.Locations[s.LocationId]
-	return OutSensorData{
-		locationName: l.Name,
-		locationType: l.LocationType,
-		dataType:     s.DataType,
-		date:         buildDate(date),
-		tim:          buildTime(d.EventTime),
-		data:         d.Data,
-	}
-}
 
 func SensorDataHandler(server *Server, w *bytes.Buffer, req string) {
 	values, err := url.ParseQuery(req)
@@ -83,29 +55,36 @@ func SensorDataHandler(server *Server, w *bytes.Buffer, req string) {
 	} else {
 		periods := values.Get("period")
 		if len(periods) > 0 {
-		    period, err = strconv.Atoi(periods)
-		    if err != nil || period <= 0 {
-		    	w.Write([]byte(fmt.Sprintf("400 Bad request: invalid period parameter: %v", periods)))
-		    	return
-		    }
+			period, err = strconv.Atoi(periods)
+			if err != nil || period <= 0 {
+				w.Write([]byte(fmt.Sprintf("400 Bad request: invalid period parameter: %v", periods)))
+				return
+			}
 		}
 	}
 
 	server.db.mutex.Lock()
-	resultMap := filterSensorData(server.db, period, start, end, dataType, time.Now())
+	resultMap := filterSensorData(server.db, period, start, end, dataType, time.Now(), server.config.TimeOffset)
 	server.db.mutex.Unlock()
-	results := aggregateResults(resultMap, maxPoints)
-	w.Write([]byte("["))
-	w.Write([]byte(strings.Join(results, ",")))
-	w.Write([]byte("]"))
+	results := aggregateResults(resultMap, maxPoints, server.config)
+	data, err := json.Marshal(results)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("500 json.Marshal error: %v", err)))
+		return
+	}
+	w.Write(data)
 }
 
-func filterSensorData(db *DB, period int, start int, end int, dataType string, now time.Time) map[string][]OutSensorData {
+// returns map sensor id -> [map date to OutSensorData]
+func filterSensorData(db *DB, period int, start int, end int, dataType string, now time.Time, timeOffset int) map[int]*OutSensorData {
 	returnLatest := period == 0 && start == 0 && end == 0
 	if returnLatest {
 		period = 1
 	}
-	resultMap := make(map[string][]OutSensorData)
+	if period != 0 && timeOffset < 0 {
+		period -= timeOffset
+	}
+	resultMap := make(map[int]*OutSensorData)
 	fromTime := 0
 	endTime := 235959
 	useAggregatedData := period == 0
@@ -144,37 +123,33 @@ func filterSensorData(db *DB, period int, start int, end int, dataType string, n
 		fromTime = 0
 	}
 	if returnLatest {
-		return getLatestValues(resultMap)
+		getLatestValues(resultMap)
 	}
 	return resultMap
 }
 
-func getLatestValues(resultMap map[string][]OutSensorData) map[string][]OutSensorData {
-	result := make(map[string][]OutSensorData)
-	for k, v := range resultMap {
-		result[k] = getLatestValue(v)
+func getLatestValues(resultMap map[int]*OutSensorData) {
+	for _, v := range resultMap {
+		v.timeData = getLatestValue(v.timeData)
 	}
-	return result
 }
 
-func getLatestValue(data []OutSensorData) []OutSensorData {
-	var latest *OutSensorData
-	var dt time.Time
-	for _, d := range data {
-		if latest == nil {
-			latest = &d
-			dt = addTimeToDate(latest.date, latest.tim)
-		} else {
-			dt2 := addTimeToDate(d.date, d.tim)
-			if dt2.After(dt) {
-				latest = &d
-			}
+func getLatestValue(data map[int][]entities.SensorData) map[int][]entities.SensorData {
+	var latest entities.SensorData
+	var maxDate int
+	for k := range data {
+		if k > maxDate {
+			maxDate = k
 		}
 	}
-	if latest == nil {
-		return []OutSensorData{}
+	maxTime := -1
+	for _, e := range data[maxDate] {
+		if e.EventTime > maxTime {
+			maxTime = e.EventTime
+			latest = e
+		}
 	}
-	return []OutSensorData{*latest}
+	return map[int][]entities.SensorData{maxDate: {latest}}
 }
 
 func isValidDataType(db *DB, sensorId int, dataType string) bool {
@@ -189,13 +164,18 @@ func isValidDataType(db *DB, sensorId int, dataType string) bool {
 	return false
 }
 
-func addToResultMap(db *DB, resultMap map[string][]OutSensorData, date int, sensorId int, data entities.SensorData) {
-	sensorName := db.Sensors[sensorId].Name
-	result, ok := resultMap[sensorName]
+// map sensorId -> OutSensorData
+func addToResultMap(db *DB, resultMap map[int]*OutSensorData, date int, sensorId int, data entities.SensorData) {
+	result, ok := resultMap[sensorId]
+	if !ok {
+		result = MakeOutSensorData(db, sensorId)
+		resultMap[sensorId] = result
+	}
+	sd, ok := result.timeData[date]
 	if ok {
-		resultMap[sensorName] = append(result, MakeOutSensorData(db, data, date, sensorId))
+		result.timeData[date] = append(sd, data)
 	} else {
-		resultMap[sensorName] = []OutSensorData{MakeOutSensorData(db, data, date, sensorId)}
+		result.timeData[date] = []entities.SensorData{data}
 	}
 }
 
@@ -206,94 +186,12 @@ func fromPeriod(period int, now time.Time) (int, int, int, int) {
 	return d2, t2, d1, t1
 }
 
-func aggregateResults(resultMap map[string][]OutSensorData, maxPoints int) []string {
-	var result []string
-
-	for _, sensorData := range resultMap {
-		compressionLevel := len(sensorData) / maxPoints + 1
-		for i := 0; i < len(sensorData); i += compressionLevel {
-			result = append(result, aggregateSensorData(sensorData, i, compressionLevel))
-		}
-	}
-	return result
-}
-
-func aggregateSensorData(data []OutSensorData, from int, compressionLevel int) string {
-	if from >= len(data) {
-		return ""
-	}
-	var result = OutSensorData{
-		locationName: data[from].locationName,
-		locationType: data[from].locationType,
-		dataType:     data[from].dataType,
-		date:         data[from].date,
-		tim:          data[from].tim,
-		data:         data[from].data,
-	}
-	if result.data.Stats != nil {
-		for _, v := range result.data.Stats {
-			v["Cnt"] = 1
-		}
-	}
-	if compressionLevel > 1 {
-		i := from + 1
-		compressionLevel--
-		if result.data.Values != nil {
-			for compressionLevel > 0 && i < len(data) {
-				for k, v := range result.data.Values {
-					v2, ok := data[i].data.Values[k]
-					if ok {
-						result.data.Values[k] = v + v2
-					}
-				}
-				i++
-				compressionLevel--
-			}
-			for k, v := range result.data.Values {
-				result.data.Values[k] = v / float64(i - from)
-			}
-		} else {
-			for compressionLevel > 0 && i < len(data) {
-				for k, v := range result.data.Stats {
-					v2, ok := data[i].data.Stats[k]
-					if ok {
-						for kk, vv := range v {
-							vv2, ok := v2[kk]
-							if ok {
-								switch kk {
-								case "Min":
-									if vv2 < vv {
-										v[kk] = vv2
-									}
-								case "Max":
-									if vv2 > vv {
-										v[kk] = vv2
-									}
-								case "Avg":
-									v[kk] = vv2 + vv
-								case "Cnt":
-									v[kk] = vv + 1
-								}
-							}
-						}
-					}
-				}
-				i++
-				compressionLevel--
-			}
-			for _, v := range result.data.Stats {
-				v["Avg"] = v["Avg"] / float64(i - from)
-			}
-		}
-	}
-	return result.toString()
-}
-
 type sensorStats struct {
-	Min float64
-	Avg float64
-	Max float64
+	Min int
+	Avg int
+	Max int
 	Cnt int
+	Sum int
 }
 
 func aggregateSensorDataArray(data map[int][]entities.SensorData) map[int]entities.SensorData {
@@ -308,6 +206,7 @@ func aggregateSensorDataArray(data map[int][]entities.SensorData) map[int]entiti
 						Min: v,
 						Avg: v,
 						Max: v,
+						Sum: v,
 						Cnt: 1,
 					}
 				} else {
@@ -318,20 +217,22 @@ func aggregateSensorDataArray(data map[int][]entities.SensorData) map[int]entiti
 						dv.Max = v
 					}
 					dv.Avg += v
+					dv.Sum += v
 					dv.Cnt++
 				}
 			}
 		}
 		out := entities.SensorData{
 			EventTime: 0,
-			Data:      entities.PropertyMap{Stats: make(map[string]map[string]float64)},
+			Data:      entities.PropertyMap{Stats: make(map[string]map[string]int)},
 		}
 		for prop, stats := range statsMap {
-			outv := make(map[string]float64)
+			outv := make(map[string]int)
 			outv["Min"] = stats.Min
 			outv["Max"] = stats.Max
-			outv["Avg"] = stats.Avg / float64(stats.Cnt)
-			outv["Cnt"] = float64(stats.Cnt)
+			outv["Avg"] = stats.Avg / stats.Cnt
+			outv["Cnt"] = stats.Cnt
+			outv["Sum"] = stats.Sum
 			out.Data.Stats[prop] = outv
 		}
 		result[sensorId] = out

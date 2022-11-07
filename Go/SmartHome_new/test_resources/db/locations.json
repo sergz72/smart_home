@@ -58,5 +58,10 @@
     "Id": 12,
     "Name": "Туалет 1 этаж",
     "LocationType": "fl1"
+  },
+  {
+    "Id": 13,
+    "Name": "Подвал",
+    "LocationType": "ext"
   }
 ]

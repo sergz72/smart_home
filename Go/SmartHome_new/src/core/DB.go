@@ -1,22 +1,30 @@
 package core
 
 import (
-	"core/entities"
 	"fmt"
 	"os"
+	"smartHome/src/core/entities"
 	"strconv"
 	"sync"
 	"time"
 )
 
 type DB struct {
+	// map locationId -> entities.Location
 	Locations map[int]entities.Location
+	// map sensorId -> entities.Sensor
 	Sensors map[int]entities.Sensor
+	// map deviceId -> array of sensor ids
+	DeviceToSensors map[int][]int
+	// map date -> [map sensorId -> []entities.SensorData]
 	SensorDataMap map[int]map[int][]entities.SensorData
+	// map date -> [map sensorId -> entities.SensorData]
 	SensorDataAggregated map[int]map[int]entities.SensorData
+	// map dataType -> array if sensor Ids
 	DataTypeMap map[string][]int
+	// map date -> list of sensor ids
 	DataToBeSaved map[int][]int
-	mutex sync.RWMutex
+	mutex         sync.RWMutex
 }
 
 func (a *DB) Load(config *configuration, now time.Time) error {
@@ -30,6 +38,7 @@ func (a *DB) Load(config *configuration, now time.Time) error {
 		return err
 	}
 	a.buildDataTypeMap()
+	a.buildDeviceToSensors()
 	a.DataToBeSaved = make(map[int][]int)
 	a.mutex = sync.RWMutex{}
 	return a.ReadSensorDataFromJson(config.DataFolder, now, config.RawDataDays)
@@ -48,7 +57,7 @@ func (a *DB) buildDataTypeMap() {
 }
 
 func (a *DB) ReadSensorDataFromJson(path string, now time.Time, rawDataDays int) error {
-	datesPath := path + string(os.PathSeparator) + "dates"
+	datesPath := path + string(os.PathSeparator) + "dates_new"
 	d, err := os.Open(datesPath)
 	if err != nil {
 		return err
@@ -94,11 +103,11 @@ func (a *DB) aggregateLastDayData() {
 
 func (a *DB) backupData(config *configuration, now time.Time) {
 	a.mutex.Lock()
-    for date, sensors := range a.DataToBeSaved {
-    	var m []int
-    	for _, sensorId := range sensors {
-    		if !entities.WriteSensorDataToJson(config.DataFolder, date, sensorId, a.SensorDataMap[date][sensorId]) {
-    			m = append(m, sensorId)
+	for date, sensors := range a.DataToBeSaved {
+		var m []int
+		for _, sensorId := range sensors {
+			if !entities.WriteSensorDataToJson(config.DataFolder, date, sensorId, a.SensorDataMap[date][sensorId]) {
+				m = append(m, sensorId)
 			}
 		}
 		if len(m) == 0 {
@@ -112,7 +121,7 @@ func (a *DB) backupData(config *configuration, now time.Time) {
 }
 
 func (a *DB) deleteOldRawSensorData(rawDataDays int, now time.Time) {
-	for date, _ := range a.SensorDataMap {
+	for date := range a.SensorDataMap {
 		days := int(now.Sub(buildDate(date)).Hours() / 24)
 		//log.Printf("now = %v, date = %v, dats = %v\n", now, date, days)
 		if days > rawDataDays {
@@ -127,9 +136,9 @@ func (a *DB) saveSensorData(sensorId int, m decodedMessage) error {
 		fmt.Printf("Sensor %v returned error status: %v\n", m.SensorName, m.Error)
 		return nil
 	}
-    d, t := toDateTime(m.MessageTime)
+	d, t := toDateTime(m.MessageTime)
 
-    a.mutex.RLock()
+	a.mutex.RLock()
 	if a.addToSensorData(m, d, t, sensorId) {
 		a.addToDataToBeSaved(d, sensorId)
 	}
@@ -163,7 +172,7 @@ func (a *DB) addToSensorData(m decodedMessage, date int, tim int, sensorId int) 
 	}
 	d, ok := a.SensorDataMap[date]
 	if !ok {
-		d = make (map[int][]entities.SensorData)
+		d = make(map[int][]entities.SensorData)
 		d[sensorId] = []entities.SensorData{v}
 		a.SensorDataMap[date] = d
 	} else {
@@ -183,34 +192,45 @@ func (a *DB) addToSensorData(m decodedMessage, date int, tim int, sensorId int) 
 	return true
 }
 
-func buildDate(date int) time.Time {
-	return time.Date(date / 10000, time.Month((date / 100) % 100), date % 100, 0, 0, 0, 0, time.UTC)
+func (a *DB) GetSensor(sensorIds []int, sensorId int) (int, string) {
+	for _, realSensorId := range sensorIds {
+		sensor, ok := a.Sensors[realSensorId]
+		if ok {
+			deviceSensor, ok := sensor.DeviceSensors[sensorId]
+			if ok {
+				return realSensorId, deviceSensor
+			}
+		}
+	}
+	return 0, ""
 }
 
-func buildTime(tim int) time.Time {
-	return time.Date(0, 1, 0, tim / 10000, (tim / 100) % 100, tim % 100, 0, time.UTC)
+func (a *DB) buildDeviceToSensors() {
+	a.DeviceToSensors = make(map[int][]int)
+	for sensorId, sensor := range a.Sensors {
+		a.DeviceToSensors[sensor.DeviceId] = append(a.DeviceToSensors[sensor.DeviceId], sensorId)
+	}
+}
+
+func buildDate(date int) time.Time {
+	return time.Date(date/10000, time.Month((date/100)%100), date%100, 0, 0, 0, 0, time.UTC)
 }
 
 func toDate(t time.Time) int {
-	return t.Year() * 10000 + int(t.Month()) * 100 + t.Day()
+	return t.Year()*10000 + int(t.Month())*100 + t.Day()
 }
 
 func toDateTime(t time.Time) (int, int) {
-	return toDate(t), t.Hour() * 10000 + t.Minute() * 100 + t.Second()
+	return toDate(t), t.Hour()*10000 + t.Minute()*100 + t.Second()
 }
 
 func fromTime(t time.Time) int64 {
-	return int64(t.Year()) * 10000000000 + int64(t.Month()) * 100000000 + int64(t.Day()) * 1000000 + int64(t.Hour()) * 10000 +
-		int64(t.Minute()) * 100 + int64(t.Second())
+	return int64(t.Year())*10000000000 + int64(t.Month())*100000000 + int64(t.Day())*1000000 + int64(t.Hour())*10000 +
+		int64(t.Minute())*100 + int64(t.Second())
 }
 
 func nextDate(date1 int) int {
-	t := time.Date(date1 / 10000, time.Month((date1 / 100) % 100), date1 % 100, 0, 0, 0, 0, time.UTC).
+	t := time.Date(date1/10000, time.Month((date1/100)%100), date1%100, 0, 0, 0, 0, time.UTC).
 		AddDate(0, 0, 1)
 	return toDate(t)
-}
-
-func addTimeToDate(date time.Time, tim time.Time) time.Time {
-	return date.Add(time.Duration(tim.Hour()) * time.Hour + time.Duration(tim.Minute()) * time.Minute +
-		            time.Duration(tim.Second()) * time.Second)
 }

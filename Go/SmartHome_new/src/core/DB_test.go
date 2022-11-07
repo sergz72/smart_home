@@ -1,13 +1,13 @@
 package core
 
 import (
-	"core/entities"
+	"smartHome/src/core/entities"
 	"testing"
 	"time"
 )
 
 func TestDBLoad(t *testing.T) {
-	config, err := loadConfiguration("../../test_resources/configuration.json")
+	config, err := loadConfiguration("../../test_resources/testConfiguration.json")
 	if err != nil {
 		t.Errorf("loadConfiguration returned an error: %v", err.Error())
 		return
@@ -107,12 +107,12 @@ func testSensorDataMap(t *testing.T, db *DB) {
 		t.Errorf("sensor data map for key 20210107/1: wrong values map length: %v", l)
 		return
 	}
-	checkData(t, sdata.Data.Values, "humi", 37.6)
-	checkData(t, sdata.Data.Values, "pres", 1003)
-	checkData(t, sdata.Data.Values, "temp", 20.2)
+	checkData(t, sdata.Data.Values, "humi", 3760)
+	checkData(t, sdata.Data.Values, "pres", 100300)
+	checkData(t, sdata.Data.Values, "temp", 2020)
 }
 
-func checkData(t *testing.T, values map[string]float64, dataName string, dataValue float64) {
+func checkData(t *testing.T, values map[string]int, dataName string, dataValue int) {
 	v, ok := values[dataName]
 	if !ok {
 		t.Errorf("sensor data map for key 20210107/1: %v data is missing", dataName)
@@ -125,7 +125,7 @@ func checkData(t *testing.T, values map[string]float64, dataName string, dataVal
 
 func testLocations(t *testing.T, db *DB) {
 	l := len(db.Locations)
-	if l != 12 {
+	if l != 13 {
 		t.Errorf("db.Load returned incorrect locations map length: %v", l)
 		return
 	}
@@ -141,7 +141,7 @@ func testLocations(t *testing.T, db *DB) {
 
 func testSensors(t *testing.T, db *DB) {
 	l := len(db.Sensors)
-	if l != 7 {
+	if l != 12 {
 		t.Errorf("db.Load returned incorrect sensors map length: %v", l)
 		return
 	}
@@ -157,7 +157,7 @@ func testSensors(t *testing.T, db *DB) {
 
 func testDataTypeMap(t *testing.T, db *DB) {
 	l := len(db.DataTypeMap)
-	if l != 2 {
+	if l != 3 {
 		t.Errorf("db.Load returned incorrect data type map length: %v", l)
 		return
 	}
@@ -166,17 +166,17 @@ func testDataTypeMap(t *testing.T, db *DB) {
 		t.Error("data type map has no 'env' key")
 		return
 	}
-	if len(m) != 5 {
+	if len(m) != 8 {
 		t.Error("data type map has with 'env' key should have length=5")
 		return
 	}
 	cnt := 0
 	for _, id := range m {
-		if id == 1 || id == 2 || id == 3 || id == 4 || id == 6 {
+		if id == 1 || id == 2 || id == 3 || id == 4 || id == 6 || id == 8 || id == 9 || id == 11 {
 			cnt++
 		}
 	}
-	if cnt != 5 {
+	if cnt != 8 {
 		t.Error("data type map has with 'env' key contains wrong data")
 	}
 }
