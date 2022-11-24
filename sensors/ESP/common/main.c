@@ -11,8 +11,6 @@
 #include "ntp.h"
 #include "common.h"
 
-#define BUTTON_GPIO 9
-
 void ble_init(void);
 
 //static const char *TAG = "main";
