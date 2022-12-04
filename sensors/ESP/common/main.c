@@ -103,6 +103,7 @@ void app_main(void)
     led_off();
     crypto_init();
     net_client_init();
+    post_init_env();
     for (;;)
     {
       if (!get_env())

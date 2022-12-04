@@ -10,17 +10,22 @@
     android:weightSum="4"
     android:orientation="horizontal">
 
-    <com.androidplot.xy.XYPlot
-        style="@style/APDefacto.Light"
+    <com.sz.charts.LineChart
         android:id="@+id/plot_temp_int"
         android:layout_width="300dp"
         android:layout_height="fill_parent"
         android:layout_weight="1"
         ap:title="@string/temp"
+        ap:titleColor="@color/colorBlack"
+        ap:titleSize="@integer/chartTitleSize"
+        ap:legendColor="@color/colorBlack"
+        ap:legendSize="@integer/chartLegendSize"
+        ap:legendTableColumns="2"
+        ap:labelColor="@color/colorBlack"
+        ap:labelSize="@integer/chartLabelSize"
+        ap:lineColors="@array/chartLineColors"
         ap:rangeTitle="°C"
-        ap:domainTitle="@string/time"
-        ap:lineLabels="left|bottom"
-        ap:lineLabelRotationBottom="-45"/>
+        ap:domainTitle="@string/time"/>
 
     <Button
         android:id="@+id/next_temp_int_graph"
@@ -29,16 +34,21 @@
         android:text="&gt;"
         />
 
-    <com.androidplot.xy.XYPlot
+    <com.sz.charts.LineChart
         android:id="@+id/plot_temp_ext"
-        style="@style/APDefacto.Light"
         android:layout_width="300dp"
         android:layout_height="fill_parent"
         android:layout_weight="1"
         ap:domainTitle="@string/time"
-        ap:lineLabelRotationBottom="-45"
-        ap:lineLabels="left|bottom"
         ap:rangeTitle="°C"
+        ap:titleColor="@color/colorBlack"
+        ap:titleSize="@integer/chartTitleSize"
+        ap:legendColor="@color/colorBlack"
+        ap:legendSize="@integer/chartLegendSize"
+        ap:legendTableColumns="2"
+        ap:labelColor="@color/colorBlack"
+        ap:labelSize="@integer/chartLabelSize"
+        ap:lineColors="@array/chartLineColors"
         ap:title="@string/temp" />
 
     <Button
@@ -48,17 +58,22 @@
         android:text="&gt;"
         />
 
-    <com.androidplot.xy.XYPlot
-        style="@style/APDefacto.Light"
+    <com.sz.charts.LineChart
         android:id="@+id/plot_humi"
         android:layout_width="300dp"
         android:layout_height="fill_parent"
         android:layout_weight="1"
         ap:title="@string/humi"
+        ap:titleColor="@color/colorBlack"
+        ap:titleSize="@integer/chartTitleSize"
+        ap:legendColor="@color/colorBlack"
+        ap:legendSize="@integer/chartLegendSize"
+        ap:legendTableColumns="2"
+        ap:labelColor="@color/colorBlack"
+        ap:labelSize="@integer/chartLabelSize"
+        ap:lineColors="@array/chartLineColors"
         ap:rangeTitle="%"
-        ap:domainTitle="@string/time"
-        ap:lineLabels="left|bottom"
-        ap:lineLabelRotationBottom="-45"/>
+        ap:domainTitle="@string/time"/>
 
     <Button
         android:id="@+id/next_humi_graph"
@@ -67,17 +82,21 @@
         android:text="&gt;"
         />
 
-    <com.androidplot.xy.XYPlot
-        style="@style/APDefacto.Light"
+    <com.sz.charts.LineChart
         android:id="@+id/plot_pres"
         android:layout_width="300dp"
         android:layout_height="fill_parent"
         android:layout_weight="1"
         ap:title="@string/pres"
+        ap:titleColor="@color/colorBlack"
+        ap:titleSize="@integer/chartTitleSize"
+        ap:legendColor="@color/colorBlack"
+        ap:legendSize="@integer/chartLegendSize"
+        ap:legendTableColumns="2"
+        ap:labelColor="@color/colorBlack"
+        ap:labelSize="@integer/chartLabelSize"
+        ap:lineColors="@array/chartLineColors"
         ap:rangeTitle="hPa"
-        ap:domainTitle="@string/time"
-        ap:lineLabels="left|bottom"
-        ap:lineLabelInsetLeft="40dp"
-        ap:lineLabelRotationBottom="-45"/>
+        ap:domainTitle="@string/time"/>
 </LinearLayout>
 </HorizontalScrollView>

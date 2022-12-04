@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.MenuItem
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 
@@ -22,6 +23,13 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
                 .commit()
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                setResult(mResult, intent)
+                finish()
+            }
+        })
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
@@ -39,13 +47,13 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         override fun onResume() {
             super.onResume()
             // Set up a listener whenever a key changes
-            preferenceScreen.sharedPreferences.registerOnSharedPreferenceChangeListener(mListener)
+            preferenceScreen.sharedPreferences!!.registerOnSharedPreferenceChangeListener(mListener)
         }
 
         override fun onPause() {
             super.onPause()
             // Set up a listener whenever a key changes
-            preferenceScreen.sharedPreferences.unregisterOnSharedPreferenceChangeListener(mListener)
+            preferenceScreen.sharedPreferences!!.unregisterOnSharedPreferenceChangeListener(mListener)
         }
     }
 
@@ -58,15 +66,11 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         mResult = Activity.RESULT_OK
     }
 
-    override fun onBackPressed() {
-        setResult(mResult)
-        finish()
-    }
-
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             android.R.id.home -> {
-                onBackPressed()
+                setResult(mResult, intent)
+                finish()
                 return true
             }
         }

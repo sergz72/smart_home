@@ -1,5 +1,6 @@
 package smart_home.smarthome
 
+import android.app.Activity
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
@@ -13,12 +14,9 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 
-import java.util.Date
-
-import smart_home.smarthome.entities.DateDeserializer
 import smart_home.smarthome.entities.SensorData
 
-abstract class SensorsFragment(private val mId: Int, protected val params: IGraphParameters?, private val  dataType: String) : Fragment(), ISmartHomeData {
+abstract class SensorsFragment(private val mId: Int, protected val params: IGraphParameters?, private val  dataType: String, private val maxPoints: Int = 200) : Fragment(), ISmartHomeData {
     protected val mGson: Gson
     private val mService = buildService()
 
@@ -26,8 +24,11 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
 
     init {
         val gsonBuilder = GsonBuilder()
-        gsonBuilder.registerTypeAdapter(Date::class.java, DateDeserializer())
         mGson = gsonBuilder.create()
+    }
+
+    fun findSensors(results: List<SensorData>, locationTypeChecker: (String) -> Boolean, dataTypeChecker: (Set<String>) -> Boolean): List<SensorData> {
+        return results.filter { sd -> locationTypeChecker(sd.locationType) && dataTypeChecker(sd.series[0].data.keys) }
     }
 
     private fun buildService(): SmartHomeService<List<SensorData>> {
@@ -35,7 +36,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
                 .setRequest(buildRequest())
     }
 
-    fun buildRequest(): String {
+    private fun buildRequest(): String {
         var requestString = "GET /sensor_data?data_type=$dataType"
         if (params != null) {
             if (params.getData().mUsePeriod) {
@@ -43,7 +44,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
             } else {
                 requestString += "&start=" + params.getData().getFromDate() + "&end=" + params.getData().getToDate()
             }
-            requestString += "&maxPoints=200"
+            requestString += "&maxPoints=$maxPoints"
         }
         return requestString
     }
@@ -83,7 +84,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
                     }
                 }
             }
-        })
+        }, Activity())
     }
 
     protected abstract fun showResults(results: List<SensorData>)

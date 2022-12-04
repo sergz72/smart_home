@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="chartTitleSize">60</integer>
+    <integer name="chartLegendSize">50</integer>
+    <integer name="chartLabelSize">40</integer>
+</resources>

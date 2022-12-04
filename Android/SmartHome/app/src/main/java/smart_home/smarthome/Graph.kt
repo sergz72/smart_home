@@ -1,36 +1,30 @@
 package smart_home.smarthome
 
-import android.graphics.Color
-import com.androidplot.ui.DynamicTableModel
-import com.androidplot.ui.TableOrder
-import com.androidplot.xy.*
+import com.sz.charts.GraphSeries
+import com.sz.charts.LineChart
 import smart_home.smarthome.entities.SensorData
 import java.text.FieldPosition
 import java.text.Format
 import java.text.ParsePosition
-import java.text.SimpleDateFormat
 import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 
 object Graph {
 
-    private val FORMATTERS = arrayOf(LineAndPointFormatter(Color.RED, Color.GREEN, Color.TRANSPARENT, null),
-            LineAndPointFormatter(Color.YELLOW, Color.BLUE, Color.TRANSPARENT, null),
-            LineAndPointFormatter(Color.CYAN, Color.MAGENTA, Color.TRANSPARENT, null),
-            LineAndPointFormatter(Color.BLACK, Color.valueOf(128f, 0f, 128f).toArgb(), Color.TRANSPARENT, null),
-            LineAndPointFormatter(Color.GREEN, Color.CYAN, Color.TRANSPARENT, null),
-            LineAndPointFormatter(Color.BLUE, Color.YELLOW, Color.TRANSPARENT, null))
-
-    private val FORMATTER = SimpleDateFormat("dd.MM HH:mm", Locale.US)
-    private val DAY_FORMATTER = SimpleDateFormat("dd.MM", Locale.US)
-    private val HOUR_FORMATTER = SimpleDateFormat("HH:mm", Locale.US)
+    private val FORMATTER = DateTimeFormatter.ofPattern("dd.MM HH:mm", Locale.US)
+    private val DAY_FORMATTER = DateTimeFormatter.ofPattern("dd.MM", Locale.US)
+    private val HOUR_FORMATTER = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
     private val LABEL_FORMATTER = object : Format() {
         override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
             val time = (obj as Number).toLong()
-            val date = Date(time)
-            if (date.hours != 0 || date.minutes != 0) {
+            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+            if (date.hour != 0 || date.minute != 0) {
                 return toAppendTo.append(FORMATTER.format(date))
             }
             return toAppendTo.append(DAY_FORMATTER.format(date))
@@ -44,7 +38,7 @@ object Graph {
     private val LABEL_HOUR_FORMATTER = object : Format() {
         override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
             val time = (obj as Number).toLong()
-            val date = Date(time)
+            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
             return toAppendTo.append(HOUR_FORMATTER.format(date))
         }
 
@@ -53,152 +47,130 @@ object Graph {
         }
     }
 
-    private class DateComparator : Comparator<IGraphData> {
-        override fun compare(o1: IGraphData, o2: IGraphData): Int {
-            return o1.date.compareTo(o2.date)
+    private val LABEL_FLOAT1_FORMATTER = object : Format() {
+        override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
+            val v = obj as Double
+            return toAppendTo.append("%.1f".format(v))
+        }
+
+        override fun parseObject(source: String, pos: ParsePosition): Any? {
+            return null
         }
     }
 
-    private class GraphDataSeries constructor(private val mData: List<IGraphData>, private val mDataName: String) : OrderedXYSeries {
-
-        override fun size(): Int {
-            return mData.size
+    private val LABEL_FLOAT0_FORMATTER = object : Format() {
+        override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
+            val v = obj as Double
+            return toAppendTo.append("%.0f".format(v))
         }
 
-        override fun getX(index: Int): Number {
-            return mData[index].date.time
-        }
-
-        override fun getY(index: Int): Number? {
-            return mData[index].getData(mDataName)
-        }
-
-        override fun getTitle(): String {
-            return mData[0].seriesColumnData
-        }
-
-        override fun getXOrder(): OrderedXYSeries.XOrder {
-            return OrderedXYSeries.XOrder.ASCENDING
+        override fun parseObject(source: String, pos: ParsePosition): Any? {
+            return null
         }
     }
 
-    private data class SeriesInfo(val mSeries: List<XYSeries>, val mLowerBoundary: Double, val mUpperBoundary: Double)
-
-    private fun convertPrefixData(data: List<IGraphData>, dataName: String): List<IGraphData> {
-        val result = ArrayList<IGraphData>()
-
-        for (item in data) {
-            for ((key, value) in item.data) {
-                if (key.startsWith(dataName)) {
-                    val location = item.seriesColumnData + ":" + key
-                    result.add(SensorData.build(location, item.date, dataName, value))
-                }
-            }
-        }
-
-        return result
-    }
-
-    private fun convertSuffixData(data: List<IGraphData>, dataName: String): List<IGraphData> {
-        val result = ArrayList<IGraphData>()
-
-        for (item in data) {
-            for ((key, _) in item.data) {
-                if (key.endsWith(dataName)) {
-                    var location = item.seriesColumnData + ":Max"
-                    var v = item.getData("Max$key")
-                    if (v != null) {
-                        result.add(SensorData.build(location, item.date, dataName, v))
-                    }
-                    location = item.seriesColumnData + ":Min"
-                    v = item.getData("Min$key")
-                    if (v != null) {
-                        result.add(SensorData.build(location, item.date, dataName, v))
-                    }
-                    location = item.seriesColumnData + ":Avg"
-                    v = item.getData("Avg$key")
-                    if (v != null) {
-                        result.add(SensorData.build(location, item.date, dataName, v))
-                    }
-                }
-            }
-        }
-
-        return result
-    }
-
-    private fun buildSeries(d: List<IGraphData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean): SeriesInfo {
-        var data = d
+    private fun buildGraphParameters(d: SensorData, dataName: String, isPrefix: Boolean, isSuffix: Boolean): Map<String, String> {
         if (isPrefix) {
-            data = convertPrefixData(data, dataName)
+            return d.series[0].data.keys.filter { it.startsWith(dataName) }.associateBy { d.locationName + ":" + it }
         }
         if (isSuffix) {
-            data = convertSuffixData(data, dataName)
-        }
-        val series = HashMap<String, MutableList<IGraphData>>()
-        var lowerBoundary = java.lang.Double.MAX_VALUE
-        var upperBoundary = java.lang.Double.MIN_VALUE
-
-        for (dataItem in data) {
-            var values: MutableList<IGraphData>? = series[dataItem.seriesColumnData]
-            if (values == null) {
-                values = ArrayList()
-                series[dataItem.seriesColumnData] = values
+            if (dataName == "pwr") {
+                return mapOf(d.locationName to "Sum$dataName")
             }
-
-            val dataValue = dataItem.getData(dataName)
-            if (dataValue != null) {
-                values.add(dataItem)
-                if (dataValue < lowerBoundary) {
-                    lowerBoundary = dataValue
-                }
-                if (dataValue > upperBoundary) {
-                    upperBoundary = dataValue
-                }
-            }
+            return mapOf(d.locationName + ":Min" to "Min$dataName",
+                         d.locationName + ":Avg" to "Avg$dataName",
+                         d.locationName + ":Max" to "Max$dataName")
         }
-
-        val result = ArrayList<XYSeries>()
-
-        for ((_, value) in series) {
-            if (value.size > 1) {
-                result.add(GraphDataSeries(value, dataName))
-            }
-        }
-
-        return SeriesInfo(result, lowerBoundary, upperBoundary)
+        return mapOf(d.locationName to dataName)
     }
 
-    fun buildGraph(plot: XYPlot, data: List<IGraphData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean,
-                   columns: Int, rows: Int) {
-        plot.clear()
-        if (data.size > 1) {
-            val comparator = DateComparator()
-            Collections.sort(data, comparator)
-            val start = data[0].date.toInstant()
-            val end = data[data.size - 1].date.toInstant()
-            val days = Duration.between(start, end).toDays()
-            var multiplier = 1
-            if (days == 2L) {
-                multiplier = 2
-            } else if (days in 3..30L) {
-                multiplier = 12
-            } else if (days > 30L) {
-                multiplier = 24 * days.toInt() / 30
-            }
-            val seriesInfo = buildSeries(data, dataName, isPrefix, isSuffix)
-            if (seriesInfo.mSeries.isNotEmpty()) {
-                var i = 0
-                for (seriesItem in seriesInfo.mSeries) {
-                    plot.addSeries(seriesItem, FORMATTERS[i++])
-                }
-                plot.setRangeBoundaries(seriesInfo.mLowerBoundary, seriesInfo.mUpperBoundary, BoundaryMode.FIXED)
-                plot.domainStepMode = StepMode.INCREMENT_BY_VAL
-                plot.domainStepValue = (60 * 60 * 2000 * multiplier).toDouble()
-                plot.graph.getLineLabelStyle(XYGraphWidget.Edge.BOTTOM).format = if (days < 3L) LABEL_HOUR_FORMATTER else LABEL_FORMATTER
-                plot.legend.setTableModel(DynamicTableModel(columns, rows, TableOrder.ROW_MAJOR))
+    private fun buildSeries(d: List<SensorData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean): GraphSeries {
+        val result = GraphSeries()
+        d.filter { it.series.size > 1 && it.series[0].data.containsKey(dataName) }
+         .forEach { data -> buildGraphParameters(data, dataName, isPrefix, isSuffix).forEach { (title, dn) ->
+                    result.addGraph(data.buildGraphData(title, dn))
             }
         }
-        plot.redraw()
+
+        return result
+    }
+
+    fun buildGraph(plot: LineChart, data: SensorData?, dataName: String, isPrefix: Boolean,
+                   isSuffix: Boolean, useFloat0: Boolean) {
+        if (data == null) {
+            plot.clearSeries()
+        } else {
+            buildGraph(plot, listOf(data), dataName, isPrefix, isSuffix, useFloat0)
+        }
+    }
+
+    fun buildGraph(plot: LineChart, data: List<SensorData>, dataName: String, isPrefix: Boolean,
+                   isSuffix: Boolean, useFloat0: Boolean) {
+        if (data.isNotEmpty() && data.maxOf { sd -> sd.series.size } > 1) {
+            val start = data.minOf { d -> d.minDate() }
+            val end = data.maxOf { d -> d.maxDate() }
+            val days = Duration.between(start, end).toDays()
+            var multiplier = 1
+            when {
+                days == 2L -> {
+                    multiplier = 2
+                }
+                days in 3..30L -> {
+                    multiplier = 12
+                }
+                days > 30L -> {
+                    multiplier = 24 * days.toInt() / 30
+                }
+            }
+            val seriesInfo = buildSeries(data, dataName, isPrefix, isSuffix)
+            val dy = seriesInfo.mUpperYBoundary - seriesInfo.mLowerYBoundary
+            var rangeStepValue = 0.1F
+            when {
+                dy > 1.0F && dy <= 2.0F -> {
+                    rangeStepValue = 0.2F
+                }
+                dy > 2.0F && dy <= 5.0F -> {
+                    rangeStepValue = 0.5F
+                }
+                dy > 5.0F && dy <= 10.0F -> {
+                    rangeStepValue = 1.0F
+                }
+                dy > 10.0F && dy <= 20.0F -> {
+                    rangeStepValue = 2.0F
+                }
+                dy > 20.0F && dy <= 50.0F -> {
+                    rangeStepValue = 5.0F
+                }
+                dy > 50.0F && dy <= 100.0F -> {
+                    rangeStepValue = 10.0F
+                }
+                dy > 100.0F && dy <= 200.0F -> {
+                    rangeStepValue = 20.0F
+                }
+                dy > 200.0F && dy <= 500.0F -> {
+                    rangeStepValue = 50.0F
+                }
+                dy > 500.0F && dy <= 1000.0F -> {
+                    rangeStepValue = 100.0F
+                }
+                dy > 1000.0F && dy <= 2000.0F -> {
+                    rangeStepValue = 200.0F
+                }
+                dy > 2000.0F && dy <= 5000.0F -> {
+                    rangeStepValue = 500.0F
+                }
+                dy > 5000.0F -> {
+                    rangeStepValue = 1000.0F
+                }
+            }
+            plot.setSeries(seriesInfo,
+                60 * 60 * 2 * multiplier,
+                if (days < 3L) LABEL_HOUR_FORMATTER else LABEL_FORMATTER,
+                rangeStepValue,
+                if (useFloat0) LABEL_FLOAT0_FORMATTER else LABEL_FLOAT1_FORMATTER
+            )
+        } else {
+            plot.clearSeries()
+        }
     }
 }

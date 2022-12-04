@@ -9,6 +9,7 @@
     <string name="title_activity_filters">Filters</string>
 
     <string name="env_sensors">Environmental sensors</string>
+    <string name="wat_sensors">Water sensors</string>
     <string name="ele_sensors">Electrical sensors</string>
     <string name="temp">Temperature</string>
     <string name="humi">Humidity</string>
@@ -18,6 +19,9 @@
     <string name="volt">Voltage</string>
     <string name="vbat">Battery voltage</string>
     <string name="vcc">Power supply voltage</string>
+    <string name="icc">Current</string>
+    <string name="pwr">Power</string>
+    <string name="total">Total: %1$d</string>
 
     <string name="select_date_start">Start date</string>
     <string name="select_date_end">End date</string>
@@ -25,8 +29,16 @@
     <string name="period">Period</string>
     <string name="set">Set</string>
 
+    <string name="serverListTitle">Server</string>
+
     <!-- Strings related to Settings -->
 
-    <string name="pref_title_server_name">Server name</string>
+    <string name="pref_title_server_1">Server 1 address</string>
+    <string name="pref_title_server_name1">Server 1 name</string>
+    <string name="pref_title_server_2">Server 2 address</string>
+    <string name="pref_title_server_name2">Server 2 name</string>
+    <string name="pref_title_server_3">Server 3 address</string>
+    <string name="pref_title_server_name3">Server 3 name</string>
+    <string name="pref_title_default_server">Default server</string>
 
 </resources>

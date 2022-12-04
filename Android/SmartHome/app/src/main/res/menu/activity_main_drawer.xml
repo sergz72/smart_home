@@ -11,6 +11,9 @@
             android:id="@+id/nav_env"
             android:title="@string/env_sensors"/>
         <item
+            android:id="@+id/nav_wat"
+            android:title="@string/wat_sensors"/>
+        <item
             android:id="@+id/nav_ele"
             android:title="@string/ele_sensors"/>
     </group>

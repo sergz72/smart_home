@@ -3,12 +3,18 @@ package smart_home.smarthome
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.gesture.Gesture
-import android.gesture.GestureOverlayView
-import android.graphics.Point
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
@@ -16,12 +22,13 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 
-class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener, IGraphParameters {
+class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener, IGraphParameters,
+    ActivityResultCallback<ActivityResult>, AdapterView.OnItemSelectedListener {
     companion object {
         const val PREFS_NAME = "SmartHome"
         private const val SETTINGS = 1
         private const val FILTERS  = 2
-        private const val PAGE_MAX = 2
+        private const val PAGE_MAX = 3
 
         fun alert(activity: Activity, message: String?) {
             val builder = AlertDialog.Builder(activity)
@@ -34,6 +41,9 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     private var pageId: Int = 0
     private var filters: FiltersActivity.Data = FiltersActivity.Data()
+    private var mActivityResultLauncher: ActivityResultLauncher<Intent>? = null
+    private var mServerList: Spinner? = null
+    private var disableRefresh = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,30 +60,77 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         val navigationView = findViewById<NavigationView>(R.id.nav_view)
         navigationView.setNavigationItemSelectedListener(this)
 
-        SmartHomeService.setupKeyAndContext(resources.openRawResource(R.raw.key), this)
+        SmartHomeService.setupKey(resources.openRawResource(R.raw.key))
+
+        mServerList = findViewById(R.id.serverSelection)
+        mServerList!!.onItemSelectedListener = this
+
+        mActivityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult(), this)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val drawerr = findViewById<DrawerLayout>(R.id.drawer_layout)
+                if (drawerr.isDrawerOpen(GravityCompat.START)) {
+                    drawerr.closeDrawer(GravityCompat.START)
+                }
+            }
+        })
 
         try {
-            updateServer()
+            updateServer(false)
             openPage(0)
         } catch (e: Exception) {
             alert(this, e.message)
         }
     }
 
-    private fun updateServer() {
+    private fun updateServer(refreshData: Boolean) {
         val settings = getSharedPreferences(PREFS_NAME, 0)
-        val name = settings.getString("server_name", "localhost")!!
 
-        SmartHomeService.setupServer(name, 60001)
+        val serverList = IntRange(1, 3)
+            .filter { settings.getString("server$it", "")!!.isNotEmpty() }
+            .map { settings.getString("server_name$it", "Server $it") }
+        val adapter = ArrayAdapter(this, R.layout.spinner_item, serverList)
+        mServerList!!.adapter = adapter
+
+        val defaultServer = settings.getString("default_server", "1")!!.toIntOrNull()
+        if (defaultServer != null && defaultServer <= serverList.size) {
+            mServerList!!.setSelection(defaultServer - 1)
+        }
+
+        refresh(refreshData)
     }
 
-    override fun onBackPressed() {
-        val drawer = findViewById<DrawerLayout>(R.id.drawer_layout)
-        if (drawer.isDrawerOpen(GravityCompat.START)) {
-            drawer.closeDrawer(GravityCompat.START)
-        } else {
-            super.onBackPressed()
+    private fun refresh(refreshData: Boolean) {
+        val serverNameObject = mServerList!!.selectedItem ?: return
+        val settings = getSharedPreferences(PREFS_NAME, 0)
+        val serverName = serverNameObject as String
+
+        var serverAddress = IntRange(1, 5)
+            .filter { settings.getString("server_name$it", "")!! == serverName }
+            .map { settings.getString("server$it", "") }
+            .first()
+        if (serverAddress.isNullOrEmpty()) {
+            alert(this, "Server address is empty")
+            return
         }
+
+        var port = 60001
+        val serverAddressParts = serverAddress.split(':')
+        if (serverAddressParts.size == 2) {
+            serverAddress = serverAddressParts[0]
+            val mayBePort = serverAddressParts[1].toIntOrNull()
+            if (mayBePort != null) {
+                port = mayBePort
+            } else {
+                alert(this, "wrong serverAddress")
+                return
+            }
+        }
+
+        SmartHomeService.setupServer(serverAddress, port)
+        if (refreshData)
+          refreshFragment()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -93,12 +150,12 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        val id = item.itemId
 
-        when (id) {
+        when (item.itemId) {
             R.id.action_settings -> {
                 val intent = Intent(this, SettingsActivity::class.java)
-                startActivityForResult(intent, SETTINGS)
+                intent.putExtra("code", SETTINGS)
+                mActivityResultLauncher!!.launch(intent)
                 return true
             }
             R.id.action_refresh -> {
@@ -107,8 +164,9 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             }
             R.id.action_filters -> {
                 val intent = Intent(this, FiltersActivity::class.java)
+                intent.putExtra("code", FILTERS)
                 intent.putExtra("data", filters)
-                startActivityForResult(intent, FILTERS)
+                mActivityResultLauncher!!.launch(intent)
                 return true
             }
         }
@@ -117,28 +175,33 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     }
 
     private fun openPage(page: Int) {
-        if (page < 0) {
-            pageId = PAGE_MAX
-        } else if (page > PAGE_MAX) {
-            pageId = 0
-        } else {
-            pageId = page
+        pageId = when {
+            page < 0 -> {
+                PAGE_MAX
+            }
+            page > PAGE_MAX -> {
+                0
+            }
+            else -> {
+                page
+            }
         }
         when (pageId) {
             0 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, HomePageFragment()).commit()
             1 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EnvSensorsFragment(this)).commit()
-            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment(this)).commit()
+            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, WatSensorsFragment(this)).commit()
+            3 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment(this)).commit()
         }
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         // Handle navigation view item clicks here.
-        val id = item.itemId
 
-        when (id) {
+        when (item.itemId) {
             R.id.nav_home -> openPage(0)
             R.id.nav_env -> openPage(1)
-            R.id.nav_ele -> openPage(2)
+            R.id.nav_wat -> openPage(2)
+            R.id.nav_ele -> openPage(3)
         }
 
         val drawer = findViewById<DrawerLayout>(R.id.drawer_layout)
@@ -146,30 +209,38 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         return true
     }
 
-    override fun onActivityResult(requestCodeIn: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCodeIn, resultCode, data)
-        var requestCode = requestCodeIn
-        requestCode = requestCode and 0xFFFF
-        if (resultCode == Activity.RESULT_OK) {
-        when (requestCode) {
-            SETTINGS -> {
-                try {
-                    updateServer()
-                } catch (e: Exception) {
-                    alert(this, e.message)
+    override fun onActivityResult(result: ActivityResult) {
+        val requestCode = result.data!!.getIntExtra("code", -2)
+        if (result.resultCode == Activity.RESULT_OK) {
+            when (requestCode) {
+                SETTINGS -> {
+                    try {
+                        updateServer(true)
+                    } catch (e: Exception) {
+                        alert(this, e.message)
+                    }
+                }
+                FILTERS -> {
+                    if (result.data != null) {
+                        filters = result.data!!.getParcelableExtra("data")!!
+                        refreshFragment()
+                    }
                 }
             }
-            FILTERS -> {
-                if (data != null) {
-                    filters = data.getParcelableExtra("data")!!
-                    refreshFragment()
-                }
-            }
-        }
         }
     }
 
     override fun getData(): FiltersActivity.Data {
         return filters
+    }
+
+    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+        if (!disableRefresh)
+            refresh(true)
+        else
+            disableRefresh = false
+    }
+
+    override fun onNothingSelected(parent: AdapterView<*>?) {
     }
 }

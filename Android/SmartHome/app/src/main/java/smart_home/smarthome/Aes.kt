@@ -50,6 +50,9 @@ object Aes {
     }
 
     private fun unbzip(decoded: ByteArray): String {
+        if (decoded.size <= 200) {
+            return decoded.toString(Charsets.UTF_8)
+        }
         val inStream = BZip2CompressorInputStream(ByteArrayInputStream(decoded))
         inStream.use {
             return inStream.readBytes().toString(Charsets.UTF_8)

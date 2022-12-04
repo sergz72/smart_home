@@ -32,8 +32,8 @@ class SensorsViewAdapter(private val mResources: Resources) : RecyclerView.Adapt
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val d = mData[position]
-        holder.mLocationNameView.text = d[0].seriesColumnData
-        holder.mDataView.text = d.map { it.getDataPresentation(mResources) }.joinToString("")
+        holder.mLocationNameView.text = d[0].locationName
+        holder.mDataView.text = d.flatMap { it.series }.joinToString("") { it.getDataPresentation(mResources) }
         holder.itemView.setBackgroundColor(if (selectedPosition == position) Color.GREEN else Color.TRANSPARENT)
     }
 
@@ -42,12 +42,10 @@ class SensorsViewAdapter(private val mResources: Resources) : RecyclerView.Adapt
     }
 
     inner class ViewHolder(v: View) : RecyclerView.ViewHolder(v), View.OnClickListener {
-        var mLocationNameView: TextView
-        var mDataView: TextView
+        var mLocationNameView: TextView = v.findViewById(R.id.location_name)
+        var mDataView: TextView = v.findViewById(R.id.data)
 
         init {
-            mLocationNameView = v.findViewById<View>(R.id.location_name) as TextView
-            mDataView = v.findViewById<View>(R.id.data) as TextView
             v.setOnClickListener(this)
         }
 

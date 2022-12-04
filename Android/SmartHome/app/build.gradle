@@ -2,10 +2,10 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 30
+    compileSdkVersion 33
     defaultConfig {
         applicationId "smart_home.smarthome"
-        minSdkVersion 29
+        minSdkVersion 31
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -22,20 +22,17 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+    namespace 'smart_home.smarthome'
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'com.android.support.constraint:constraint-layout:2.0.4'
-    implementation 'androidx.navigation:navigation-ui-ktx:2.3.2'
-    implementation 'androidx.preference:preference:1.1.1'
-    testImplementation 'junit:junit:4.13.1'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
-    api 'com.androidplot:androidplot-core:1.5.7'
-    api 'com.google.code.gson:gson:2.8.6'
-    api 'org.apache.commons:commons-compress:1.20'
+    implementation 'androidx.navigation:navigation-ui-ktx:2.5.3'
+    implementation 'androidx.preference:preference-ktx:1.2.0'
+    implementation(name:'szcharts', ext:'aar')
+    api 'com.google.code.gson:gson:2.8.9'
+    api 'org.apache.commons:commons-compress:1.21'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
-repositories {
-    mavenCentral()
-}
+

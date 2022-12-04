@@ -1,8 +1,10 @@
 package smart_home.smarthome
 
+import android.app.Activity
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.NetworkOnMainThreadException
 import java.io.InputStream
 import java.net.*
 import java.util.concurrent.Executor
@@ -11,24 +13,20 @@ import java.util.concurrent.Executors
 class SmartHomeService<T> {
     companion object {
         private val executor: Executor = Executors.newSingleThreadExecutor()
-        private lateinit var mAddress: InetAddress
+        private var mAddress: InetAddress? = null
         private var mPort: Int = 0
-        private lateinit var context: Context
 
-        fun setupKeyAndContext(keyStream: InputStream, ctx: Context) {
+        fun setupKey(keyStream: InputStream) {
             Aes.setKey(keyStream.readBytes())
-            context = ctx
         }
 
         fun setupServer(serverAddress: String, port: Int) {
-            getInetAddressByName(serverAddress)
-            mPort = port
-        }
-
-        private fun getInetAddressByName(name: String) {
-            executor.execute{
-                mAddress = InetAddress.getByName(name)
+            mAddress = try {
+                InetAddress.getByName(serverAddress)
+            } catch (e: NetworkOnMainThreadException) {
+                null
             }
+            mPort = port
         }
     }
 
@@ -46,8 +44,8 @@ class SmartHomeService<T> {
         return this
     }
 
-    fun doInBackground(callback: Callback<T>) {
-        if (mRequest != null) {
+    fun doInBackground(callback: Callback<T>, context: Activity) {
+        if (mRequest != null && mAddress != null) {
             executor.execute {
                 val socket = DatagramSocket()
                 val bytes = Aes.encode(mRequest!!)
@@ -56,7 +54,7 @@ class SmartHomeService<T> {
                 try {
                     val inPacket = DatagramPacket(receiveData, receiveData.size)
                     var exc: SocketTimeoutException? = null
-                    socket.soTimeout = if (isWifiConnected()) 2000 else 7000 // 2 seconds
+                    socket.soTimeout = if (isWifiConnected(context)) 2000 else 7000 // 2 seconds
                     for (retry in 1..3) {
                         socket.send(packet)
                         try {
@@ -92,12 +90,16 @@ class SmartHomeService<T> {
         }
     }
 
-    private fun isWifiConnected(): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-        if (cm is ConnectivityManager) {
-            val n = cm.activeNetwork ?: return false
-            val cp = cm.getNetworkCapabilities(n)
-            return cp != null && cp.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    private fun isWifiConnected(context: Activity): Boolean {
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+            if (cm is ConnectivityManager) {
+                val n = cm.activeNetwork ?: return false
+                val cp = cm.getNetworkCapabilities(n)
+                return cp != null && cp.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            }
+        } catch (e: Exception) {
+           return true
         }
 
         return true

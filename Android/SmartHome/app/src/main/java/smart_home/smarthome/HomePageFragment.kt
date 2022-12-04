@@ -1,5 +1,6 @@
 package smart_home.smarthome
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -31,8 +32,9 @@ class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, null, "all
         super.onAttach(context)
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     override fun showResults(results: List<SensorData>) {
-        val dataMap = results.groupBy {  it.seriesColumnData }
+        val dataMap = results.groupBy {  it.locationName }
         mSensorsViewAdapter!!.setData(dataMap)
         mSensorsViewAdapter!!.notifyDataSetChanged()
     }

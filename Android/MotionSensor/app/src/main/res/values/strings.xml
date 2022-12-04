@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Motion Sensor</string>
+    <string name="action_settings">Settings</string>
+    <string name="title_activity_settings">Settings</string>
+    <string name="time">Time</string>
+    <string name="hcDistance">hcDistance</string>
+    <string name="vlDistance">vlDistance</string>
+
+    <string name="pref_title_use_hc_sensor">Use HC sensor</string>
+    <string name="pref_title_hc_alert_distance">HC sensor alert distance</string>
+    <string name="pref_title_use_vl_sensor">Use VL sensor</string>
+    <string name="pref_title_vl_alert_distance">VL sensor alert distance</string>
+    <string name="pref_title_disable_alarm">Disable alarm</string>
+</resources>

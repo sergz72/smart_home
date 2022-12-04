@@ -22,4 +22,22 @@
         <item>336</item>
         <item>720</item>
     </integer-array>
+    <string-array name="chartLineColors">
+        <item>Red,Green</item>
+        <item>Yellow,Blue</item>
+        <item>Cyan,Magenta</item>
+        <item>Black,#800080</item>
+        <item>Green,Cyan</item>
+        <item>Blue,Yellow</item>
+    </string-array>
+    <string-array name="servers">
+        <item>Server 1</item>
+        <item>Server 2</item>
+        <item>Server 3</item>
+    </string-array>
+    <string-array name="serverIds">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
 </resources>
