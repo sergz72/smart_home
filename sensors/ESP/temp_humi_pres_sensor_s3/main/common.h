@@ -10,10 +10,10 @@
 #define SEND_INTERVAL 5000 // 5 seconds
 #else
 #define SEND_INTERVAL 270000 // 4.5 minutes
-#define HOST_IP_ADDR ????
+#define HOST_IP_ADDR ""
 #endif
 
-#define PORT ????
+#define PORT 0
 
 #define BLE_ENV
 
@@ -30,12 +30,19 @@
 
 #ifdef WEMOS_S3
 #define BUTTON_GPIO 0
-#define I2C_MASTER_SCL_IO           11                         /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           10                         /*!< GPIO number used for I2C master data  */
+#define I2C_MASTER_SCL_IO           14                         /*!< GPIO number used for I2C master clock */
+#define I2C_MASTER_SDA_IO           21                         /*!< GPIO number used for I2C master data  */
+#define PIN_NUM_MISO 13
+#define PIN_NUM_MOSI 11
+#define PIN_NUM_CLK  12
+#define PIN_NUM_CS   10
+#define PIN_NUM_GDO0 15
+#define PIN_NUM_GDO2 16
 #define LED_GPIO 38
 #define LED_STRIP
-#define GPIO_INPUT_IO 2
-#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT_IO)
+#define GPIO_RECEIVER_DATA_IO 2
+#define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_RECEIVER_DATA_IO) | (1ULL<<PIN_NUM_GDO0) | (1ULL<<PIN_NUM_GDO2))
+#define GPIO_OUTPUT_PIN_SEL (1ULL<<PIN_NUM_CS)
 //#define WIFI_POWER 3 // db
 #endif
 

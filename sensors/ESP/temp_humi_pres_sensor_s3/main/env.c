@@ -1,23 +1,20 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "stdint.h"
 #include "esp_log.h"
-#include "driver/i2c.h"
 #include "driver/gpio.h"
+#include "PrologueDecoder.h"
+#include "driver/gptimer.h"
+#include "cc1101_func.h"
+#include "common.h"
 #include "led.h"
 #include "env.h"
+#include "hal.h"
+#include "laCrosseDecoder.h"
 #ifdef USE_BME280
 #include "bme280.h"
 #endif
-#include "PrologueDecoder.h"
-#include "common.h"
-#include "driver/gptimer.h"
-
-#define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
-#define I2C_MASTER_FREQ_HZ          100000                     /*!< I2C master clock frequency */
-#define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_TIMEOUT_MS       1000
 
 static const char *TAG = "env";
 static char prologueBuffer[DECODER_BUFFER_SIZE * sizeof(ProloguePacket)];
@@ -32,69 +29,16 @@ uint32_t pres_val = 10003;
 #endif
 int16_t ext_temp_val = 0;
 uint16_t ext_humi_val = 0;
+int16_t ext_temp_val2 = 0;
 
-static esp_err_t i2c_master_init(void)
-{
-  i2c_config_t conf = {
-      .mode = I2C_MODE_MASTER,
-      .sda_io_num = I2C_MASTER_SDA_IO,
-      .scl_io_num = I2C_MASTER_SCL_IO,
-      .sda_pullup_en = GPIO_PULLUP_ENABLE,
-      .scl_pullup_en = GPIO_PULLUP_ENABLE,
-      .master.clk_speed = I2C_MASTER_FREQ_HZ,
-  };
-
-  i2c_param_config(I2C_MASTER_NUM, &conf);
-
-  return i2c_driver_install(I2C_MASTER_NUM, conf.mode, I2C_MASTER_RX_BUF_DISABLE,
-                            I2C_MASTER_TX_BUF_DISABLE, 0);
-}
-
-#ifdef USE_BME280
-unsigned int bme280Read(unsigned char register_no, unsigned char *pData, int size)
-{
-  return i2c_master_write_read_device(I2C_MASTER_NUM, BME280_ADDRESS >> 1, &register_no,
-                                      1, pData, size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
-}
-
-unsigned int bme280Write(unsigned char register_no, unsigned char value)
-{
-  unsigned char data[2];
-  data[0] = register_no;
-  data[1] = value;
-  return i2c_master_write_to_device(I2C_MASTER_NUM, BME280_ADDRESS >> 1, data, 2,
-                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
-}
-
-void delayms(unsigned int ms)
-{
-  vTaskDelay (ms / portTICK_PERIOD_MS);
-}
-#endif
-
-static void gpio_init(void)
-{
-  //zero-initialize the config structure.
-  gpio_config_t io_conf;
-  //disable interrupt
-  io_conf.intr_type = GPIO_INTR_DISABLE;
-  //disable pull-down mode
-  io_conf.pull_down_en = 0;
-  //disable pull-up mode
-  io_conf.pull_up_en = 0;
-  //bit mask of the pins
-  io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-  //set as input mode
-  io_conf.mode = GPIO_MODE_INPUT;
-  gpio_config(&io_conf);
-}
+void post_init_env(void) {}
 
 /* Timer interrupt service routine */
 static bool IRAM_ATTR on_timer_alarm_cb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
 {
   BaseType_t mustYield = pdFALSE;
   currentTime += 200;
-  int level = gpio_get_level(GPIO_INPUT_IO);
+  int level = gpio_get_level(GPIO_RECEIVER_DATA_IO);
   if (level != prevLevel)
   {
     prevLevel = level;
@@ -109,10 +53,20 @@ void init_env(void)
 {
   esp_err_t rc;
 
+  gpio_init();
+
   rc = i2c_master_init();
   if (rc != ESP_OK)
   {
     ESP_LOGE(TAG, "i2c_master_init error %d", rc);
+    set_led_red();
+    while (1){}
+  }
+
+  rc = spi_master_init();
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "spi_master_init error %d", rc);
     set_led_red();
     while (1){}
   }
@@ -125,6 +79,13 @@ void init_env(void)
   }
 #endif
 
+  if (!cc1101Init())
+  {
+    ESP_LOGE(TAG, "cc1101Init failed");
+    set_led_red();
+    while (1){}
+  }
+
   env_semaphore = xSemaphoreCreateBinary();
   if (!env_semaphore) {
     ESP_LOGE(TAG, "semaphore create fail.");
@@ -133,7 +94,6 @@ void init_env(void)
   }
   xSemaphoreGive(env_semaphore);
 
-  gpio_init();
   PrologueDecoderInit(DECODER_BUFFER_SIZE, prologueBuffer);
 
   gptimer_config_t timer_config = {
@@ -157,41 +117,87 @@ void init_env(void)
   ESP_ERROR_CHECK(gptimer_enable(gptimer));
 }
 
+#define LA_CROSSE_FLAG 1
+#define PROLOGUE_FLAG 2
+#define ALL_DONE 3
+
 static int get_ext_env(void)
 {
-  int i;
+  int i, flags;
   ProloguePacket *p = NULL;
+  unsigned char *laCrossePacket;
 
-  currentTime = prevLevel = 0;
+  currentTime = prevLevel = flags = 0;
 
   // 200 us timer
   gptimer_start(gptimer);
 
   for (i = 0; i < 240; i++)
   {
-    xSemaphoreTake(env_semaphore, portMAX_DELAY);
-    p = queue_peek(&prologueDecoderQueue);
-    if (p)
+    if (!(flags & LA_CROSSE_FLAG))
     {
-      queue_pop(&prologueDecoderQueue);
-      xSemaphoreGive(env_semaphore);
-      if (p->id == SENSOR_ID && p->type == PACKET_TYPE)
+      if ((i % 10) == 0)
       {
-        ext_temp_val = (int16_t) (p->temperature * 10);
-        ext_humi_val = (uint16_t) p->humidity * 100;
-        ESP_LOGI(TAG, "External sensor id: %d, packet type: %d, temperature: %d.%d, humidity %d.%d", p->id, p->type,
-                 ext_temp_val / 100, ext_temp_val % 100, ext_humi_val / 100, ext_humi_val % 100);
-        break;
+//      ESP_LOGI(TAG, "cc1101ReceiveStart");
+        cc1101ReceiveStart();
+      } else if ((i % 10) == 9)
+      {
+//      ESP_LOGI(TAG, "cc1101ReceiveStop");
+        cc1101ReceiveStop();
+      } else
+      {
+        laCrossePacket = cc1101Receive();
+        if (laCrossePacket)
+        {
+          ESP_LOGI(TAG, "PACKET RECEIVED!!! %d %d %d %d %d", laCrossePacket[0], laCrossePacket[1], laCrossePacket[2],
+                   laCrossePacket[3], laCrossePacket[4]);
+          laCrossePacket = laCrosseDecode(8, laCrossePacket, &ext_temp_val2, NULL);
+          if (!laCrossePacket)
+          {
+            ext_temp_val2 *= 10;
+            ESP_LOGI(TAG, "PACKET DECODE SUCCESS, t = %d", ext_temp_val2);
+            cc1101ReceiveStop();
+            if (flags & PROLOGUE_FLAG)
+              break;
+            flags |= LA_CROSSE_FLAG;
+          }
+          else
+            ESP_LOGE(TAG, "PACKET DECODE FAILURE %s", laCrossePacket);
+        }
       }
     }
-    else
-      xSemaphoreGive(env_semaphore);
+    if (!(flags & PROLOGUE_FLAG))
+    {
+      xSemaphoreTake(env_semaphore, portMAX_DELAY);
+      p = queue_peek(&prologueDecoderQueue);
+      if (p)
+      {
+        queue_pop(&prologueDecoderQueue);
+        xSemaphoreGive(env_semaphore);
+        if (p->id == SENSOR_ID && p->type == PACKET_TYPE)
+        {
+          ext_temp_val = (int16_t) (p->temperature * 10);
+          ext_humi_val = (uint16_t) p->humidity * 100;
+          ESP_LOGI(TAG, "External sensor id: %d, packet type: %d, temperature: %d.%d, humidity %d.%d", p->id, p->type,
+                   ext_temp_val / 100, ext_temp_val % 100, ext_humi_val / 100, ext_humi_val % 100);
+          gptimer_stop(gptimer);
+          PrologueDecoderReset();
+          if (flags & LA_CROSSE_FLAG)
+            break;
+          flags |= PROLOGUE_FLAG;
+        }
+      } else
+        xSemaphoreGive(env_semaphore);
+    }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
   if (i == 240)
+  {
     ESP_LOGE(TAG, "External temperature receiver failure");
-  gptimer_stop(gptimer);
-  PrologueDecoderReset();
+    gptimer_stop(gptimer);
+    PrologueDecoderReset();
+    cc1101ReceiveStop();
+  }
   return 0;
 }
 

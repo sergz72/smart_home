@@ -16,6 +16,7 @@ extern uint32_t pres_val;
 
 int get_env(void);
 void init_env(void);
+void post_init_env(void);
 
 esp_err_t sht30_register_read(uint8_t *rdata, size_t rlen, uint8_t *data, size_t len);
 esp_err_t sht30_register_write(uint8_t *data, size_t len);

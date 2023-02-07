@@ -13,7 +13,7 @@
 #define HOST_IP_ADDR ""
 #endif
 
-#define PORT ????
+#define PORT 0
 
 #define BLE_ENV
 
@@ -44,6 +44,8 @@
 #define LED_GPIO 2
 #define LED_STRIP
 
+#define BUTTON_GPIO 9
+
 #endif
 
 #ifdef WEMOS_C3
@@ -52,6 +54,9 @@
 #define SHT30_SENSOR_ADDR           0x45
 #define LED_GPIO 7
 #define WIFI_POWER 3 // db
+
+#define BUTTON_GPIO 9
+
 #endif
 
 #endif //TEMP_HUMI_PRES_SENSOR_COMMON_H

@@ -25,6 +25,8 @@ uint16_t humi_val = 4020;
 uint32_t pres_val = 10003;
 #endif
 
+void post_init_env(void) {}
+
 static esp_err_t i2c_master_init(void)
 {
   i2c_config_t conf = {

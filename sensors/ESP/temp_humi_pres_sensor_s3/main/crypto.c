@@ -104,8 +104,8 @@ int encrypt_env(void **data)
   sdata.sensor_data4_2 = (ext_temp_val & 0x8000) ? 0xFF : 0;
   sdata.sensor_data5_1 = ext_humi_val;
   sdata.sensor_data5_2 = 0;
-  sdata.sensor_data6_1 = 0;
-  sdata.sensor_data6_2 = 0;
+  sdata.sensor_data6_1 = ext_temp_val2;
+  sdata.sensor_data6_2 = (ext_temp_val2 & 0x8000) ? 0xFF : 0;
 #endif
   calculateCRC(&sdata);
   encrypt((unsigned char*)&sdata);

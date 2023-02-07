@@ -10,16 +10,18 @@
 #define SEND_INTERVAL 5000 // 5 seconds
 #else
 #define SEND_INTERVAL 300000 // 5 minutes
-#define HOST_IP_ADDR "?????"
+#define HOST_IP_ADDR ""
 #endif
 
 #define NOTIFICATION_HOST_IP_ADDR "192.168.178.202"
 #define NOTIFICATION_SEND_INTERVAL 20 // 2 seconds
 
-#define PORT ?????
-#define NOTIFICATION_PORT ?????
+#define PORT 0
+#define NOTIFICATION_PORT 0
 
 #define MOTION_DELAY 10
+
+#define ST_IMPL
 
 #define BLE_ENV
 

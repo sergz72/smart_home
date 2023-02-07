@@ -15,8 +15,10 @@ extern uint32_t pres_val;
 #endif
 extern int16_t ext_temp_val;
 extern uint16_t ext_humi_val;
+extern int16_t ext_temp_val2;
 
 int get_env(void);
 void init_env(void);
+void post_init_env(void);
 
 #endif //TEMP_HUMI_PRES_SENSOR_ENV_H

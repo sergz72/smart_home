@@ -13,7 +13,7 @@
 #ifdef USE_BME280
 #include "bme280.h"
 #endif
-#include "vl53l1x_api.h"
+#include "vl_sensor.h"
 #include "lwip/sockets.h"
 
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
@@ -111,12 +111,17 @@ unsigned int bme280Write(unsigned char register_no, unsigned char value)
   return i2c_master_write_to_device(I2C_MASTER_NUM, BME280_ADDRESS >> 1, data, 2,
                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
+#endif
 
 void delayms(unsigned int ms)
 {
   vTaskDelay (ms / portTICK_PERIOD_MS);
 }
-#endif
+
+unsigned long long int get_time_ms(void)
+{
+  return esp_timer_get_time();
+}
 
 static struct sockaddr_in dest_addr;
 
@@ -162,30 +167,11 @@ static int calculateDistance(int delay)
   return delay * SOUND_SPEED / 20000;
 }
 
-static uint16_t VLMesaureDistance(void)
-{
-  uint16_t Distance;
-  uint16_t SignalRate;
-  uint16_t AmbientRate;
-  uint16_t SpadNum;
-  uint8_t RangeStatus;
-
-  VL53L1X_GetRangeStatus(0, &RangeStatus);
-  VL53L1X_GetDistance(0, &Distance);
-  VL53L1X_GetSignalRate(0, &SignalRate);
-  VL53L1X_GetAmbientRate(0, &AmbientRate);
-  VL53L1X_GetSpadNb(0, &SpadNum);
-  ESP_LOGI(TAG, "VL53L1: RangeStatus: %u, Distance: %u, SignalRate: %u, AmbientRate: %u, SpadNum: %u", RangeStatus,
-           Distance, SignalRate, AmbientRate, SpadNum);
-  return (RangeStatus == 0) && (SignalRate >= 6000 || Distance > 1000) ? Distance / 10 : 0 ;
-}
-
 static void gpio_task(void* arg)
 {
   queue_item qi;
   int64_t start_time, send_data_until;
   int counter, delay, distance;
-  uint8_t dataReady;
   uint16_t Distance = 0;
 
   start_time = send_data_until = 0;
@@ -243,17 +229,11 @@ static void gpio_task(void* arg)
         ESP_LOGI(TAG, "HC-SR04, VL53L1: start");
         // VL53L1
         xSemaphoreTake(env_semaphore, portMAX_DELAY);
-        VL53L1X_StartRanging(0);   /* This function has to be called to enable the ranging */
-        dataReady = 0;
-        while (!dataReady)
-        {
-          VL53L1X_CheckForDataReady(0, &dataReady);
-          vTaskDelay(2 / portTICK_PERIOD_MS);
-        }
-        Distance = VLMesaureDistance();
-        VL53L1X_ClearInterrupt(0);
-        VL53L1X_StopRanging(0);
+        //ESP_LOGI(TAG, "VL53L1: take");
+        Distance = VLMeasureDistance();
+        //ESP_LOGI(TAG, "VL53L1: measure");
         xSemaphoreGive(env_semaphore);
+        //ESP_LOGI(TAG, "VL53L1: done");
       }
     }
   }
@@ -297,34 +277,6 @@ void post_init_env(void)
   gpio_isr_handler_add(ECHO_GPIO, gpio_isr_handler, (void*)ECHO_GPIO);
 }
 
-void boot_vl_sensor(void)
-{
-  uint8_t byteData, sensorState=0;
-  uint16_t wordData;
-
-  gpio_set_level(VL_XSCHUT, 1);
-  vTaskDelay(2 / portTICK_PERIOD_MS);
-
-  ESP_LOGI(TAG, "VL53L1 chip init");
-  VL53L1_RdByte(0, 0x010F, &byteData);
-  ESP_LOGI(TAG, "VL53L1X Model_ID: %X", byteData);
-  VL53L1_RdByte(0, 0x0110, &byteData);
-  ESP_LOGI(TAG, "VL53L1X Module_Type: %X", byteData);
-  VL53L1_RdWord(0, 0x010F, &wordData);
-  ESP_LOGI(TAG, "VL53L1X: %X", wordData);
-  while(!sensorState)
-  {
-    VL53L1X_BootState(0, &sensorState);
-    vTaskDelay(2 / portTICK_PERIOD_MS);
-  }
-  ESP_LOGI(TAG, "VL53L1 chip booted");
-  VL53L1X_SensorInit(0);
-  /* Optional functions to be used to change the main ranging parameters according the application requirements to get the best ranging performances */
-  VL53L1X_SetDistanceMode(0, 2); /* 1=short, 2=long */
-  VL53L1X_SetTimingBudgetInMs(0, 500); /* in ms possible values [20, 50, 100, 200, 500] */
-  VL53L1X_SetInterMeasurementInMs(0, 5000); /* in ms, IM must be > = TB */
-}
-
 void init_env(void)
 {
   esp_err_t rc;
@@ -359,7 +311,13 @@ void init_env(void)
   }
 #endif
   gpio_init();
-  boot_vl_sensor();
+  rc = VLInit();
+  if (rc)
+  {
+    ESP_LOGE(TAG, "VLInit error %X", rc);
+    set_led_red();
+    while (1);
+  }
   net_client_init();
 
   env_semaphore = xSemaphoreCreateBinary();
@@ -371,6 +329,12 @@ void init_env(void)
   xSemaphoreGive(env_semaphore);
 }
 
+#ifdef TEST
+int get_env(void)
+{
+  return 1;
+}
+#else
 int get_env(void)
 {
 #if defined(SEND_PRESSURE) && defined(QMP6988_SENSOR_ADDR)
@@ -414,8 +378,4 @@ int get_env(void)
 #endif
   return 0;
 }
-
-/*int get_env(void)
-{
-  return 1;
-}*/
+#endif
