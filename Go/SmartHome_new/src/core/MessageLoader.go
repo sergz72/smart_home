@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var deviceDataOffsets = []int{10, 13, 20, 23, 26, 29}
+var deviceDataOffsets = []int{10, 13, 20, 23, 26, 29, 36, 39, 42, 45}
 
 var lastDeviceTime map[int]uint32
 
@@ -22,7 +22,7 @@ func tryLoadSensorData(server *Server, data []byte, timeOffset int, useDeviceTim
 		return false
 	}
 	l := len(data)
-	if l != 16 && l != 32 {
+	if l != 16 && l != 32 && l != 48 {
 		return false
 	}
 
@@ -46,6 +46,12 @@ func tryLoadSensorData(server *Server, data []byte, timeOffset int, useDeviceTim
 	if l > 16 {
 		eventTime2 := binary.LittleEndian.Uint32(data[16:])
 		if eventTime != eventTime2 {
+			return false
+		}
+	}
+	if l > 32 {
+		eventTime3 := binary.LittleEndian.Uint32(data[32:])
+		if eventTime != eventTime3 {
 			return false
 		}
 	}
@@ -89,13 +95,16 @@ func buildMessages(db *DB, sensors []int, data []byte, timeOffset int, eventTime
 			log.Println(err.Error())
 			return nil
 		}
+		if dataName == "pwr" {
+			sensorData *= 100
+		}
 		m, ok := result[realSensorId]
 		if ok {
 			m.Message.Values[dataName] = int(sensorData)
 		} else {
 			var t time.Time
 			if useDeviceTime {
-				t = time.Unix(int64(eventTime), 0)
+				t = time.Unix(int64(eventTime), 0).Add(time.Duration(timeOffset) * time.Hour)
 			} else {
 				t = time.Now().Add(time.Duration(timeOffset) * time.Hour)
 			}

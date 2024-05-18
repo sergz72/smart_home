@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"smartHome/src/core/entities"
-	"strconv"
+	"smartHome/src/core/files"
 	"sync"
 	"time"
 )
@@ -28,7 +28,11 @@ type DB struct {
 }
 
 func (a *DB) Load(config *configuration, now time.Time) error {
-	var err error
+	storage, err := files.NewFileStorage(config.DataFolder, config.ZipFileName)
+	defer storage.Close()
+	if err != nil {
+		return err
+	}
 	a.Locations, err = entities.ReadLocationsFromJson(config.DataFolder + string(os.PathSeparator) + "locations.json")
 	if err != nil {
 		return err
@@ -41,7 +45,7 @@ func (a *DB) Load(config *configuration, now time.Time) error {
 	a.buildDeviceToSensors()
 	a.DataToBeSaved = make(map[int][]int)
 	a.mutex = sync.RWMutex{}
-	return a.ReadSensorDataFromJson(config.DataFolder, now, config.RawDataDays)
+	return a.ReadSensorDataFromJson(storage, now, config)
 }
 
 func (a *DB) buildDataTypeMap() {
@@ -56,47 +60,29 @@ func (a *DB) buildDataTypeMap() {
 	}
 }
 
-func (a *DB) ReadSensorDataFromJson(path string, now time.Time, rawDataDays int) error {
-	datesPath := path + string(os.PathSeparator) + "dates_new"
-	d, err := os.Open(datesPath)
-	if err != nil {
-		return err
-	}
-	fi, err := d.Readdir(-1)
-	if err != nil {
-		_ = d.Close()
-		return err
-	}
-	_ = d.Close()
+func (a *DB) ReadSensorDataFromJson(storage *files.FileStorage, now time.Time, config *configuration) error {
 	a.SensorDataMap = make(map[int]map[int][]entities.SensorData)
 	a.SensorDataAggregated = make(map[int]map[int]entities.SensorData)
-	for _, file := range fi {
-		if file.Mode().IsDir() {
-			datePath := datesPath + "/" + file.Name()
-			date, err := strconv.Atoi(file.Name())
-			if err != nil {
-				return err
-			}
-			sensorData, err := entities.ReadSensorDataFromJson(datePath)
-			if err != nil {
-				return err
-			}
-			days := int(now.Sub(buildDate(date)).Hours() / 24)
-			if days <= rawDataDays {
-				a.SensorDataMap[date] = sensorData
-			}
-			a.SensorDataAggregated[date] = aggregateSensorDataArray(sensorData)
+	for date, files := range storage.Files {
+		sensorData, err := entities.ReadSensorDataFromJson(files)
+		if err != nil {
+			return err
 		}
+		days := int(now.Sub(buildDate(date)).Hours() / 24)
+		if days <= config.RawDataDays {
+			a.SensorDataMap[date] = sensorData
+		}
+		a.SensorDataAggregated[date] = aggregateSensorDataArray(sensorData, config.TotalCalculation)
 	}
 	return nil
 }
 
-func (a *DB) aggregateLastDayData() {
+func (a *DB) aggregateLastDayData(totalCalculation map[string]int) {
 	lastDay := toDate(time.Now().AddDate(0, 0, -1))
 	d, ok := a.SensorDataMap[lastDay]
 	if ok {
 		a.mutex.RLock()
-		a.SensorDataAggregated[lastDay] = aggregateSensorDataArray(d)
+		a.SensorDataAggregated[lastDay] = aggregateSensorDataArray(d, totalCalculation)
 		a.mutex.RUnlock()
 	}
 }
@@ -131,12 +117,27 @@ func (a *DB) deleteOldRawSensorData(rawDataDays int, now time.Time) {
 	}
 }
 
+func (a *DB) updateOffsets(sensorId int, propertyMap entities.PropertyMap) {
+	sensor, ok := a.Sensors[sensorId]
+	if ok {
+		for dataType, offset := range sensor.Offsets {
+			var value int
+			value, ok = propertyMap.Values[dataType]
+			if ok {
+				propertyMap.Values[dataType] = value + offset
+			}
+		}
+	}
+}
+
 func (a *DB) saveSensorData(sensorId int, m decodedMessage) error {
 	if len(m.Error) > 0 {
 		fmt.Printf("Sensor %v returned error status: %v\n", m.SensorName, m.Error)
 		return nil
 	}
 	d, t := toDateTime(m.MessageTime)
+
+	a.updateOffsets(sensorId, m.Message)
 
 	a.mutex.RLock()
 	if a.addToSensorData(m, d, t, sensorId) {

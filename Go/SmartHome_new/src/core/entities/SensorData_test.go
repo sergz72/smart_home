@@ -10,7 +10,7 @@ func TestMarshalSensorData(t *testing.T) {
 	vals["humi"] = 100
 	sd := []SensorData{{
 		EventTime: 100102,
-		Data:      PropertyMap{
+		Data: PropertyMap{
 			Values: vals,
 			Stats:  nil,
 		},

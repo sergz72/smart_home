@@ -6,8 +6,25 @@ import (
 )
 
 type SensorTimeData struct {
-	Date int                   `json:"date"`
-	Data []entities.SensorData `json:"data"`
+	Date int                      `json:"date"`
+	Data []entities.OutSensorData `json:"data"`
+}
+
+func buildSensorTimeData(date int, data []entities.SensorData) SensorTimeData {
+	var outData []entities.OutSensorData
+	for _, d := range data {
+		outData = append(outData, entities.OutSensorData{
+			EventTime: d.EventTime,
+			Data: entities.OutPropertyMap{
+				Values: d.Data.Values,
+				Stats:  d.Data.Stats,
+			},
+		})
+	}
+	return SensorTimeData{
+		Date: date,
+		Data: outData,
+	}
 }
 
 type OutSensorData struct {
@@ -86,10 +103,7 @@ func (sd *OutSensorData) buildTimeData(compressionLevel int) []SensorTimeData {
 
 	if compressionLevel == 1 {
 		for date, data := range sd.timeData {
-			result = append(result, SensorTimeData{
-				Date: date,
-				Data: data,
-			})
+			result = append(result, buildSensorTimeData(date, data))
 		}
 	} else {
 		var keys []int
@@ -107,7 +121,7 @@ func (sd *OutSensorData) buildTimeData(compressionLevel int) []SensorTimeData {
 			data := sd.timeData[date]
 			for _, d := range data {
 				if len(values) == compressionLevel {
-					currentSensorTimeData.Data = append(currentSensorTimeData.Data, entities.SensorData{
+					currentSensorTimeData.Data = append(currentSensorTimeData.Data, entities.OutSensorData{
 						EventTime: currentTime,
 						Data:      aggregateValues(values),
 					})
@@ -125,7 +139,7 @@ func (sd *OutSensorData) buildTimeData(compressionLevel int) []SensorTimeData {
 			}
 		}
 		if len(values) > 0 {
-			currentSensorTimeData.Data = append(currentSensorTimeData.Data, entities.SensorData{
+			currentSensorTimeData.Data = append(currentSensorTimeData.Data, entities.OutSensorData{
 				EventTime: currentTime,
 				Data:      aggregateValues(values),
 			})
@@ -209,8 +223,8 @@ func aggregatePropertyMapStats(values []entities.PropertyMap) map[string]map[str
 	return result
 }
 
-func aggregateValues(values []entities.PropertyMap) entities.PropertyMap {
-	return entities.PropertyMap{
+func aggregateValues(values []entities.PropertyMap) entities.OutPropertyMap {
+	return entities.OutPropertyMap{
 		Values: aggregatePropertyMapValues(values),
 		Stats:  aggregatePropertyMapStats(values),
 	}
@@ -228,7 +242,7 @@ func MakeOutSensorData(db *DB, sensorId int) *OutSensorData {
 }
 
 func aggregateResults(resultMap map[int]*OutSensorData, maxPoints int, config *configuration) []OutSensorData {
-	var result []OutSensorData
+	result := []OutSensorData{}
 
 	for _, sensorData := range resultMap {
 		l := sensorData.length()

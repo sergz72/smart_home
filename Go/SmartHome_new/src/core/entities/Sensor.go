@@ -12,6 +12,7 @@ type Sensor struct {
 	LocationId    int
 	DeviceId      int
 	DeviceSensors map[int]string
+	Offsets       map[string]int
 }
 
 func ReadSensorsFromJson(path string) (map[int]Sensor, error) {

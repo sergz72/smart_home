@@ -1,5 +1,6 @@
 {
     "DataFolder": "../../test_resources/db",
+    "ZipFileName": "db.zip",
     "KeyFileName": "key.dat",
     "PortNumber": 59999,
     "CompressionType": "bz",

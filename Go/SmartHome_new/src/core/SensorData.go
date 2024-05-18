@@ -194,7 +194,7 @@ type sensorStats struct {
 	Sum int
 }
 
-func aggregateSensorDataArray(data map[int][]entities.SensorData) map[int]entities.SensorData {
+func aggregateSensorDataArray(data map[int][]entities.SensorData, totalCalculation map[string]int) map[int]entities.SensorData {
 	result := make(map[int]entities.SensorData)
 	for sensorId, dataArray := range data {
 		statsMap := make(map[string]*sensorStats)
@@ -227,12 +227,16 @@ func aggregateSensorDataArray(data map[int][]entities.SensorData) map[int]entiti
 			Data:      entities.PropertyMap{Stats: make(map[string]map[string]int)},
 		}
 		for prop, stats := range statsMap {
+			div, ok := totalCalculation[prop]
+			if !ok {
+				div = 1
+			}
 			outv := make(map[string]int)
 			outv["Min"] = stats.Min
 			outv["Max"] = stats.Max
 			outv["Avg"] = stats.Avg / stats.Cnt
 			outv["Cnt"] = stats.Cnt
-			outv["Sum"] = stats.Sum
+			outv["Sum"] = stats.Sum / div
 			out.Data.Stats[prop] = outv
 		}
 		result[sensorId] = out

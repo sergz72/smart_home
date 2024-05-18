@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"smartHome/src/core/files"
 	"strconv"
 	"strings"
 )
@@ -14,13 +15,16 @@ type PropertyMap struct {
 	Stats  map[string]map[string]int
 }
 
-func (p *PropertyMap) ToString() string {
+type OutPropertyMap struct {
+	Values map[string]int
+	Stats  map[string]map[string]int
+}
+
+func (p *OutPropertyMap) MarshalJSON() ([]byte, error) {
 	if p.Values != nil {
-		v, _ := json.Marshal(convertValues(p.Values))
-		return string(v)
+		return json.Marshal(convertValues(p.Values))
 	}
-	s, _ := json.Marshal(convertStats(p.Stats))
-	return string(s)
+	return json.Marshal(convertStats(p.Stats))
 }
 
 func convertStats(stats map[string]map[string]int) map[string]map[string]float64 {
@@ -70,25 +74,21 @@ type SensorData struct {
 	Data      PropertyMap
 }
 
-func ReadSensorDataFromJson(path string) (map[int][]SensorData, error) {
-	d, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	fi, err := d.Readdir(-1)
-	if err != nil {
-		_ = d.Close()
-		return nil, err
-	}
-	_ = d.Close()
+type OutSensorData struct {
+	EventTime int
+	Data      OutPropertyMap
+}
+
+func ReadSensorDataFromJson(files []files.FileProvider) (map[int][]SensorData, error) {
 	result := make(map[int][]SensorData)
-	for _, file := range fi {
-		if strings.HasSuffix(file.Name(), ".json") {
-			sensorId, err := strconv.Atoi(file.Name()[0 : len(file.Name())-5])
+	for _, file := range files {
+		fileName := file.GetName()
+		if strings.HasSuffix(fileName, ".json") {
+			sensorId, err := strconv.Atoi(fileName[0 : len(fileName)-5])
 			if err != nil {
 				return nil, err
 			}
-			sensorData, err := readSensorData(path + string(os.PathSeparator) + file.Name())
+			sensorData, err := readSensorData(file)
 			if err != nil {
 				return nil, err
 			}
@@ -99,9 +99,9 @@ func ReadSensorDataFromJson(path string) (map[int][]SensorData, error) {
 	return result, nil
 }
 
-func readSensorData(fileName string) ([]SensorData, error) {
+func readSensorData(file files.FileProvider) ([]SensorData, error) {
 	var sensorData []SensorData
-	dat, err := os.ReadFile(fileName)
+	dat, err := file.Read()
 	if err != nil {
 		return nil, err
 	}

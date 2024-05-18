@@ -23,6 +23,7 @@ func TestDBLoad(t *testing.T) {
 	testDataTypeMap(t, &db)
 	testSensorDataMap(t, &db)
 	testSensorDataAggregated(t, &db)
+	testUpdateOffsets(t, &db)
 }
 
 func testSensorDataAggregated(t *testing.T, db *DB) {
@@ -178,5 +179,30 @@ func testDataTypeMap(t *testing.T, db *DB) {
 	}
 	if cnt != 8 {
 		t.Error("data type map has with 'env' key contains wrong data")
+	}
+}
+
+func testUpdateOffsets(t *testing.T, db *DB) {
+	m := entities.PropertyMap{
+		Values: map[string]int{"temp": 1100, "humi": 5000},
+	}
+	db.updateOffsets(1, m)
+	if m.Values["temp"] != 1100 {
+		t.Fatal("Wrong temp value")
+	}
+	if m.Values["humi"] != 5000 {
+		t.Fatal("Wrong temp value")
+	}
+	sensor, ok := db.Sensors[1]
+	if ok {
+		sensor.Offsets = map[string]int{"temp": -100}
+		db.Sensors[1] = sensor
+	}
+	db.updateOffsets(1, m)
+	if m.Values["temp"] != 1000 {
+		t.Fatal("Wrong corrected temp value")
+	}
+	if m.Values["humi"] != 5000 {
+		t.Fatal("Wrong temp value")
 	}
 }
