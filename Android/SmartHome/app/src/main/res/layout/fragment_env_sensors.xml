@@ -111,5 +111,61 @@
         ap:lineColors="@array/chartLineColors"
         ap:rangeTitle="hPa"
         ap:domainTitle="@string/time"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <com.sz.charts.LineChart
+            android:id="@+id/plot_co2"
+            android:layout_width="0dp"
+            android:layout_height="300dp"
+            android:layout_weight="1"
+            ap:title="@string/co2"
+            ap:titleColor="@color/colorBlack"
+            ap:titleSize="@integer/chartTitleSize"
+            ap:legendColor="@color/colorBlack"
+            ap:legendSize="@integer/chartLegendSize"
+            ap:legendTableColumns="2"
+            ap:labelColor="@color/colorBlack"
+            ap:labelSize="@integer/chartLabelSize"
+            ap:lineColors="@array/chartLineColors"
+            ap:rangeTitle="%"
+            ap:domainTitle="@string/time"/>
+        <Button
+            android:id="@+id/next_co2_graph"
+            android:layout_width="30dp"
+            android:layout_height="match_parent"
+            android:text="&gt;"
+            />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <com.sz.charts.LineChart
+            android:id="@+id/plot_lux"
+            android:layout_width="0dp"
+            android:layout_height="300dp"
+            android:layout_weight="1"
+            ap:title="@string/lux"
+            ap:titleColor="@color/colorBlack"
+            ap:titleSize="@integer/chartTitleSize"
+            ap:legendColor="@color/colorBlack"
+            ap:legendSize="@integer/chartLegendSize"
+            ap:legendTableColumns="2"
+            ap:labelColor="@color/colorBlack"
+            ap:labelSize="@integer/chartLabelSize"
+            ap:lineColors="@array/chartLineColors"
+            ap:rangeTitle="%"
+            ap:domainTitle="@string/time"/>
+        <Button
+            android:id="@+id/next_lux_graph"
+            android:layout_width="30dp"
+            android:layout_height="match_parent"
+            android:text="&gt;"
+            />
+    </LinearLayout>
 </LinearLayout>
 </ScrollView>

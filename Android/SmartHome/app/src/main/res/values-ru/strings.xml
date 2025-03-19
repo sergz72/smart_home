@@ -22,6 +22,8 @@
     <string name="icc">Ток</string>
     <string name="pwr">Мощность</string>
     <string name="total">Всего: %1$d</string>
+    <string name="co2">CO2</string>
+    <string name="lux">Освещенность</string>
 
     <string name="select_date_start">Начальная дата</string>
     <string name="select_date_end">Конечная дата</string>

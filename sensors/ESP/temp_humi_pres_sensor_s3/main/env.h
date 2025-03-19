@@ -10,12 +10,13 @@
 
 extern int16_t temp_val;
 extern uint16_t humi_val;
-#ifdef SEND_PRESSURE
 extern uint32_t pres_val;
-#endif
 extern int16_t ext_temp_val;
 extern uint16_t ext_humi_val;
 extern int16_t ext_temp_val2;
+extern int16_t ext_temp_val3;
+extern uint16_t ext_humi_val3;
+extern uint32_t co2_level;
 
 int get_env(void);
 void init_env(void);

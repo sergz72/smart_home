@@ -62,7 +62,7 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         mResult = Activity.RESULT_CANCELED
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String) {
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         mResult = Activity.RESULT_OK
     }
 

@@ -3,7 +3,6 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "wifi.h"
-#include "common.h"
 
 #define MAXIMUM_RETRY 5
 

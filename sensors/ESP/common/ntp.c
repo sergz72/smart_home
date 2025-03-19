@@ -9,9 +9,9 @@ static const char *TAG = "ntp";
 
 static void initialize_sntp(void)
 {
-  sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  sntp_setservername(0, "pool.ntp.org");
-  sntp_init();
+  esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_init();
 }
 
 void obtain_time(void)

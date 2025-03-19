@@ -2,18 +2,21 @@
 #define TEMP_HUMI_PRES_SENSOR_COMMON_H
 
 //#define TEST
+//#define NO_ENV
 
 #define DEVICE_ID 1
 
 #ifdef TEST
+#define CONFIG_SERVER_ADDRESS_SUFFIX 200
 #define HOST_IP_ADDR "192.168.178.200"
 #define SEND_INTERVAL 5000 // 5 seconds
 #else
+#define CONFIG_SERVER_ADDRESS_SUFFIX 254
 #define SEND_INTERVAL 270000 // 4.5 minutes
-#define HOST_IP_ADDR ""
+#define HOST_IP_ADDR "152.67.67.107"
 #endif
 
-#define PORT 0
+#define PORT 60002
 
 #define BLE_ENV
 
@@ -21,11 +24,10 @@
 
 #if DEVICE_ID == 1
 #define WEMOS_S3
-#define USE_BME280
-#define SEND_PRESSURE
 #define DEVICE_NAME "env_sensor_1"
-#define SENSOR_ID 37
+#define SENSOR_ID 185
 #define PACKET_TYPE 5
+#define BSENSOR_ID 255
 #endif
 
 #ifdef WEMOS_S3

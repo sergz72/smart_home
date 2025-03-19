@@ -5,15 +5,20 @@
 #include "common.h"
 #include "board.h"
 #include <cc1101.h>
-#ifdef USE_BME280
 #include "bme280.h"
-#endif
+#include "mh_z19b.h"
+#include "driver/uart.h"
 
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          100000                     /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
+
+#define PIN_UART1_TXD 17
+#define PIN_UART1_RXD 18
+#define UART1_BAUD_RATE   9600
+#define UART1_BUFFER_SIZE 1024
 
 static spi_device_handle_t spi_handle;
 
@@ -59,7 +64,6 @@ esp_err_t spi_master_init(void)
   return spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle);
 }
 
-#ifdef USE_BME280
 unsigned int bme280Read(unsigned char register_no, unsigned char *pData, int size)
 {
   return i2c_master_write_read_device(I2C_MASTER_NUM, BME280_ADDRESS >> 1, &register_no,
@@ -79,7 +83,22 @@ void delayms(unsigned int ms)
 {
   vTaskDelay (ms / portTICK_PERIOD_MS);
 }
-#endif
+
+void uart1_init(void)
+{
+  uart_config_t uart_config = {
+    .baud_rate = UART1_BAUD_RATE,
+    .data_bits = UART_DATA_8_BITS,
+    .parity    = UART_PARITY_DISABLE,
+    .stop_bits = UART_STOP_BITS_1,
+    .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    .source_clk = UART_SCLK_DEFAULT,
+  };
+
+  uart_driver_install(1, UART1_BUFFER_SIZE, UART1_BUFFER_SIZE, 0, NULL, ESP_INTR_FLAG_IRAM);
+  uart_param_config(1, &uart_config);
+  uart_set_pin(1, PIN_UART1_TXD, PIN_UART1_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+}
 
 void gpio_init(void)
 {
@@ -159,4 +178,14 @@ unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned
   spi_device_release_bus(spi_handle);
 
   return err == ESP_OK ? 1 : 0;
+}
+
+void mh_z19b_send(unsigned char *data, int len)
+{
+  uart_write_bytes(1, data, len);
+}
+
+int mh_z19b_read(unsigned char *data, int data_size)
+{
+  return uart_read_bytes(1, data, data_size, 100 / portTICK_PERIOD_MS);
 }

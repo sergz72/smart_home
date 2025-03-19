@@ -38,6 +38,8 @@ data class SensorDataEvent(val date: LocalDateTime, val data: Map<String, Any>) 
                 "vbat" -> resources.getString(R.string.vbat)
                 "vcc" -> resources.getString(R.string.vcc)
                 "icc" -> resources.getString(R.string.icc)
+                "co2" -> resources.getString(R.string.co2)
+                "lux" -> resources.getString(R.string.lux)
                 else -> key
             }
             result.append("  ").append(dataName).append(": ").append(value).append('\n')

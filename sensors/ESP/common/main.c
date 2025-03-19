@@ -103,9 +103,11 @@ void app_main(void)
     led_off();
     crypto_init();
     net_client_init();
+    net_client_config_server_init();
     post_init_env();
     for (;;)
     {
+      net_client_update_server_parameters();
       if (!get_env())
       {
         l = encrypt_env(&data);

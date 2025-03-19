@@ -14,14 +14,20 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
     private var mNextTempIntGraph: Button? = null
     private var mNextTempExtGraph: Button? = null
     private var mNextHumiGraph: Button? = null
+    private var mNextCO2Graph: Button? = null
+    private var mNextLuxGraph: Button? = null
     private var mIntTempSensors: List<SensorData>? = null
     private var mExtTempSensors: List<SensorData>? = null
     private var mHumiSensors: List<SensorData>? = null
     private var mPresSensor: SensorData? = null
+    private var mCO2Sensors: List<SensorData>? = null
+    private var mLuxSensors: List<SensorData>? = null
     private var mIntTempSensorIdx: Int = 0
     private var mExtTempSensorIdx: Int = 0
     private var mHumiSensorIdx: Int = 0
-    
+    private var mCO2SensorIdx: Int = 0
+    private var mLuxSensorIdx: Int = 0
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
         val rootView = super.onCreateView(inflater, container, savedInstanceState)
@@ -31,6 +37,10 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         mNextTempExtGraph!!.setOnClickListener(this)
         mNextHumiGraph = rootView.findViewById(R.id.next_humi_graph)
         mNextHumiGraph!!.setOnClickListener(this)
+        mNextCO2Graph = rootView.findViewById(R.id.next_co2_graph)
+        mNextCO2Graph!!.setOnClickListener(this)
+        mNextLuxGraph = rootView.findViewById(R.id.next_lux_graph)
+        mNextLuxGraph!!.setOnClickListener(this)
         return rootView
     }
 
@@ -39,6 +49,8 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         mIntTempSensorIdx = 0
         mExtTempSensorIdx = 0
         mHumiSensorIdx = 0
+        mCO2SensorIdx = 0;
+        mLuxSensorIdx = 0;
         showResults(requireView())
     }
 
@@ -47,12 +59,16 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         mExtTempSensors = findSensors(results, { it == "ext" }, { it.contains("temp") })
         mHumiSensors = findSensors(results, { true }, { it.contains("humi") })
         mPresSensor = findSensors(results, { true }, { it.contains("pres") }).firstOrNull()
+        mCO2Sensors = findSensors(results, { true }, { it.contains("co2") })
+        mLuxSensors = findSensors(results, { true }, { it.contains("lux") })
     }
 
     private fun showResults(v: View) {
         showIntTempSensors(v)
         showExtTempSensors(v)
         showHumiSensors(v)
+        showCO2Sensors(v)
+        showLuxSensors(v)
         val plot = v.findViewById<LineChart>(R.id.plot_pres)
         Graph.buildGraph(plot, mPresSensor, "pres", false, !params!!.getData().mUsePeriod, false)
     }
@@ -80,6 +96,20 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         }
     }
 
+    private fun showCO2Sensors(v: View) {
+        if (mCO2Sensors != null && mCO2SensorIdx < mCO2Sensors!!.size) {
+            val plot = v.findViewById<LineChart>(R.id.plot_co2)
+            Graph.buildGraph(plot, mCO2Sensors!![mCO2SensorIdx], "co2", false, !params!!.getData().mUsePeriod, false)
+        }
+    }
+
+    private fun showLuxSensors(v: View) {
+        if (mLuxSensors != null && mLuxSensorIdx < mLuxSensors!!.size) {
+            val plot = v.findViewById<LineChart>(R.id.plot_lux)
+            Graph.buildGraph(plot, mLuxSensors!![mLuxSensorIdx], "lux", false, !params!!.getData().mUsePeriod, false)
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         if (mIntTempSensors != null) {
@@ -101,6 +131,8 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
             mNextTempIntGraph -> showNextTempIntGraph()
             mNextTempExtGraph -> showNextTempExtGraph()
             mNextHumiGraph -> showNextHumiGraph()
+            mNextCO2Graph -> showNextCO2Graph()
+            mNextLuxGraph -> showNextLuxGraph()
         }
     }
 
@@ -131,6 +163,26 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
                 mHumiSensorIdx = 0
             }
             showHumiSensors(requireView())
+        }
+    }
+
+    private fun showNextCO2Graph() {
+        if (mCO2Sensors != null && mCO2Sensors!!.isNotEmpty()) {
+            mCO2SensorIdx++
+            if (mCO2SensorIdx >= mCO2Sensors!!.size) {
+                mCO2SensorIdx = 0
+            }
+            showCO2Sensors(requireView())
+        }
+    }
+
+    private fun showNextLuxGraph() {
+        if (mLuxSensors != null && mLuxSensors!!.isNotEmpty()) {
+            mLuxSensorIdx++
+            if (mLuxSensorIdx >= mLuxSensors!!.size) {
+                mLuxSensorIdx = 0
+            }
+            showLuxSensors(requireView())
         }
     }
 }
