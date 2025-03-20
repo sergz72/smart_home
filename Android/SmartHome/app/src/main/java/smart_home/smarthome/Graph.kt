@@ -71,7 +71,7 @@ object Graph {
 
     private fun buildGraphParameters(d: SensorData, dataName: String, isPrefix: Boolean, isSuffix: Boolean): Map<String, String> {
         if (isPrefix) {
-            return d.series[0].data.keys.filter { it.startsWith(dataName) }.associateBy { d.locationName + ":" + it }
+            return d.series.last().data.keys.filter { it.startsWith(dataName) }.associateBy { d.locationName + ":" + it }
         }
         if (isSuffix) {
             if (dataName == "pwr") {
@@ -86,7 +86,7 @@ object Graph {
 
     private fun buildSeries(d: List<SensorData>, dataName: String, isPrefix: Boolean, isSuffix: Boolean): GraphSeries {
         val result = GraphSeries()
-        d.filter { it.series.size > 1 && it.series[0].data.containsKey(dataName) }
+        d.filter { it.series.size > 1 && it.series.last().data.containsKey(dataName) }
          .forEach { data -> buildGraphParameters(data, dataName, isPrefix, isSuffix).forEach { (title, dn) ->
                     result.addGraph(data.buildGraphData(title, dn))
             }
@@ -107,8 +107,8 @@ object Graph {
     fun buildGraph(plot: LineChart, data: List<SensorData>, dataName: String, isPrefix: Boolean,
                    isSuffix: Boolean, useFloat0: Boolean) {
         if (data.isNotEmpty() && data.maxOf { sd -> sd.series.size } > 1) {
-            val start = data.minOf { d -> d.minDate() }
-            val end = data.maxOf { d -> d.maxDate() }
+            val start = data.minOf { d -> d.minDate(dataName) }
+            val end = data.maxOf { d -> d.maxDate(dataName) }
             val days = Duration.between(start, end).toDays()
             var multiplier = 1
             when {

@@ -52,7 +52,11 @@ data class SensorDataArray(@SerializedName("EventTime") val eventTime: Int,
                            @SerializedName("Data") val data: Map<String, Any>)
 
 data class SensorTimeData(@SerializedName("date") val date: Int,
-                          @SerializedName("data") val data: List<SensorDataArray>)
+                          @SerializedName("data") val data: List<SensorDataArray>) {
+    fun buildTimeData(dataName: String): SensorTimeData {
+        return SensorTimeData(date, data.filter { it.data.containsKey(dataName) }.toList())
+    }
+}
 
 data class SensorData(@SerializedName("locationName") val locationName: String,
                       @SerializedName("locationType") val locationType: String,
@@ -65,15 +69,23 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
     val series get() = buildSeries()
 
     fun buildGraphData(title: String, dataName: String): IGraphData {
-        return GraphData(this, title, dataName)
+        return GraphData(buildSensorData(dataName), title, dataName)
     }
 
-    fun minDate(): LocalDateTime {
-        return series[0].date
+    private fun buildSensorData(dataName: String): SensorData {
+        return SensorData(locationName, locationType, dataType, total, buildTimeData(dataName))
     }
 
-    fun maxDate(): LocalDateTime {
-        return series[series.size - 1].date
+    private fun buildTimeData(dataName: String): List<SensorTimeData> {
+        return timeData.map { it.buildTimeData(dataName) }.toList()
+    }
+
+    fun minDate(dataName: String): LocalDateTime {
+        return series.filter { it.data.containsKey(dataName) }.minOf { it.date }
+    }
+
+    fun maxDate(dataName: String): LocalDateTime {
+        return series.filter { it.data.containsKey(dataName) }.maxOf { it.date }
     }
 
     private fun buildSeries(): List<SensorDataEvent> {

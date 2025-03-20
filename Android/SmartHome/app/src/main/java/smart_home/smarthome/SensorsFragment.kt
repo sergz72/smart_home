@@ -28,7 +28,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
     }
 
     fun findSensors(results: List<SensorData>, locationTypeChecker: (String) -> Boolean, dataTypeChecker: (Set<String>) -> Boolean): List<SensorData> {
-        return results.filter { sd -> locationTypeChecker(sd.locationType) && dataTypeChecker(sd.series[0].data.keys) }
+        return results.filter { sd -> locationTypeChecker(sd.locationType) && dataTypeChecker(sd.series.last().data.keys) }
     }
 
     private fun buildService(): SmartHomeService<List<SensorData>> {
