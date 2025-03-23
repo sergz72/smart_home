@@ -1,10 +1,16 @@
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{SocketAddr, UdpSocket, TcpListener, TcpStream};
+use std::sync::Arc;
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+use bzip2::Compression;
+use bzip2::read::BzEncoder;
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::TryRngCore;
 use rand::rngs::OsRng;
+use log::{error};
+use crate::keys::read_key_file32;
 
 const BUFFER_SIZE: usize = 1024;
 
@@ -19,7 +25,7 @@ struct NetworkConnection {
 }
 
 trait NetworkServer {
-    fn receive(&mut self) -> Result<NetworkConnection, Error>;
+    fn receive(&self) -> Result<NetworkConnection, Error>;
     fn send(&self, connection: NetworkConnection) -> Result<(), Error>;
 }
 
@@ -32,10 +38,14 @@ struct TcpServer {
 }
 
 pub struct BaseServer {
-    network_server: Box<dyn NetworkServer>,
-    message_processor: Box<dyn MessageProcessor>,
+    network_server: Box<dyn NetworkServer + Sync>,
+    message_processor: Arc<dyn MessageProcessor + Sync + Send>,
     key: [u8; 32]
 }
+
+unsafe impl Send for UdpServer {}
+unsafe impl Send for TcpServer {}
+unsafe impl Send for BaseServer {}
 
 impl UdpServer {
     fn new(port_number: u16) -> Result<UdpServer, Error> {
@@ -45,7 +55,7 @@ impl UdpServer {
 }
 
 impl NetworkServer for UdpServer {
-    fn receive(&mut self) -> Result<NetworkConnection, Error> {
+    fn receive(&self) -> Result<NetworkConnection, Error> {
         let mut buffer = [0u8; BUFFER_SIZE];
         let (n, src) = self.socket.recv_from(& mut buffer)?;
         Ok(NetworkConnection{src, stream: None, data:buffer[0..n].to_vec()})
@@ -65,7 +75,7 @@ impl TcpServer {
 }
 
 impl NetworkServer for TcpServer {
-    fn receive(&mut self) -> Result<NetworkConnection, Error> {
+    fn receive(&self) -> Result<NetworkConnection, Error> {
         let (mut stream, src) =  self.listener.accept()?;
         let mut buffer = [0u8; BUFFER_SIZE];
         let n = stream.read(&mut buffer)?;
@@ -77,7 +87,7 @@ impl NetworkServer for TcpServer {
     }
 }
 
-fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkServer>, Error> {
+fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkServer + Sync>, Error> {
     if udp {
         Ok(Box::new(UdpServer::new(port_number)?))
     } else {
@@ -86,21 +96,45 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 }
 
 impl BaseServer {
-    pub fn new(udp: bool, port_number: u16, message_processor: Box<dyn MessageProcessor>, key: [u8; 32])
-        -> Result<BaseServer, Error> {
-        Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor, key })
+    pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
+               key_file_name: &String) -> Result<BaseServer, Error> {
+        Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
+                        key: read_key_file32(key_file_name)? })
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&'static self) {
         loop {
-            let mut connection = self.network_server.receive()?;
-            let response = self.message_processor.process_message(&connection.data);
-            if !response.is_empty() {
-                let encrypted = self.encrypt(response)?;
-                connection.data = encrypted;
-                self.network_server.send(connection)?;
+            match self.network_server.receive() {
+                Ok(connection) => {
+                    thread::spawn(|| self.handle(connection));
+                },
+                Err(err) => error!("Receive error: {}", err)
             }
         }
+    }
+
+    fn handle(&self, connection: NetworkConnection) {
+        if let Err(e) = self.handler(connection) {
+            error!("{}", e);
+        }
+    }
+
+    fn handler(&self, mut connection: NetworkConnection) -> Result<(), Error> {
+        let response = self.message_processor.process_message(&connection.data);
+        if !response.is_empty() {
+            let compressed = self.compress(response)?;
+            let encrypted = self.encrypt(compressed)?;
+            connection.data = encrypted;
+            self.network_server.send(connection)?;
+        }
+        Ok(())
+    }
+
+    fn compress(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let mut compressor = BzEncoder::new(data.as_slice(), Compression::best());
+        let mut result = Vec::new();
+        compressor.read_to_end(&mut result)?;
+        Ok(result)
     }
 
     fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
