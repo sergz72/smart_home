@@ -13,3 +13,15 @@ pub fn read_key_file32(key_file_name: &String) -> Result<[u8; 32], Error> {
     reader.read(&mut buffer)?;
     Ok(buffer)
 }
+
+pub fn read_key_file16(key_file_name: &String) -> Result<[u8; 16], Error> {
+    let file_size = fs::metadata(key_file_name)?.len();
+    if file_size != 16 {
+        return Err(Error::new(ErrorKind::InvalidData, "invalid file length"));
+    }
+    let f = File::open(key_file_name)?;
+    let mut reader = BufReader::new(f);
+    let mut buffer = [0; 16];
+    reader.read(&mut buffer)?;
+    Ok(buffer)
+}
