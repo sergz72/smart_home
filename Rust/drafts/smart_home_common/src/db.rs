@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::io::{Error, ErrorKind};
 use std::ops::Add;
 use chrono::{Datelike, Local, Timelike};
@@ -11,6 +12,12 @@ pub struct Message {
     pub sensor_id: i16,
     pub value_type: String,
     pub value: i32
+}
+
+impl Display for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "message sensor_id={} value_type={} value={}", self.sensor_id, self.value_type, self.value)
+    }
 }
 
 impl DB {

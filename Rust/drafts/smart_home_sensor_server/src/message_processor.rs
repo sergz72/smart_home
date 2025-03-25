@@ -86,7 +86,9 @@ fn build_messages(logger: &Logger, decrypted: Vec<u8>, sensors: &HashMap<usize, 
             return None;
         }
         let value = build_value(&decrypted, offset);
-        messages.push(Message{sensor_id: sensor.sensor_id, value_type: sensor.value_type.clone(), value})
+        let message = Message{sensor_id: sensor.sensor_id, value_type: sensor.value_type.clone(), value};
+        logger.info(message.to_string());
+        messages.push(message);
     }
     if messages.is_empty() {
         logger.error("no sensors found");
