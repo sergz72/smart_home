@@ -15,7 +15,7 @@ use crate::keys::read_key_file32;
 const BUFFER_SIZE: usize = 1024;
 
 pub trait MessageProcessor {
-    fn process_message(&self, message: &Vec<u8>) -> Vec<u8>;
+    fn process_message(&self, message: &Vec<u8>, time_offset: i64) -> Vec<u8>;
 }
 
 struct NetworkConnection {
@@ -40,7 +40,8 @@ struct TcpServer {
 pub struct BaseServer {
     network_server: Box<dyn NetworkServer + Sync>,
     message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-    key: [u8; 32]
+    key: [u8; 32],
+    time_offset: i64
 }
 
 unsafe impl Send for UdpServer {}
@@ -97,9 +98,9 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 
 impl BaseServer {
     pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-               key_file_name: &String) -> Result<BaseServer, Error> {
+               key_file_name: &String, time_offset: i64) -> Result<BaseServer, Error> {
         Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
-                        key: read_key_file32(key_file_name)? })
+                        key: read_key_file32(key_file_name)?, time_offset })
     }
 
     pub fn start(&'static self) {
@@ -120,7 +121,8 @@ impl BaseServer {
     }
 
     fn handler(&self, mut connection: NetworkConnection) -> Result<(), Error> {
-        let response = self.message_processor.process_message(&connection.data);
+        let response = 
+            self.message_processor.process_message(&connection.data, self.time_offset);
         if !response.is_empty() {
             let compressed = self.compress(response)?;
             let encrypted = self.encrypt(compressed)?;

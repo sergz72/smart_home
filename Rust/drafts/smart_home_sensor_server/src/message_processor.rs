@@ -8,7 +8,8 @@ use aes::cipher::typenum::U16;
 use smart_home_common::base_server::MessageProcessor;
 use smart_home_common::keys::read_key_file16;
 use log::error;
-use crate::db::DeviceSensor;
+use smart_home_common::db::{DB, Message};
+use crate::DeviceSensor;
 
 const DEVICE_DATA_OFFSETS: [usize; 10] = [10, 13, 20, 23, 26, 29, 36, 39, 42, 45];
 
@@ -16,11 +17,13 @@ struct SensorMessageProcessor {
     device_sensors: HashMap<usize, HashMap<usize, DeviceSensor>>,
     aes: Aes128,
     last_device_time: Mutex<HashMap<u16, u32>>,
-    key_sum: u32
+    key_sum: u32,
+    db: DB
 }
 
 impl SensorMessageProcessor {
-    fn new(key_file_name: &String, device_sensors: HashMap<usize, HashMap<usize, DeviceSensor>>)
+    fn new(key_file_name: &String, device_sensors: HashMap<usize, HashMap<usize, DeviceSensor>>,
+            db: DB)
         -> Result<SensorMessageProcessor, Error> {
         let key_bytes = read_key_file16(key_file_name)?;
         let mut key_sum: u32 = 0;
@@ -34,12 +37,12 @@ impl SensorMessageProcessor {
         let key = GenericArray::from(key_bytes);
         let aes = Aes128::new(&key);
         Ok(SensorMessageProcessor {device_sensors, aes,
-            last_device_time: Mutex::new(HashMap::new()), key_sum})
+            last_device_time: Mutex::new(HashMap::new()), key_sum, db})
     }
 }
 
 impl MessageProcessor for SensorMessageProcessor {
-    fn process_message(&self, message: &Vec<u8>) -> Vec<u8> {
+    fn process_message(&self, message: &Vec<u8>, time_offset: i64) -> Vec<u8> {
         let n = message.len();
         if n != 16 && n != 32 && n != 48 {
             error!("wrong data size");
@@ -52,16 +55,48 @@ impl MessageProcessor for SensorMessageProcessor {
         let device_id = u16::from_le_bytes(buf16);
         match self.get_sensors(device_id) {
             Some(sensors) => 
-                self.process_decrypted_message(device_id, decrypted, sensors),
-            None => error!("wrong sensor id")
+                self.process_decrypted_message(device_id, decrypted, sensors, time_offset),
+            None => error!("wrong device id")
         }
         Vec::new()
     }
 }
 
+fn build_value(decrypted: &Vec<u8>, offset: usize) -> i32 {
+    let mut buf32 = [0u8; 4];
+    buf32.copy_from_slice(&decrypted[offset..offset+3]);
+    if buf32[2] & 0x80 != 0 {
+        buf32[3] = 0xFF;
+    }
+    i32::from_le_bytes(buf32)
+}
+
+fn build_messages(decrypted: Vec<u8>, sensors: &HashMap<usize, DeviceSensor>) -> Option<Vec<Message>> {
+    let mut messages = Vec::new();
+    for (pidx, sensor) in sensors {
+        let idx = *pidx;
+        if idx >= DEVICE_DATA_OFFSETS.len() {
+            error!("sensor index out of bounds");
+            return None;
+        }
+        let offset = DEVICE_DATA_OFFSETS[idx];
+        if offset + 2 >= decrypted.len() {
+            error!("sensor offset out of bounds");
+            return None;
+        }
+        let value = build_value(&decrypted, offset);
+        messages.push(Message{sensor_id: sensor.sensor_id, value_type: sensor.value_type.clone(), value})
+    }
+    if messages.is_empty() {
+        error!("no sensors found");
+        return None;
+    }
+    Some(messages)
+}
+
 impl SensorMessageProcessor {
     fn process_decrypted_message(&self, device_id: u16, decrypted: Vec<u8>,
-                                 sensors: &HashMap<usize, DeviceSensor>) {
+                                 sensors: &HashMap<usize, DeviceSensor>, time_offset: i64) {
         // crc check
         let mut buf32 = [0u8; 4];
         buf32.copy_from_slice(&decrypted[0..4]);
@@ -88,8 +123,12 @@ impl SensorMessageProcessor {
             error!("wrong event_time");
             return;
         }
-        //todo
-        self.last_device_time.lock().unwrap().insert(device_id, event_time);
+        if let Some(messages) = build_messages(decrypted, sensors) {
+            self.last_device_time.lock().unwrap().insert(device_id, event_time);
+            if let Err(error) = self.db.insert_messages_to_db(messages, time_offset) {
+                error!("{}", error);
+            }
+        }
     }
     
     fn calculate_crc(&self, decrypted: &Vec<u8>) -> u32 {
@@ -124,7 +163,8 @@ impl SensorMessageProcessor {
     }
 }
 
-pub fn build_message_processor(device_key_file_name: &String, device_sensors: HashMap<usize, HashMap<usize, DeviceSensor>>)
+pub fn build_message_processor(device_key_file_name: &String, device_sensors: HashMap<usize,
+                                HashMap<usize, DeviceSensor>>, db: DB)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(SensorMessageProcessor::new(device_key_file_name, device_sensors)?))
+    Ok(Arc::new(SensorMessageProcessor::new(device_key_file_name, device_sensors, db)?))
 }
