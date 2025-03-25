@@ -7,8 +7,8 @@ use aes::cipher::{BlockDecrypt, KeyInit};
 use aes::cipher::typenum::U16;
 use smart_home_common::base_server::MessageProcessor;
 use smart_home_common::keys::read_key_file16;
-use log::error;
 use smart_home_common::db::{DB, Message};
+use smart_home_common::logger::Logger;
 use crate::DeviceSensor;
 
 const DEVICE_DATA_OFFSETS: [usize; 10] = [10, 13, 20, 23, 26, 29, 36, 39, 42, 45];
@@ -42,10 +42,10 @@ impl SensorMessageProcessor {
 }
 
 impl MessageProcessor for SensorMessageProcessor {
-    fn process_message(&self, message: &Vec<u8>, time_offset: i64) -> Vec<u8> {
+    fn process_message(&self, logger: &Logger, message: &Vec<u8>, time_offset: i64) -> Vec<u8> {
         let n = message.len();
         if n != 16 && n != 32 && n != 48 {
-            error!("wrong data size");
+            logger.error("wrong data size");
             return Vec::new();
         }
 
@@ -55,8 +55,8 @@ impl MessageProcessor for SensorMessageProcessor {
         let device_id = u16::from_le_bytes(buf16);
         match self.get_sensors(device_id) {
             Some(sensors) => 
-                self.process_decrypted_message(device_id, decrypted, sensors, time_offset),
-            None => error!("wrong device id")
+                self.process_decrypted_message(logger, device_id, decrypted, sensors, time_offset),
+            None => logger.error("wrong device id")
         }
         Vec::new()
     }
@@ -71,38 +71,39 @@ fn build_value(decrypted: &Vec<u8>, offset: usize) -> i32 {
     i32::from_le_bytes(buf32)
 }
 
-fn build_messages(decrypted: Vec<u8>, sensors: &HashMap<usize, DeviceSensor>) -> Option<Vec<Message>> {
+fn build_messages(logger: &Logger, decrypted: Vec<u8>, sensors: &HashMap<usize, DeviceSensor>)
+    -> Option<Vec<Message>> {
     let mut messages = Vec::new();
     for (pidx, sensor) in sensors {
         let idx = *pidx;
         if idx >= DEVICE_DATA_OFFSETS.len() {
-            error!("sensor index out of bounds");
+            logger.error("sensor index out of bounds");
             return None;
         }
         let offset = DEVICE_DATA_OFFSETS[idx];
         if offset + 2 >= decrypted.len() {
-            error!("sensor offset out of bounds");
+            logger.error("sensor offset out of bounds");
             return None;
         }
         let value = build_value(&decrypted, offset);
         messages.push(Message{sensor_id: sensor.sensor_id, value_type: sensor.value_type.clone(), value})
     }
     if messages.is_empty() {
-        error!("no sensors found");
+        logger.error("no sensors found");
         return None;
     }
     Some(messages)
 }
 
 impl SensorMessageProcessor {
-    fn process_decrypted_message(&self, device_id: u16, decrypted: Vec<u8>,
+    fn process_decrypted_message(&self, logger: &Logger, device_id: u16, decrypted: Vec<u8>,
                                  sensors: &HashMap<usize, DeviceSensor>, time_offset: i64) {
         // crc check
         let mut buf32 = [0u8; 4];
         buf32.copy_from_slice(&decrypted[0..4]);
         let crc = u32::from_le_bytes(buf32);
         if crc != self.calculate_crc(&decrypted) {
-            error!("wrong CRC");
+            logger.error("wrong CRC");
             return;
         }
         // event time check
@@ -114,19 +115,19 @@ impl SensorMessageProcessor {
             buf32.copy_from_slice(&decrypted[n..n+4]);
             let event_time2 = u32::from_le_bytes(buf32);
             if event_time != event_time2 {
-                error!("wrong event_time{n}");
+                logger.error(format!("wrong event_time{}", n));
                 return;
             }
             n += 16;
         }
         if event_time < *self.last_device_time.lock().unwrap().get(&device_id).unwrap_or(&0) {
-            error!("wrong event_time");
+            logger.error("wrong event_time");
             return;
         }
-        if let Some(messages) = build_messages(decrypted, sensors) {
+        if let Some(messages) = build_messages(logger, decrypted, sensors) {
             self.last_device_time.lock().unwrap().insert(device_id, event_time);
             if let Err(error) = self.db.insert_messages_to_db(messages, time_offset) {
-                error!("{}", error);
+                logger.error(format!("insert_messages_to_db error: {}", error));
             }
         }
     }

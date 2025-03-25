@@ -1,0 +1,9 @@
+{
+  "DBConnectionString": "postgresql://postgres@localhost/smart_home",
+  "KeyFileName": "key.dat",
+  "PortNumber": 59999,
+  "TcpPortNumber": 60002,
+  "DeviceKeyFileName": "device_key.dat",
+  "TimeOffset": -1,
+  "TotalCalculation": {"pwr": 12}
+}

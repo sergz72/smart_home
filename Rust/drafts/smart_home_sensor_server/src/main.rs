@@ -53,13 +53,13 @@ fn main() -> Result<(), Error> {
         let pn = config.tcp_port_number;
         let processor = message_processor.clone();
         let tcp_server = Box::leak(Box::new(
-            BaseServer::new(false, pn, processor, &fname, config.time_offset)?));
+            BaseServer::new(false, pn, processor, &fname, config.time_offset, "tcp_server".to_string())?));
         thread::spawn(move ||tcp_server.start());
     }
     let udp_server =
         Box::leak(Box::new(BaseServer::new(true, config.port_number,
                                            message_processor.clone(), &config.key_file_name,
-                                           config.time_offset)?));
+                                           config.time_offset, "udp_server".to_string())?));
     udp_server.start();
     Ok(())
 }

@@ -9,19 +9,20 @@ use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::TryRngCore;
 use rand::rngs::OsRng;
-use log::{error};
 use crate::keys::read_key_file32;
+use crate::logger::Logger;
 
 const BUFFER_SIZE: usize = 1024;
 
 pub trait MessageProcessor {
-    fn process_message(&self, message: &Vec<u8>, time_offset: i64) -> Vec<u8>;
+    fn process_message(&self, logger: &Logger, message: &Vec<u8>, time_offset: i64) -> Vec<u8>;
 }
 
 struct NetworkConnection {
     src: SocketAddr,
     stream: Option<TcpStream>,
-    data: Vec<u8>
+    data: Vec<u8>,
+    logger: Logger
 }
 
 trait NetworkServer {
@@ -41,7 +42,8 @@ pub struct BaseServer {
     network_server: Box<dyn NetworkServer + Sync>,
     message_processor: Arc<dyn MessageProcessor + Sync + Send>,
     key: [u8; 32],
-    time_offset: i64
+    time_offset: i64,
+    logger: Logger
 }
 
 unsafe impl Send for UdpServer {}
@@ -59,7 +61,8 @@ impl NetworkServer for UdpServer {
     fn receive(&self) -> Result<NetworkConnection, Error> {
         let mut buffer = [0u8; BUFFER_SIZE];
         let (n, src) = self.socket.recv_from(& mut buffer)?;
-        Ok(NetworkConnection{src, stream: None, data:buffer[0..n].to_vec()})
+        let logger = Logger::new("udp ".to_string() + src.to_string().as_str());
+        Ok(NetworkConnection{src, stream: None, data:buffer[0..n].to_vec(), logger})
     }
 
     fn send(&self, connection: NetworkConnection) -> Result<(), Error> {
@@ -80,7 +83,8 @@ impl NetworkServer for TcpServer {
         let (mut stream, src) =  self.listener.accept()?;
         let mut buffer = [0u8; BUFFER_SIZE];
         let n = stream.read(&mut buffer)?;
-        Ok(NetworkConnection{src, stream: Some(stream), data:buffer[0..n].to_vec()})
+        let logger = Logger::new("tcp ".to_string() + src.to_string().as_str());
+        Ok(NetworkConnection{src, stream: Some(stream), data:buffer[0..n].to_vec(), logger})
     }
 
     fn send(&self, connection: NetworkConnection) -> Result<(), Error> {
@@ -98,31 +102,32 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 
 impl BaseServer {
     pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-               key_file_name: &String, time_offset: i64) -> Result<BaseServer, Error> {
+               key_file_name: &String, time_offset: i64, name: String) -> Result<BaseServer, Error> {
         Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
-                        key: read_key_file32(key_file_name)?, time_offset })
+                        key: read_key_file32(key_file_name)?, time_offset, logger: Logger::new(name) })
     }
 
     pub fn start(&'static self) {
+        self.logger.info("Starting server...");
         loop {
             match self.network_server.receive() {
                 Ok(connection) => {
                     thread::spawn(|| self.handle(connection));
                 },
-                Err(err) => error!("Receive error: {}", err)
+                Err(err) => self.logger.error(format!("Receive error: {}", err))
             }
         }
     }
 
     fn handle(&self, connection: NetworkConnection) {
         if let Err(e) = self.handler(connection) {
-            error!("{}", e);
+            self.logger.error(e.to_string());
         }
     }
 
     fn handler(&self, mut connection: NetworkConnection) -> Result<(), Error> {
         let response = 
-            self.message_processor.process_message(&connection.data, self.time_offset);
+            self.message_processor.process_message(&connection.logger, &connection.data, self.time_offset);
         if !response.is_empty() {
             let compressed = self.compress(response)?;
             let encrypted = self.encrypt(compressed)?;
