@@ -4,8 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chacha20 = "0.9.X"
-rand = "0.9.X"
-bzip2 = "0.X"
 chrono = "0.X"
 postgres = "0.X"

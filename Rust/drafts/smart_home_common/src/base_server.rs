@@ -1,14 +1,7 @@
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, Read, Write};
 use std::net::{SocketAddr, UdpSocket, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
-use bzip2::Compression;
-use bzip2::read::BzEncoder;
-use chacha20::ChaCha20;
-use chacha20::cipher::{KeyIvInit, StreamCipher};
-use rand::TryRngCore;
-use rand::rngs::OsRng;
 use crate::logger::Logger;
 
 const BUFFER_SIZE: usize = 1024;
@@ -40,7 +33,6 @@ struct TcpServer {
 pub struct BaseServer {
     network_server: Box<dyn NetworkServer + Sync>,
     message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-    key: [u8; 32],
     time_offset: i64,
     logger: Logger
 }
@@ -101,9 +93,9 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 
 impl BaseServer {
     pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-               key: Option<[u8; 32]>, time_offset: i64, name: String) -> Result<BaseServer, Error> {
+               time_offset: i64, name: String) -> Result<BaseServer, Error> {
         Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
-                        key: key.unwrap_or([0u8; 32]), time_offset, logger: Logger::new(name) })
+                        time_offset, logger: Logger::new(name) })
     }
 
     pub fn start(&'static self) {
@@ -128,52 +120,9 @@ impl BaseServer {
         let response = 
             self.message_processor.process_message(&connection.logger, &connection.data, self.time_offset);
         if !response.is_empty() {
-            let compressed = self.compress(response)?;
-            let encrypted = self.encrypt(compressed)?;
-            connection.data = encrypted;
+            connection.data = response;
             self.network_server.send(connection)?;
         }
         Ok(())
-    }
-
-    fn compress(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let mut compressor = BzEncoder::new(data.as_slice(), Compression::best());
-        let mut result = Vec::new();
-        compressor.read_to_end(&mut result)?;
-        Ok(result)
-    }
-
-    fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let iv = self.build_iv()?;
-        let mut cipher = ChaCha20::new((&self.key).into(), (&iv).into());
-        let bytes = data.as_slice();
-        let mut out_vec = vec![0u8; bytes.len()];
-        let out_bytes = out_vec.as_mut_slice();
-        cipher.apply_keystream_b2b(bytes, out_bytes)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        let mut result = Vec::from(iv);
-        result.append(&mut out_vec);
-        Ok(result)
-    }
-
-    fn build_iv(&self) -> Result<[u8; 12], Error> {
-        let mut random_part = [0u8; 4];
-        OsRng.try_fill_bytes(&mut random_part)
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-        let mut iv = [0u8; 12];
-        let now = SystemTime::now().duration_since(UNIX_EPOCH)
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-        iv[0..4].copy_from_slice(&random_part);
-        let mut time_bytes = now.as_secs().to_le_bytes();
-        time_bytes[0] ^= random_part[0];
-        time_bytes[1] ^= random_part[1];
-        time_bytes[2] ^= random_part[2];
-        time_bytes[3] ^= random_part[3];
-        time_bytes[4] ^= random_part[0];
-        time_bytes[5] ^= random_part[1];
-        time_bytes[6] ^= random_part[2];
-        time_bytes[7] ^= random_part[3];
-        iv[4..12].copy_from_slice(&time_bytes);
-        Ok(iv)
     }
 }
