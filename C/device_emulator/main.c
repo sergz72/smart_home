@@ -9,12 +9,14 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <aes128.h>
 
 #define MAX_SENSORS 10
 #define FIRST_SENSOR_VALUE_ARGUMENT 4
 
 static sensor_data sdata;
 static struct sockaddr_in dest_addr;
+static unsigned char encrypted[sizeof(sensor_data)];
 
 static void usage(void)
 {
@@ -87,7 +89,7 @@ static int send_sensor_data_udp(int length)
     printf("Unable to create socket: errno %d\n", errno);
     return 1;
   }
-  int err = sendto(sock, &sdata, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+  int err = sendto(sock, encrypted, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
   if (err < 0)
   {
     shutdown(sock, 0);
@@ -172,7 +174,7 @@ static int send_sensor_data_tcp(int length)
     }
   }
   puts("Successfully connected, sending data...");
-  err = send(sock, &sdata, length, 0);
+  err = send(sock, encrypted, length, 0);
   if (err < 0)
     printf("Error occurred during sending: errno %d\n", errno);
   else
@@ -180,6 +182,19 @@ static int send_sensor_data_tcp(int length)
   shutdown(sock, 0);
   close(sock);
   return err;
+}
+
+static void encrypt_sensor_data(int length)
+{
+  unsigned char *encrypted_p = encrypted;
+  unsigned char *plain_p = (unsigned char*)&sdata;
+  while (length > 0)
+  {
+    aes128_encrypt(encrypted_p, plain_p);
+    length -= 16;
+    encrypted_p += 16;
+    plain_p += 16;
+  }
 }
 
 int main(int argc, char **argv)
@@ -215,6 +230,9 @@ int main(int argc, char **argv)
     return 5;
   }
 
+  crc_init(default_aes_key);
+  aes128_set_key(default_aes_key);
+
   dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
   dest_addr.sin_family = AF_INET;
   dest_addr.sin_port = htons(port);
@@ -232,6 +250,7 @@ int main(int argc, char **argv)
   putchar('\n');
   int length = sensor_count > 6 ? 48 : sensor_count > 2 ? 32 : 16;
   prepare_sensor_data(length);
+  encrypt_sensor_data(length);
   if (udp)
     return send_sensor_data_udp(length);
   return send_sensor_data_tcp(length);

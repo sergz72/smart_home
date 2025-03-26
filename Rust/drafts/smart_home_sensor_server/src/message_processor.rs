@@ -64,7 +64,7 @@ impl MessageProcessor for SensorMessageProcessor {
 
 fn build_value(decrypted: &Vec<u8>, offset: usize) -> i32 {
     let mut buf32 = [0u8; 4];
-    buf32.copy_from_slice(&decrypted[offset..offset+3]);
+    buf32[0..3].copy_from_slice(&decrypted[offset..offset+3]);
     if buf32[2] & 0x80 != 0 {
         buf32[3] = 0xFF;
     }
@@ -136,7 +136,7 @@ impl SensorMessageProcessor {
     
     fn calculate_crc(&self, decrypted: &Vec<u8>) -> u32 {
         let mut crc: u32 = 0;
-        let mut n = 0;
+        let mut n = 4;
         while n < decrypted.len() {
             let mut buf32 = [0u8; 4];
             buf32.copy_from_slice(&decrypted[n..n+4]);
