@@ -49,16 +49,15 @@ fn main() -> Result<(), Error> {
     let message_processor = 
         build_message_processor(&config.device_key_file_name, device_sensors, db)?;
     if config.tcp_port_number != 0 {
-        let fname = config.key_file_name.clone();
         let pn = config.tcp_port_number;
         let processor = message_processor.clone();
         let tcp_server = Box::leak(Box::new(
-            BaseServer::new(false, pn, processor, &fname, config.time_offset, "tcp_server".to_string())?));
+            BaseServer::new(false, pn, processor, None, config.time_offset, "tcp_server".to_string())?));
         thread::spawn(move ||tcp_server.start());
     }
     let udp_server =
         Box::leak(Box::new(BaseServer::new(true, config.port_number,
-                                           message_processor.clone(), &config.key_file_name,
+                                           message_processor.clone(), None,
                                            config.time_offset, "udp_server".to_string())?));
     udp_server.start();
     Ok(())

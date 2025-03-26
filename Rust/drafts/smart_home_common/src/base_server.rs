@@ -9,7 +9,6 @@ use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::TryRngCore;
 use rand::rngs::OsRng;
-use crate::keys::read_key_file32;
 use crate::logger::Logger;
 
 const BUFFER_SIZE: usize = 1024;
@@ -102,9 +101,9 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 
 impl BaseServer {
     pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-               key_file_name: &String, time_offset: i64, name: String) -> Result<BaseServer, Error> {
+               key: Option<[u8; 32]>, time_offset: i64, name: String) -> Result<BaseServer, Error> {
         Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
-                        key: read_key_file32(key_file_name)?, time_offset, logger: Logger::new(name) })
+                        key: key.unwrap_or([0u8; 32]), time_offset, logger: Logger::new(name) })
     }
 
     pub fn start(&'static self) {
