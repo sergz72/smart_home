@@ -60,9 +60,23 @@ impl UserMessageProcessor {
             return Err(Error::new(ErrorKind::InvalidData, "message is too short"));
         }
         let iv = &message[0..12];
-        check_iv(iv)?;
+        let decrypted_iv_vec = self.encrypt_iv(iv)?;
+        let decrypted_iv = decrypted_iv_vec.as_slice();
+        check_iv(decrypted_iv)?;
         let encrypted = &message[12..];
-        self.transform(iv, encrypted)
+        self.transform(decrypted_iv, encrypted)
+    }
+
+    fn encrypt_iv(&self, iv: &[u8]) -> Result<Vec<u8>, Error> {
+        let random_part = &iv[0..4];
+        let mut iv3 = [0u8; 12];
+        iv3[0..4].copy_from_slice(random_part);
+        iv3[4..8].copy_from_slice(random_part);
+        iv3[8..12].copy_from_slice(random_part);
+        let transformed = self.transform(&iv3, &iv[4..12])?;
+        let mut result = Vec::from(random_part);
+        result.extend_from_slice(&transformed);
+        Ok(result)
     }
 
     fn encrypt_response(&self, response: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -71,12 +85,12 @@ impl UserMessageProcessor {
     }
 
     fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let iv = build_iv()?;
+        let iv_raw = build_iv()?;
+        let mut iv = self.encrypt_iv(&iv_raw)?;
         let bytes = data.as_slice();
         let mut out_vec = self.transform(&iv, bytes)?;
-        let mut result = Vec::from(iv);
-        result.append(&mut out_vec);
-        Ok(result)
+        iv.append(&mut out_vec);
+        Ok(iv)
     }
 }
 
@@ -88,17 +102,8 @@ fn compress(data: Vec<u8>) -> Result<Vec<u8>, Error> {
 }
 
 fn check_iv(iv: &[u8]) -> Result<(), Error> {
-    let random_part = &iv[0..4];
     let mut time_bytes = [0u8; 8];
     time_bytes.copy_from_slice(&iv[4..12]);
-    time_bytes[0] ^= random_part[0];
-    time_bytes[1] ^= random_part[1];
-    time_bytes[2] ^= random_part[2];
-    time_bytes[3] ^= random_part[3];
-    time_bytes[4] ^= random_part[0];
-    time_bytes[5] ^= random_part[1];
-    time_bytes[6] ^= random_part[2];
-    time_bytes[7] ^= random_part[3];
     let now = SystemTime::now().duration_since(UNIX_EPOCH)
         .map_err(|e| Error::new(ErrorKind::Other, e))?.as_secs();
     let time = u64::from_le_bytes(time_bytes);
@@ -117,15 +122,7 @@ fn build_iv() -> Result<[u8; 12], Error> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH)
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     iv[0..4].copy_from_slice(&random_part);
-    let mut time_bytes = now.as_secs().to_le_bytes();
-    time_bytes[0] ^= random_part[0];
-    time_bytes[1] ^= random_part[1];
-    time_bytes[2] ^= random_part[2];
-    time_bytes[3] ^= random_part[3];
-    time_bytes[4] ^= random_part[0];
-    time_bytes[5] ^= random_part[1];
-    time_bytes[6] ^= random_part[2];
-    time_bytes[7] ^= random_part[3];
+    let time_bytes = now.as_secs().to_le_bytes();
     iv[4..12].copy_from_slice(&time_bytes);
     Ok(iv)
 }

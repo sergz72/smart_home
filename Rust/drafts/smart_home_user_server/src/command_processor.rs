@@ -54,10 +54,11 @@ impl CommandProcessor {
 
         let aggregated = days_between(start_date, end_date) > MAX_UNAGGREGATED_DATA_DAYS;
 
-        let query = aggregated ? build_aggregated_query(start_date, start_time, data_type);
+        //let query = aggregated ? build_aggregated_query(start_date, start_time, data_type);
 
         let mut client = self.db.get_database_connection()?;
-        let rows = client.query("");
+        //let rows = client.query("");
+        Ok(Vec::new())
     }
 }
 
