@@ -131,3 +131,43 @@ pub fn build_message_processor(key: [u8; 32], db: DB)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
     Ok(Arc::new(UserMessageProcessor::new(key, db)?))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Error, ErrorKind};
+    use rand::rngs::OsRng;
+    use rand::TryRngCore;
+    use smart_home_common::db::DB;
+    use crate::message_processor::{build_iv, check_iv, UserMessageProcessor};
+
+    #[test]
+    fn test_iv() -> Result<(), Error> {
+        let mut key = [0u8; 32];
+        OsRng.try_fill_bytes(&mut key)
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        let message_processor =
+            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+        let iv_raw = build_iv()?;
+        check_iv(&iv_raw)?;
+        let iv = message_processor.encrypt_iv(&iv_raw)?;
+        let decrypted_iv = message_processor.encrypt_iv(iv.as_slice())?;
+        check_iv(decrypted_iv.as_slice())?;
+        assert_eq!(iv_raw, decrypted_iv.as_slice());
+        Ok(())
+    }
+
+    #[test]
+    fn test_encrypt_iv() -> Result<(), Error> {
+        let key = [0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
+                                13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
+                                24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
+        let message_processor =
+            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+        let iv_raw = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
+        let iv = message_processor.encrypt_iv(&iv_raw)?;
+        assert_eq!(iv.as_slice(), [1, 2, 3, 4, 87, 191, 4, 40, 131, 151, 75, 156]);
+        let decrypted_iv = message_processor.encrypt_iv(iv.as_slice())?;
+        assert_eq!(iv_raw, decrypted_iv.as_slice());
+        Ok(())
+    }
+}

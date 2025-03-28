@@ -32,9 +32,17 @@ fun sendUDP(hostName: String, port: Int, data: ByteArray): ByteArray {
 
 fun encrypt(request: ByteArray, key: SecretKeySpec): ByteArray {
     val cipher = Cipher.getInstance("ChaCha20")
-    val param = ChaCha20ParameterSpec(buildIV(key), 0)
+    val iv = buildIV(key)
+    val transformed = transformIV(key, iv)
+    val param = ChaCha20ParameterSpec(iv, 0)
     cipher.init(Cipher.ENCRYPT_MODE, key, param)
-    return cipher.doFinal(request)
+    val encrypted = cipher.doFinal(request)
+    val data = ByteBuffer
+        .allocate(encrypted.size + iv.size)
+        .put(transformed)
+        .put(encrypted)
+        .array()
+    return data
 }
 
 fun transformIV(key: SecretKeySpec, iv: ByteArray): ByteArray {
@@ -73,11 +81,11 @@ fun buildIV(key: SecretKeySpec): ByteArray {
     val iv = random.nextBytes(12)
     val time = System.currentTimeMillis() / 1000L
     ByteBuffer.allocate(Long.SIZE_BYTES)
-        .putLong(time)
         .order(ByteOrder.LITTLE_ENDIAN)
+        .putLong(time)
         .array()
         .copyInto(iv, 4, 0)
-    return transformIV(key, iv)
+    return iv
 }
 
 fun buildKeyValue(parameter: String): Pair<String, String> {
