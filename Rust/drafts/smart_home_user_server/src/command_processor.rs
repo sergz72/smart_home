@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
 use std::ops::Add;
 use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
@@ -19,6 +20,23 @@ struct SensorDataQuery {
     time_or_unit: i32,
     period: i32,
     period_unit: i32
+}
+
+struct Aggregated {
+    min: i32,
+    avg: i32,
+    max: i32
+}
+
+struct SensorDataValue {
+    time: i32,
+    value: i32
+}
+
+struct SensorData {
+    date: i32,
+    value: Option<SensorDataValue>,
+    aggregated: Option<Aggregated>
 }
 
 impl CommandProcessor {
@@ -49,9 +67,12 @@ impl CommandProcessor {
 
         let client = self.db.get_database_connection()?;
         let rows = if aggregated
-            { run_aggregated_query(client, start_datetime, end_datetime, query.data_type, query.max_points)? }
-            else { run_query(client, start_datetime, end_datetime, query.data_type, query.max_points)? };
-
+            { run_aggregated_query(client, start_datetime, end_datetime, query.data_type)? }
+            else { run_query(client, start_datetime, end_datetime, query.data_type)? };
+        let by_sensor_id: HashMap<i16, Vec<SensorData>> = aggregate_by_sensor_id(rows, aggregated)
+            .into_iter()
+            .map(|(k,v)|(k, aggregate_by_max_points(v, query.max_points)))
+            .collect();
         Ok(Vec::new())
     }
 
@@ -60,29 +81,83 @@ impl CommandProcessor {
     }
 }
 
+fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize) -> Vec<SensorData> {
+    todo!()
+}
+
+fn aggregate_by_sensor_id(rows: Vec<Row>, aggregated: bool) -> HashMap<i16, Vec<SensorData>> {
+    let mut result = HashMap::new();
+    for row in rows {
+        let id: i16 = row.get(0);
+        let data = to_sensor_data(row, aggregated);
+        let row = result.entry(id).or_insert(Vec::new());
+        row.push(data);
+    }
+    result
+}
+
+fn to_sensor_data(row: Row, aggregated: bool) -> SensorData {
+    todo!()
+}
+
 fn split_datetime(datetime: DateTime<Local>) -> (i32, i32) {
     (datetime.year() * 10000 + (datetime.month() * 100) as i32 + datetime.day() as i32,
      (datetime.hour() * 10000) as i32 + (datetime.minute() * 100) as i32 + datetime.second() as i32)
 }
 
-fn add_end_datetime() -> String {
-    " AND (e.date <= $4 OR (s.date == $4 AND e.time <= $5))".to_string()
+fn end_datetime_string(add: bool) -> String {
+    " and (event_date < $4 OR (event_date = $4 AND event_time <= $5))".to_string()
+}
+
+fn end_date_string(add: bool) -> String {
+    " and event_date <= $3".to_string()
 }
 
 fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
-                          data_type: String, max_points: usize) -> Result<Vec<Row>, Error> {
-    let (start_date, start_time) = split_datetime(start_datetime);
-    let sql = "".to_string() + add_end_datetime().as_str();
-    client.query(&sql, &[])
-        .map_err(|e| Error::new(ErrorKind::Other, e))
+                          data_type: String) -> Result<Vec<Row>, Error> {
+    let (start_date, _start_time) = split_datetime(start_datetime);
+    let sql = "with aggregated as (
+    select sensor_id, event_date, value_type,  min(value)::int min_value, avg(value)::int avg_value,
+           max(value)::int max_value
+      from sensor_events
+     where event_date >= $1
+       and sensor_id in (select id from sensors where data_type = $2)".to_string() +
+        end_date_string(end_datetime.is_some()).as_str() +
+"    group by sensor_id, event_date, value_type
+)
+select sensor_id, event_date,
+       json_agg(json_build_object('value_type', value_type, 'min', min_value, 'avg', avg_value, 'max', max_value))
+  from aggregated
+group by sensor_id, event_date
+order by event_date";
+    if let Some(end_datetime_value) = end_datetime {
+        let (end_date, _end_time) = split_datetime(end_datetime_value);
+        client.query(&sql, &[&start_date, &data_type, &end_date])
+            .map_err(|e| Error::new(ErrorKind::Other, e))
+    } else {
+        client.query(&sql, &[&start_date, &data_type])
+            .map_err(|e| Error::new(ErrorKind::Other, e))
+    }
 }
 
 fn run_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
-             data_type: String, max_points: usize) -> Result<Vec<Row>, Error> {
+             data_type: String) -> Result<Vec<Row>, Error> {
     let (start_date, start_time) = split_datetime(start_datetime);
-    let sql = "".to_string() + add_end_datetime().as_str();
-    client.query(&sql, &[])
-        .map_err(|e| Error::new(ErrorKind::Other, e))
+    let sql = "select sensor_id, event_date, event_time, json_agg(json_build_object('value_type', value_type, 'value', value)) values
+  from sensor_events
+ where ((event_date > $1) or (event_date = $1 and event_time >= $2))
+   and sensor_id in (select id from sensors where data_type = $3)".to_string() +
+        end_datetime_string(end_datetime.is_some()).as_str() +
+        " group by sensor_id, event_date, event_time
+order by event_date, event_time";
+    if let Some(end_datetime_value) = end_datetime {
+        let (end_date, end_time) = split_datetime(end_datetime_value);
+        client.query(&sql, &[&start_date, &start_time, &data_type, &end_date, &end_time])
+            .map_err(|e| Error::new(ErrorKind::Other, e))
+    } else {
+        client.query(&sql, &[&start_date, &start_time, &data_type])
+            .map_err(|e| Error::new(ErrorKind::Other, e))
+    }
 }
 
 fn build_sensor_data_query(command: Vec<u8>) -> Result<SensorDataQuery, Error> {
