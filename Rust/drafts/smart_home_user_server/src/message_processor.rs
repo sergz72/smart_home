@@ -28,7 +28,11 @@ impl UserMessageProcessor {
 
 impl MessageProcessor for UserMessageProcessor {
     fn process_message(&self, logger: &Logger, message: &Vec<u8>, _time_offset: i64) -> Vec<u8> {
-        match self.process_message_with_result(logger, message) {
+        if message.len() < 13 || !self.command_processor.check_message_length(message.len() - 12) {
+            logger.error("Wrong message length");
+            return Vec::new();
+        }
+        match self.process_message_with_result(message) {
             Ok(result) => result,
             Err(error) => {
                 logger.error(format!("process_message error: {}", error));
@@ -39,10 +43,10 @@ impl MessageProcessor for UserMessageProcessor {
 }
 
 impl UserMessageProcessor {
-    fn process_message_with_result(&self, logger: &Logger, message: &Vec<u8>)
+    fn process_message_with_result(&self, message: &Vec<u8>)
         -> Result<Vec<u8>, Error> {
         let command = self.decrypt(message)?;
-        let response = self.command_processor.execute(logger, command)?;
+        let response = self.command_processor.execute(command)?;
         self.encrypt_response(response)
     }
 

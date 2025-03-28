@@ -1,12 +1,24 @@
-use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
+use std::ops::Add;
+use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
+use postgres::{Client, Row};
 use smart_home_common::db::DB;
-use smart_home_common::logger::Logger;
 
-const MAX_UNAGGREGATED_DATA_DAYS: i32 = 7;
+const MAX_UNAGGREGATED_DATA_DAYS: i64 = 7;
+const MIN_DATE: i32 = 20190101;
+const MAX_TIME: i32 = 235959;
 
 pub struct CommandProcessor {
     db: DB
+}
+
+struct SensorDataQuery {
+    max_points: usize,
+    data_type: String,
+    date_or_offset: i32,
+    time_or_unit: i32,
+    period: i32,
+    period_unit: i32
 }
 
 impl CommandProcessor {
@@ -14,72 +26,111 @@ impl CommandProcessor {
         CommandProcessor { db }
     }
 
-    pub fn execute(&self, logger: &Logger, command: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let command_string = String::from_utf8(command)
-            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
-        logger.info(format!("Command: {}", command_string));
-        if !command_string.starts_with("GET ") {
-            return Err(Error::new(ErrorKind::InvalidData, "Invalid command"));
-        }
-        if command_string[4..].starts_with("/sensor_data?") {
-            return self.get_sensor_data(&command_string[17..]);
-        }
-        Err(Error::new(ErrorKind::InvalidData, "Invalid GET operation"))
+    pub fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
+        self.get_sensor_data(build_sensor_data_query(command)?)
     }
 
-    fn get_sensor_data(&self, query: &str) -> Result<Vec<u8>, Error> {
-        let parsed = parse_query(query);
-
-        let mut max_points = 1000000;
-        if let Some(max_points_string) = parsed.get("max_points") {
-            max_points = max_points_string.parse()
-                .map_err(|e|Error::new(ErrorKind::InvalidInput, "Invalid max_points value"))?;
+    fn get_sensor_data(&self, mut query: SensorDataQuery) -> Result<Vec<u8>, Error> {
+        if query.max_points == 0 {
+            query.max_points = 1000000;
         }
 
-        let data_type = parsed.get("data_type")
-            .ok_or(Error::new(ErrorKind::InvalidInput, "Missing data_type"))?;
+        let now = Local::now();
 
-        let start_string = parsed.get("start")
-            .ok_or(Error::new(ErrorKind::InvalidInput, "Missing start"))?;
-        let (start_date, start_time) = parse_start(start_string)?;
-
-        let mut end_date = None;
-        let mut end_time = None;
-        if let Some(period_string) = parsed.get("period") {
-            let (end_date_value, end_time_value) =
-                parse_period(period_string, start_date, start_time)?;
-            end_date = Some(end_date_value);
-            end_time = Some(end_time_value);
+        let start_datetime =
+            parse_datetime(now, query.date_or_offset, query.time_or_unit)?;
+        let mut end_datetime = None;
+        if query.period != 0 {
+            end_datetime =
+                Some(parse_period(start_datetime, query.period, query.period_unit)?);
         }
 
-        let aggregated = days_between(start_date, end_date) > MAX_UNAGGREGATED_DATA_DAYS;
+        let aggregated = (end_datetime.unwrap_or(now) - start_datetime).num_days() > MAX_UNAGGREGATED_DATA_DAYS;
 
-        //let query = aggregated ? build_aggregated_query(start_date, start_time, data_type);
+        let client = self.db.get_database_connection()?;
+        let rows = if aggregated
+            { run_aggregated_query(client, start_datetime, end_datetime, query.data_type, query.max_points)? }
+            else { run_query(client, start_datetime, end_datetime, query.data_type, query.max_points)? };
 
-        let mut client = self.db.get_database_connection()?;
-        //let rows = client.query("");
         Ok(Vec::new())
     }
+
+    pub fn check_message_length(&self, length: usize) -> bool {
+        length == 16
+    }
 }
 
-fn days_between(start_date: i32, end_date: Option<i32>) -> i32 {
-    todo!()
+fn split_datetime(datetime: DateTime<Local>) -> (i32, i32) {
+    (datetime.year() * 10000 + (datetime.month() * 100) as i32 + datetime.day() as i32,
+     (datetime.hour() * 10000) as i32 + (datetime.minute() * 100) as i32 + datetime.second() as i32)
 }
 
-fn parse_start(start_string: &String) -> Result<(i32, i32), Error> {
-    todo!()
+fn add_end_datetime() -> String {
+    " AND (e.date <= $4 OR (s.date == $4 AND e.time <= $5))".to_string()
 }
 
-fn parse_period(period_string: &String, start_date: i32, start_time: i32) -> Result<(i32, i32), Error> {
-    todo!()
+fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
+                          data_type: String, max_points: usize) -> Result<Vec<Row>, Error> {
+    let (start_date, start_time) = split_datetime(start_datetime);
+    let sql = "".to_string() + add_end_datetime().as_str();
+    client.query(&sql, &[])
+        .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
-fn parse_query(query: &str) -> HashMap<String, String> {
-    query
-        .split('&')
-        .filter_map(|s| {
-            s.split_once('=')
-                .and_then(|t| Some((t.0.to_owned(), t.1.to_owned())))
-        })
-        .collect()
+fn run_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
+             data_type: String, max_points: usize) -> Result<Vec<Row>, Error> {
+    let (start_date, start_time) = split_datetime(start_datetime);
+    let sql = "".to_string() + add_end_datetime().as_str();
+    client.query(&sql, &[])
+        .map_err(|e| Error::new(ErrorKind::Other, e))
+}
+
+fn build_sensor_data_query(command: Vec<u8>) -> Result<SensorDataQuery, Error> {
+    let mut buffer16 = [0u8; 2];
+    buffer16.copy_from_slice(&command[0..2]);
+    let max_points = u16::from_le_bytes(buffer16) as usize;
+    let data_type = String::from_utf8(command[2..6].to_vec())
+        .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+    let mut buffer32 = [0u8; 4];
+    buffer32.copy_from_slice(&command[6..10]);
+    let date_or_offset = i32::from_le_bytes(buffer32);
+    buffer32.copy_from_slice(&command[10..14]);
+    let time_or_unit = i32::from_le_bytes(buffer32);
+    let period = command[14] as i32;
+    let period_unit = command[15] as i32;
+    Ok(SensorDataQuery{max_points, data_type, date_or_offset, time_or_unit, period, period_unit})
+}
+
+fn parse_datetime(date_now: DateTime<Local>, date: i32, time: i32) -> Result<DateTime<Local>, Error> {
+    if date >= 0 {
+        if date < MIN_DATE || time < 0 || time > MAX_TIME {
+            return Err(Error::new(ErrorKind::InvalidData, "Invalid date or time"));
+        }
+        Ok(build_datetime(date, time))
+    } else {
+        parse_period(date_now, -date, time)
+    }
+}
+
+fn build_datetime(date: i32, time: i32) -> DateTime<Local> {
+    Local.with_ymd_and_hms(date / 10000,
+                           ((date / 100) % 100) as u32,
+                           (date % 100) as u32,
+                           (time / 10000) as u32,
+                           ((time / 100) % 100) as u32,
+                           (time % 100) as u32).unwrap()
+}
+
+fn parse_period(start_datetime: DateTime<Local>, period: i32, period_unit: i32)
+                -> Result<DateTime<Local>, Error> {
+    if period <= 0 {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid period"));
+    }
+    match period_unit {
+        0 => Ok(start_datetime.add(TimeDelta::hours(period as i64))),
+        1 => Ok(start_datetime + Days::new(period as u64)),
+        2 => Ok(start_datetime + Months::new(period as u32)),
+        3 => Ok(start_datetime + Months::new((period * 12) as u32)),
+        _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+    }
 }
