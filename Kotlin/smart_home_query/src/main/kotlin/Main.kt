@@ -64,15 +64,16 @@ fun decrypt(response: ByteArray, key: SecretKeySpec): ByteArray {
         throw IOException("Invalid response")
     }
     val cipher = Cipher.getInstance("ChaCha20")
-    val param = ChaCha20ParameterSpec(transformIV(key, response.sliceArray(0..12)), 0)
+    val iv = transformIV(key, response.sliceArray(0..12))
+    val param = ChaCha20ParameterSpec(iv, 0)
     cipher.init(Cipher.DECRYPT_MODE, key, param)
     return cipher.doFinal(response.sliceArray(12..<response.size))
 }
 
-fun decompress(decrypted: ByteArray): String {
+fun decompress(decrypted: ByteArray): ByteArray {
     val inStream = BZip2CompressorInputStream(ByteArrayInputStream(decrypted))
     inStream.use {
-        return inStream.readBytes().toString(Charsets.UTF_8)
+        return inStream.readBytes()
     }
 }
 
@@ -170,6 +171,20 @@ fun main(args: Array<String>) {
     val response = sendUDP(hostName, port, sendData)
     val decrypted = decrypt(response, key)
     val decompressed = decompress(decrypted)
-
-    println(decompressed)
+    when (decompressed[0]) {
+        //not aggregated
+        0.toByte() -> {
+            println(decompressed)
+        }
+        // aggregated
+        1.toByte() -> {
+            println(decompressed)
+        }
+        // error
+        2.toByte() -> {
+            val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
+            println("Error: $message")
+        }
+        else -> println("Wrong response type ${decrypted[0]}")
+    }
 }

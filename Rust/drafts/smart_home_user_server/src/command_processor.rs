@@ -28,15 +28,15 @@ struct Aggregated {
     max: i32
 }
 
-struct SensorDataValue {
+struct SensorDataValues {
     time: i32,
-    value: i32
+    values: HashMap<String, i32>
 }
 
 struct SensorData {
     date: i32,
-    value: Option<SensorDataValue>,
-    aggregated: Option<Aggregated>
+    values: Option<SensorDataValues>,
+    aggregated: Option<HashMap<String, Aggregated>>
 }
 
 impl CommandProcessor {
@@ -97,6 +97,25 @@ fn aggregate_by_sensor_id(rows: Vec<Row>, aggregated: bool) -> HashMap<i16, Vec<
 }
 
 fn to_sensor_data(row: Row, aggregated: bool) -> SensorData {
+    let event_date: i32 = row.get(1);
+    if aggregated {
+        let values_string: String = row.get(2);
+        let values = parse_aggregated_values(values_string);
+        SensorData{date: event_date, values: None, aggregated: Some(values)}
+    } else {
+        let event_time: i32 = row.get(2);
+        let values_string: String = row.get(3);
+        let values = parse_values(values_string);
+        SensorData{date: event_date, values: Some(SensorDataValues{time: event_time, values}),
+                    aggregated: None}
+    }
+}
+
+fn parse_values(values_string: String) -> HashMap<String, i32> {
+    todo!()
+}
+
+fn parse_aggregated_values(values_string: String) -> HashMap<String, Aggregated> {
     todo!()
 }
 

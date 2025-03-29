@@ -32,10 +32,20 @@ impl MessageProcessor for UserMessageProcessor {
             logger.error("Wrong message length");
             return Vec::new();
         }
-        match self.process_message_with_result(message) {
-            Ok(result) => result,
+        let result = match self.process_message_with_result(logger, message) {
+            Ok(message) => message,
             Err(error) => {
                 logger.error(format!("process_message error: {}", error));
+                let mut message = Vec::new();
+                message.push(2); // error
+                message.extend_from_slice(error.to_string().as_bytes());
+                message
+            }
+        };
+        match self.encrypt_response(result) {
+            Ok(encrypted) => encrypted,
+            Err(error) => {
+                logger.error(format!("encrypt_response error: {}", error));
                 Vec::new()
             }
         }
@@ -43,11 +53,15 @@ impl MessageProcessor for UserMessageProcessor {
 }
 
 impl UserMessageProcessor {
-    fn process_message_with_result(&self, message: &Vec<u8>)
+    fn process_message_with_result(&self, logger: &Logger, message: &Vec<u8>)
         -> Result<Vec<u8>, Error> {
-        let command = self.decrypt(message)?;
-        let response = self.command_processor.execute(command)?;
-        self.encrypt_response(response)
+        match self.decrypt(message) {
+            Ok(command) => self.command_processor.execute(command),
+            Err(error) => {
+                logger.error(format!("message decrypt error: {}", error));
+                Ok(Vec::new())
+            }
+        }
     }
 
     fn transform(&self, iv: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
@@ -92,7 +106,7 @@ impl UserMessageProcessor {
         let iv_raw = build_iv()?;
         let mut iv = self.encrypt_iv(&iv_raw)?;
         let bytes = data.as_slice();
-        let mut out_vec = self.transform(&iv, bytes)?;
+        let mut out_vec = self.transform(&iv_raw, bytes)?;
         iv.append(&mut out_vec);
         Ok(iv)
     }
@@ -172,6 +186,20 @@ mod tests {
         assert_eq!(iv.as_slice(), [1, 2, 3, 4, 87, 191, 4, 40, 131, 151, 75, 156]);
         let decrypted_iv = message_processor.encrypt_iv(iv.as_slice())?;
         assert_eq!(iv_raw, decrypted_iv.as_slice());
+        Ok(())
+    }
+
+    #[test]
+    fn test_encrypt_decrypt() -> Result<(), Error> {
+        let key = [0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
+            13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
+            24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
+        let message_processor =
+            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+        let message = vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
+        let encrypted = message_processor.encrypt(message.clone())?;
+        let decrypted = message_processor.decrypt(&encrypted)?;
+        assert_eq!(message, decrypted);
         Ok(())
     }
 }

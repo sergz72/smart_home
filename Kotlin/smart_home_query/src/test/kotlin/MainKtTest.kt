@@ -1,4 +1,6 @@
 import com.sz.smart_home.query.buildIV
+import com.sz.smart_home.query.decrypt
+import com.sz.smart_home.query.encrypt
 import com.sz.smart_home.query.transformIV
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
@@ -31,5 +33,14 @@ class MainKtTest {
         assertEquals(transformed[9], 0)
         assertEquals(transformed[10], 0)
         assertEquals(transformed[11], 0)
+    }
+
+    @Test
+    fun encryptTest() {
+        val key = SecretKeySpec(keyBytes, 0, keyBytes.size, "ChaCha20")
+        val data = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+        val encrypted = encrypt(data, key)
+        val decrypted = decrypt(encrypted, key)
+        assertArrayEquals(data, decrypted)
     }
 }
