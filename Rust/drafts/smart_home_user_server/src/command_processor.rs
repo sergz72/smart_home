@@ -22,15 +22,23 @@ struct SensorDataQuery {
     period_unit: i32
 }
 
+#[derive(Clone)]
 struct Aggregated {
     min: i32,
     avg: i32,
     max: i32
 }
 
+#[derive(Clone)]
 struct SensorDataValues {
     time: i32,
     values: HashMap<String, i32>
+}
+
+impl SensorDataValues {
+    fn add(&mut self, values: &HashMap<String, i32>) {
+        todo!()
+    }
 }
 
 struct SensorData {
@@ -39,16 +47,76 @@ struct SensorData {
     aggregated: Option<HashMap<String, Aggregated>>
 }
 
+impl SensorData {
+    fn from(source: &SensorData) -> SensorData {
+        SensorData{date: source.date, values: source.values.as_ref().map(|v|v.clone()),
+                    aggregated: source.aggregated.as_ref().map(|v|v.clone())}
+    }
+
+    fn add(&mut self, data: &SensorData) {
+        if let Some(values) = &mut self.values {
+            values.add(&data.values.as_ref().unwrap().values);
+        }
+        if let Some(aggregated) = &mut self.aggregated {
+            for (k, v) in aggregated {
+                todo!()
+                //aggregated.g
+            }
+        }
+    }
+    
+    fn to_binary(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        result.extend_from_slice(&self.date.to_le_bytes());
+        if let Some(values) = &self.values {
+            result.extend_from_slice(&values.time.to_le_bytes());
+            result.push(values.values.len() as u8);
+            for (key, value) in &values.values {
+                append_key(key, &mut result);
+                result.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        if let Some(aggregated) = &self.aggregated {
+            result.push(aggregated.len() as u8);
+            for (key, value) in aggregated {
+                append_key(key, &mut result);
+                result.extend_from_slice(&value.min.to_le_bytes());
+                result.extend_from_slice(&value.avg.to_le_bytes());
+                result.extend_from_slice(&value.max.to_le_bytes());
+            }
+        }
+        result
+    }
+}
+
+fn append_key(key: &String, result: &mut Vec<u8>) {
+    let bytes = key.as_bytes();
+    result.push(bytes[0]);
+    result.push(bytes[1]);
+    result.push(bytes[2]);
+}
+
 impl CommandProcessor {
     pub fn new(db: DB) -> CommandProcessor {
         CommandProcessor { db }
     }
 
     pub fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
-        self.get_sensor_data(build_sensor_data_query(command)?)
+        let (data, aggregated) = self.get_sensor_data(build_sensor_data_query(command)?)?;
+        let mut result = Vec::new();
+        result.push(if aggregated { 1 } else { 0 });
+        for (sensor_id, d) in data {
+            result.push(sensor_id as u8);
+            result.extend_from_slice(&d.len().to_le_bytes());
+            for sd in d {
+                result.extend_from_slice(&sd.to_binary());
+            }
+        }
+        Ok(result)
     }
 
-    fn get_sensor_data(&self, mut query: SensorDataQuery) -> Result<Vec<u8>, Error> {
+    fn get_sensor_data(&self, mut query: SensorDataQuery)
+        -> Result<(HashMap<i16, Vec<SensorData>>, bool), Error> {
         if query.max_points == 0 {
             query.max_points = 1000000;
         }
@@ -73,7 +141,7 @@ impl CommandProcessor {
             .into_iter()
             .map(|(k,v)|(k, aggregate_by_max_points(v, query.max_points)))
             .collect();
-        Ok(Vec::new())
+        Ok((by_sensor_id, aggregated))
     }
 
     pub fn check_message_length(&self, length: usize) -> bool {
@@ -82,7 +150,19 @@ impl CommandProcessor {
 }
 
 fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize) -> Vec<SensorData> {
-    todo!()
+    let factor = data.len() / max_points + 1;
+    let mut idx = 0;
+    let mut result = Vec::new();
+    while idx < data.len() {
+        let mut sd = SensorData::from(data.get(idx).unwrap());
+        idx += 1;
+        for i in 1..factor {
+            sd.add(data.get(idx).unwrap());
+            idx += 1;
+        }
+        result.push(sd);
+    }
+    result
 }
 
 fn aggregate_by_sensor_id(rows: Vec<Row>, aggregated: bool) -> HashMap<i16, Vec<SensorData>> {
@@ -226,5 +306,24 @@ fn parse_period(start_datetime: DateTime<Local>, period: i32, period_unit: i32)
         2 => Ok(start_datetime + Months::new(period as u32)),
         3 => Ok(start_datetime + Months::new((period * 12) as u32)),
         _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Error;
+    use smart_home_common::db::DB;
+    use crate::command_processor::{CommandProcessor, SensorDataQuery};
+
+    #[test]
+    fn test_get_sensor_data() -> Result<(), Error> {
+        let processor = CommandProcessor::new(
+            DB::new("postgresql://postgres@localhost/smart_home".to_string())
+        );
+        let result = processor.get_sensor_data(
+            SensorDataQuery{max_points: 200, data_type: "env".to_string(),
+                                    date_or_offset: 20250301, time_or_unit: 0, period: 0, period_unit: 0},
+        )?;
+        Ok(())
     }
 }
