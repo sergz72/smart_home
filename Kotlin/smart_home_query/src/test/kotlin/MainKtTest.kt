@@ -1,7 +1,4 @@
-import com.sz.smart_home.query.buildIV
-import com.sz.smart_home.query.decrypt
-import com.sz.smart_home.query.encrypt
-import com.sz.smart_home.query.transformIV
+import com.sz.smart_home.query.SmartHomeService
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import javax.crypto.spec.SecretKeySpec
@@ -12,35 +9,35 @@ class MainKtTest {
 
     @Test
     fun ivTest() {
-        val key = SecretKeySpec(keyBytes, 0, keyBytes.size, "ChaCha20")
+        val service = SmartHomeService(keyBytes, "localhost", 60000)
         val iv = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
-        val transformed = transformIV(key, iv)
+        val transformed = service.transformIV(iv)
         assertArrayEquals(transformed, byteArrayOf(1, 2, 3, 4, 87, 191u.toByte(), 4, 40, 131u.toByte(), 151u.toByte(), 75, 156u.toByte()))
-        val transformed2 = transformIV(key, transformed)
+        val transformed2 = service.transformIV(transformed)
         assertArrayEquals(iv, transformed2)
     }
 
     @Test
     fun buildIvTest() {
-        val key = SecretKeySpec(keyBytes, 0, keyBytes.size, "ChaCha20")
-        val iv = buildIV(key)
-        val transformed = transformIV(key, iv)
+        val service = SmartHomeService(keyBytes, "localhost", 60000)
+        val iv = service.buildIV()
+        val transformed = service.transformIV(iv)
         assertEquals(transformed[0], iv[0])
         assertEquals(transformed[1], iv[1])
         assertEquals(transformed[2], iv[2])
         assertEquals(transformed[3], iv[3])
-        assertEquals(transformed[8], 0)
-        assertEquals(transformed[9], 0)
-        assertEquals(transformed[10], 0)
-        assertEquals(transformed[11], 0)
+        assertEquals(iv[8], 0)
+        assertEquals(iv[9], 0)
+        assertEquals(iv[10], 0)
+        assertEquals(iv[11], 0)
     }
 
     @Test
     fun encryptTest() {
-        val key = SecretKeySpec(keyBytes, 0, keyBytes.size, "ChaCha20")
+        val service = SmartHomeService(keyBytes, "localhost", 60000)
         val data = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
-        val encrypted = encrypt(data, key)
-        val decrypted = decrypt(encrypted, key)
+        val encrypted = service.encrypt(data)
+        val decrypted = service.decrypt(encrypted)
         assertArrayEquals(data, decrypted)
     }
 }
