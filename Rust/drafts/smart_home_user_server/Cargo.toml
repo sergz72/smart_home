@@ -11,7 +11,7 @@ chacha20 = "0.9.X"
 rand = "0.9.X"
 bzip2 = "0.X"
 chrono = "0.X"
-postgres = "0.X"
+postgres = { version = "0.X", features = ["with-serde_json-1"]}
 
 [profile.dev]
 overflow-checks = false

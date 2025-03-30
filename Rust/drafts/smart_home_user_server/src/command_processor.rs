@@ -47,6 +47,12 @@ struct SensorData {
     aggregated: Option<HashMap<String, Aggregated>>
 }
 
+struct SensorDataOut {
+    date: i32,
+    values: Option<Vec<SensorDataValues>>,
+    aggregated: Option<HashMap<String, Aggregated>>
+}
+
 impl SensorData {
     fn from(source: &SensorData) -> SensorData {
         SensorData{date: source.date, values: source.values.as_ref().map(|v|v.clone()),
@@ -64,16 +70,20 @@ impl SensorData {
             }
         }
     }
-    
+}
+
+impl SensorDataOut {
     fn to_binary(&self) -> Vec<u8> {
         let mut result = Vec::new();
         result.extend_from_slice(&self.date.to_le_bytes());
         if let Some(values) = &self.values {
-            result.extend_from_slice(&values.time.to_le_bytes());
-            result.push(values.values.len() as u8);
-            for (key, value) in &values.values {
-                append_key(key, &mut result);
-                result.extend_from_slice(&value.to_le_bytes());
+            result.extend_from_slice(&(values.len() as u32).to_le_bytes());
+            for value in values {
+                result.push(value.values.len() as u8);
+                for (key, value) in &value.values {
+                    append_key(key, &mut result);
+                    result.extend_from_slice(&value.to_le_bytes());
+                }
             }
         }
         if let Some(aggregated) = &self.aggregated {
@@ -88,12 +98,12 @@ impl SensorData {
         result
     }
 }
-
 fn append_key(key: &String, result: &mut Vec<u8>) {
     let bytes = key.as_bytes();
     result.push(bytes[0]);
     result.push(bytes[1]);
     result.push(bytes[2]);
+    result.push(if bytes.len() > 3 { bytes[3] } else { 0x20 });
 }
 
 impl CommandProcessor {
@@ -107,7 +117,7 @@ impl CommandProcessor {
         result.push(if aggregated { 1 } else { 0 });
         for (sensor_id, d) in data {
             result.push(sensor_id as u8);
-            result.extend_from_slice(&d.len().to_le_bytes());
+            result.extend_from_slice(&(d.len() as u32).to_le_bytes());
             for sd in d {
                 result.extend_from_slice(&sd.to_binary());
             }
@@ -116,7 +126,7 @@ impl CommandProcessor {
     }
 
     fn get_sensor_data(&self, mut query: SensorDataQuery)
-        -> Result<(HashMap<i16, Vec<SensorData>>, bool), Error> {
+        -> Result<(HashMap<i16, Vec<SensorDataOut>>, bool), Error> {
         if query.max_points == 0 {
             query.max_points = 1000000;
         }
@@ -137,9 +147,9 @@ impl CommandProcessor {
         let rows = if aggregated
             { run_aggregated_query(client, start_datetime, end_datetime, query.data_type)? }
             else { run_query(client, start_datetime, end_datetime, query.data_type)? };
-        let by_sensor_id: HashMap<i16, Vec<SensorData>> = aggregate_by_sensor_id(rows, aggregated)
+        let by_sensor_id: HashMap<i16, Vec<SensorDataOut>> = aggregate_by_sensor_id(rows, aggregated)
             .into_iter()
-            .map(|(k,v)|(k, aggregate_by_max_points(v, query.max_points)))
+            .map(|(k,v)|(k, aggregate_by_max_points(v, query.max_points, aggregated)))
             .collect();
         Ok((by_sensor_id, aggregated))
     }
@@ -149,20 +159,37 @@ impl CommandProcessor {
     }
 }
 
-fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize) -> Vec<SensorData> {
+fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize, aggregated: bool) -> Vec<SensorDataOut> {
     let factor = data.len() / max_points + 1;
     let mut idx = 0;
     let mut result = Vec::new();
     while idx < data.len() {
         let mut sd = SensorData::from(data.get(idx).unwrap());
         idx += 1;
-        for i in 1..factor {
+        for _i in 1..factor {
             sd.add(data.get(idx).unwrap());
             idx += 1;
         }
         result.push(sd);
     }
-    result
+    to_sensor_data_out(result, aggregated)
+}
+
+fn to_sensor_data_out(data: Vec<SensorData>, aggregated: bool) -> Vec<SensorDataOut> {
+    let mut map = HashMap::new();
+    for d in data {
+        let day_data = map.entry(d.date).or_insert(Vec::new());
+        day_data.push(d);
+    }
+    map.into_iter().map(|(k, v)|SensorDataOut{
+        date: k,
+        aggregated: if aggregated { v[0].aggregated.clone() } else { None },
+        values: if aggregated { None } else { Some(aggregate_values(v)) },
+    }).collect()
+}
+
+fn aggregate_values(values: Vec<SensorData>) -> Vec<SensorDataValues> {
+    values.into_iter().map(|v|v.values.unwrap()).collect()
 }
 
 fn aggregate_by_sensor_id(rows: Vec<Row>, aggregated: bool) -> HashMap<i16, Vec<SensorData>> {
@@ -179,37 +206,43 @@ fn aggregate_by_sensor_id(rows: Vec<Row>, aggregated: bool) -> HashMap<i16, Vec<
 fn to_sensor_data(row: Row, aggregated: bool) -> SensorData {
     let event_date: i32 = row.get(1);
     if aggregated {
-        let values_string: String = row.get(2);
-        let values = parse_aggregated_values(values_string);
+        let values_json: serde_json::Value = row.get(2);
+        let values = parse_aggregated_values(values_json);
         SensorData{date: event_date, values: None, aggregated: Some(values)}
     } else {
         let event_time: i32 = row.get(2);
-        let values_string: String = row.get(3);
-        let values = parse_values(values_string);
+        let values_json: serde_json::Value = row.get(3);
+        let values = parse_values(values_json);
         SensorData{date: event_date, values: Some(SensorDataValues{time: event_time, values}),
                     aggregated: None}
     }
 }
 
-fn parse_values(values_string: String) -> HashMap<String, i32> {
-    todo!()
+fn parse_values(values_json: serde_json::Value) -> HashMap<String, i32> {
+    let mut result = HashMap::new();
+    for element in values_json.as_array().unwrap() {
+        let map = element.as_object().unwrap();
+        result.insert(map["value_type"].to_string(), map["value"].as_i64().unwrap() as i32);
+    }
+    result
 }
 
-fn parse_aggregated_values(values_string: String) -> HashMap<String, Aggregated> {
-    todo!()
+fn parse_aggregated_values(values_json: serde_json::Value) -> HashMap<String, Aggregated> {
+    let mut result = HashMap::new();
+    for element in values_json.as_array().unwrap() {
+        let map = element.as_object().unwrap();
+        result.insert(map["value_type"].to_string(), Aggregated{
+            min: map["min"].as_i64().unwrap() as i32,
+            avg: map["avg"].as_i64().unwrap() as i32,
+            max: map["max"].as_i64().unwrap() as i32
+        });
+    }
+    result
 }
 
 fn split_datetime(datetime: DateTime<Local>) -> (i32, i32) {
     (datetime.year() * 10000 + (datetime.month() * 100) as i32 + datetime.day() as i32,
      (datetime.hour() * 10000) as i32 + (datetime.minute() * 100) as i32 + datetime.second() as i32)
-}
-
-fn end_datetime_string(add: bool) -> String {
-    " and (event_date < $4 OR (event_date = $4 AND event_time <= $5))".to_string()
-}
-
-fn end_date_string(add: bool) -> String {
-    " and event_date <= $3".to_string()
 }
 
 fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
@@ -221,7 +254,7 @@ fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end
       from sensor_events
      where event_date >= $1
        and sensor_id in (select id from sensors where data_type = $2)".to_string() +
-        end_date_string(end_datetime.is_some()).as_str() +
+        if end_datetime.is_some() {" and event_date <= $3" } else { "" } +
 "    group by sensor_id, event_date, value_type
 )
 select sensor_id, event_date,
@@ -246,7 +279,7 @@ fn run_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: 
   from sensor_events
  where ((event_date > $1) or (event_date = $1 and event_time >= $2))
    and sensor_id in (select id from sensors where data_type = $3)".to_string() +
-        end_datetime_string(end_datetime.is_some()).as_str() +
+        if end_datetime.is_some() { " and (event_date < $4 OR (event_date = $4 AND event_time <= $5))" } else { "" } +
         " group by sensor_id, event_date, event_time
 order by event_date, event_time";
     if let Some(end_datetime_value) = end_datetime {
@@ -320,10 +353,11 @@ mod tests {
         let processor = CommandProcessor::new(
             DB::new("postgresql://postgres@localhost/smart_home".to_string())
         );
-        let result = processor.get_sensor_data(
+        let (result, aggregated) = processor.get_sensor_data(
             SensorDataQuery{max_points: 200, data_type: "env".to_string(),
                                     date_or_offset: 20250301, time_or_unit: 0, period: 0, period_unit: 0},
         )?;
+        assert_eq!(true, aggregated);
         Ok(())
     }
 }
