@@ -80,6 +80,7 @@ impl SensorDataOut {
             result.extend_from_slice(&(values.len() as u32).to_le_bytes());
             for value in values {
                 result.push(value.values.len() as u8);
+                result.extend_from_slice(&value.time.to_le_bytes());
                 for (key, value) in &value.values {
                     append_key(key, &mut result);
                     result.extend_from_slice(&value.to_le_bytes());
@@ -117,7 +118,7 @@ impl CommandProcessor {
         result.push(if aggregated { 1 } else { 0 });
         for (sensor_id, d) in data {
             result.push(sensor_id as u8);
-            result.extend_from_slice(&(d.len() as u32).to_le_bytes());
+            result.extend_from_slice(&(d.len() as u16).to_le_bytes());
             for sd in d {
                 result.extend_from_slice(&sd.to_binary());
             }

@@ -66,6 +66,13 @@ fun buildRequest(query: String): SmartHomeQuery {
     return SmartHomeQuery(maxPoints, dataType, startDate, startDateOffset, period)
 }
 
+fun printResponse(response: SensorDataResponse) {
+    println("Response: aggregated: ${response.aggregated}, sensor count: ${response.data.size}")
+    for ((k, v) in response.data) {
+        println("Sensor $k: ${v.size} records.")
+    }
+}
+
 fun main(args: Array<String>) {
     if (args.size != 4) {
         usage()
@@ -78,5 +85,6 @@ fun main(args: Array<String>) {
 
     val request = buildRequest(query)
     val service = SmartHomeService(keyBytes, hostName, port)
-    service.send(request)
+    val response = service.send(request)
+    printResponse(response)
 }

@@ -1,5 +1,7 @@
 package com.sz.smart_home.query
 
+import com.sz.smart_home.query.SensorData.Companion.buildFromAggregatedResponse
+import com.sz.smart_home.query.SensorData.Companion.buildFromResponse
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -121,7 +123,7 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
         buffer.put(bytes[0])
         buffer.put(bytes[1])
         buffer.put(bytes[2])
-        buffer.put(if (bytes.size > 3) { bytes[3] } else { 0 })
+        buffer.put(if (bytes.size > 3) { bytes[3] } else { 0x20 })
         if (query.startDate != null) {
             buffer.putInt(query.startDate.date)
             buffer.putInt(query.startDate.time)
@@ -138,27 +140,23 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
         return buffer.array()
     }
 
-    fun send(query: SmartHomeQuery) {
+    fun send(query: SmartHomeQuery): SensorDataResponse {
         val request = buildRequest(query)
         val sendData = encrypt(request)
         val response = sendUDP(sendData)
         val decrypted = decrypt(response)
         val decompressed = decompress(decrypted)
-        when (decompressed[0]) {
+        return when (decompressed[0]) {
             //not aggregated
-            0.toByte() -> {
-                println(decompressed)
-            }
+            0.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), false, ::buildFromResponse)
             // aggregated
-            1.toByte() -> {
-                println(decompressed)
-            }
+            1.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), true, ::buildFromAggregatedResponse)
             // error
             2.toByte() -> {
                 val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
-                println("Error: $message")
+                throw IOException("Error: $message")
             }
-            else -> println("Wrong response type ${decrypted[0]}")
+            else -> throw IOException("Wrong response type ${decrypted[0]}")
         }
     }
 }
