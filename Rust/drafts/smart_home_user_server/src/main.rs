@@ -1,6 +1,7 @@
 mod configuration;
 mod message_processor;
 mod command_processor;
+mod sensor_data;
 
 use std::io::Error;
 use smart_home_common::base_server::BaseServer;

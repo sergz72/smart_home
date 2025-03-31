@@ -2,7 +2,6 @@ package com.sz.smart_home.query
 
 import java.nio.file.Files
 import java.nio.file.Paths
-import javax.crypto.spec.SecretKeySpec
 
 fun usage() {
     println("Usage: java -jar smart_home_query.jar keyFileName hostName port query")
@@ -32,7 +31,6 @@ fun parsePeriod(periodStr: String?): DateOffset? {
         return null
     }
     val unit: TimeUnit = when (periodStr.last()) {
-        'h' -> TimeUnit.hour
         'd' -> TimeUnit.day
         'm' -> TimeUnit.month
         'y' -> TimeUnit.year
@@ -73,6 +71,13 @@ fun printResponse(response: SensorDataResponse) {
     }
 }
 
+fun printResponse(response: List<Sensor>) {
+    println("Response: sensor count: ${response.size}")
+    for (v in response) {
+        println("Sensor ${v.id}: ${v.dataType} ${v.location}")
+    }
+}
+
 fun main(args: Array<String>) {
     if (args.size != 4) {
         usage()
@@ -83,8 +88,14 @@ fun main(args: Array<String>) {
     val port = args[2].toInt()
     val query = args[3]
 
-    val request = buildRequest(query)
     val service = SmartHomeService(keyBytes, hostName, port)
-    val response = service.send(request)
-    printResponse(response)
+
+    if (query == "sensors") {
+        val response = service.getSensors()
+        printResponse(response)
+    } else {
+        val request = buildRequest(query)
+        val response = service.send(request)
+        printResponse(response)
+    }
 }

@@ -16,7 +16,6 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
 enum class TimeUnit {
-    hour,
     day,
     month,
     year
@@ -38,6 +37,12 @@ data class SmartHomeQuery(
     val startDate: DateTime?,
     val startDateOffset: DateOffset?,
     val period: DateOffset?
+)
+
+data class Sensor(
+    val id: Int,
+    val dataType: String,
+    val location: String
 )
 
 class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: Int) {
@@ -117,7 +122,8 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
     private fun buildRequest(query: SmartHomeQuery): ByteArray {
         if (query.dataType.length < 3)
             throw IllegalArgumentException("dataType must be more than 2 characters")
-        val buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN)
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.put(1)
         buffer.putShort(query.maxPoints)
         val bytes = query.dataType.toByteArray()
         buffer.put(bytes[0])
@@ -151,6 +157,24 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
             0.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), false, ::buildFromResponse)
             // aggregated
             1.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), true, ::buildFromAggregatedResponse)
+            // error
+            2.toByte() -> {
+                val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
+                throw IOException("Error: $message")
+            }
+            else -> throw IOException("Wrong response type ${decrypted[0]}")
+        }
+    }
+
+    fun getSensors(): List<Sensor> {
+        val request = byteArrayOf(0)
+        val sendData = encrypt(request)
+        val response = sendUDP(sendData)
+        val decrypted = decrypt(response)
+        val decompressed = decompress(decrypted)
+        return when (decompressed[0]) {
+            //no error
+            0.toByte() -> SensorsResponse.parseResponse(decompressed.drop(1))
             // error
             2.toByte() -> {
                 val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
