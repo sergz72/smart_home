@@ -3,6 +3,8 @@ use std::io::{Error, ErrorKind};
 use std::ops::Add;
 use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
 use postgres::{Client, Row};
+use rand::rngs::OsRng;
+use rand::TryRngCore;
 use smart_home_common::db::DB;
 
 const MAX_UNAGGREGATED_DATA_DAYS: i64 = 7;
@@ -32,6 +34,11 @@ struct Aggregated {
 impl Aggregated {
     fn new() -> Aggregated {
         Aggregated{min: i32::MAX, avg: 0, max: i32::MIN}
+    }
+    
+    fn random() -> Aggregated {
+        let v = (OsRng.try_next_u32().unwrap() / 10) as i32;
+        Aggregated{min: v, avg: v * 2, max: v * 4}
     }
     
     fn add(&mut self, value: &Aggregated) {
@@ -398,7 +405,7 @@ mod tests {
     use rand::rngs::OsRng;
     use rand::TryRngCore;
     use smart_home_common::db::DB;
-    use crate::command_processor::{aggregate_by_max_points, CommandProcessor, SensorData, SensorDataQuery, SensorDataValues};
+    use crate::command_processor::{aggregate_by_max_points, Aggregated, CommandProcessor, SensorData, SensorDataQuery, SensorDataValues};
 
     #[test]
     fn test_get_sensor_data() -> Result<(), Error> {
@@ -430,7 +437,7 @@ mod tests {
             SensorData{date:20250331, values: Some(generate_values(103000, &["humi", "pres", "temp"])), aggregated: None},
             SensorData{date:20250331, values: Some(generate_values(103500, &["humi", "pres", "temp"])), aggregated: None},
             SensorData{date:20250331, values: Some(generate_values(104000, &["humi", "pres", "temp"])), aggregated: None},
-            SensorData{date:20250331, values: Some(generate_values(104500, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(104500, &["humi", "pres", "temp"])), aggregated: None}
         ];
         let mut result = aggregate_by_max_points(source.clone(), 3, false);
         assert_eq!(1, result.len());
@@ -442,16 +449,16 @@ mod tests {
         assert_eq!(3, values.len());
         let value = values.remove(0);
         assert_eq!(value.time, 101000);
-        check_values(value.values, &source[0..4]);
+        check_raw_values(value.values, &source[0..4]);
         let value = values.remove(0);
         assert_eq!(value.time, 103000);
-        check_values(value.values, &source[4..8]);
+        check_raw_values(value.values, &source[4..8]);
         let value = values.remove(0);
         assert_eq!(value.time, 104500);
-        check_values(value.values, &source[8..10]);
+        check_raw_values(value.values, &source[8..10]);
     }
 
-    fn check_values(values: HashMap<String, i32>, data: &[SensorData]) {
+    fn check_raw_values(values: HashMap<String, i32>, data: &[SensorData]) {
         let mut average = HashMap::new();
         for value in data {
             for (key, data) in &value.values.as_ref().unwrap().values {
@@ -462,6 +469,62 @@ mod tests {
         assert_eq!(average.len(), values.len());
         for (k, v) in average {
             assert_eq!(*values.get(&k).unwrap(), v);
+        }
+    }
+
+    fn generate_aggregated(value_types: &[&str]) -> HashMap<String, Aggregated> {
+        value_types.into_iter().map(|v|(v.to_string(), Aggregated::random())).collect()
+    }
+    
+    #[test]
+    fn test_aggregate_by_max_points_aggregated() {
+        let source = vec![
+            SensorData{date:20250331, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250401, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250402, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp", "co2"]))},
+            SensorData{date:20250403, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp", "co2"]))},
+            SensorData{date:20250404, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250405, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250406, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250407, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250408, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+            SensorData{date:20250409, values: None, aggregated: Some(generate_aggregated(&["humi", "pres", "temp"]))},
+        ];
+        let mut result = aggregate_by_max_points(source.clone(), 3, true);
+        assert_eq!(3, result.len());
+        let data = result.remove(0);
+        assert_eq!(data.date, 20250401);
+        assert!(data.aggregated.is_some());
+        assert!(data.values.is_none());
+        check_aggregated_values(data.aggregated.unwrap(), &source[0..4]);
+        let data = result.remove(0);
+        assert_eq!(data.date, 20250405);
+        assert!(data.aggregated.is_some());
+        assert!(data.values.is_none());
+        check_aggregated_values(data.aggregated.unwrap(), &source[4..8]);
+        let data = result.remove(0);
+        assert_eq!(data.date, 20250409);
+        assert!(data.aggregated.is_some());
+        assert!(data.values.is_none());
+        check_aggregated_values(data.aggregated.unwrap(), &source[8..10]);
+    }
+    
+    fn check_aggregated_values(values: HashMap<String, Aggregated>, data: &[SensorData]) {
+        let mut average = HashMap::new();
+        for value in data {
+            for (key, data) in value.aggregated.as_ref().unwrap() {
+                average.entry(key.clone()).or_insert(Aggregated::new()).add(data);
+            }
+        }
+        for (_key, agg) in &mut average {
+            agg.calculate_average(data.len() as i32);
+        }
+        assert_eq!(average.len(), values.len());
+        for (k, a) in average {
+            let v = values.get(&k).unwrap();
+            assert_eq!(v.min, a.min);
+            assert_eq!(v.avg, a.avg);
+            assert_eq!(v.max, a.max);
         }
     }
 }
