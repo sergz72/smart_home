@@ -105,11 +105,12 @@ impl SensorData {
         }
     }
     
-    fn calculate_average(&mut self, n: i32, new_time: i32) {
+    fn calculate_average(&mut self, n: i32, new_time: i32, new_date: i32) {
         if let Some(values) = &mut self.values {
             values.calculate_average(n, new_time);
         }
         if let Some(aggregated) = &mut self.aggregated {
+            self.date = new_date;
             for (_key, value) in aggregated {
                 value.calculate_average(n);
             }
@@ -225,7 +226,7 @@ fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize, aggregated:
         let n = idx - start;
         let d = data.get(start + n / 2).unwrap();
         sd.calculate_average(n as i32, 
-                             d.values.as_ref().map(|v|v.time).unwrap_or(0));
+                             d.values.as_ref().map(|v|v.time).unwrap_or(0), d.date);
         result.push(sd);
     }
     to_sensor_data_out(result, aggregated)
@@ -237,11 +238,13 @@ fn to_sensor_data_out(data: Vec<SensorData>, aggregated: bool) -> Vec<SensorData
         let day_data = map.entry(d.date).or_insert(Vec::new());
         day_data.push(d);
     }
-    map.into_iter().map(|(k, v)|SensorDataOut{
+    let mut v: Vec<SensorDataOut> = map.into_iter().map(|(k, v)|SensorDataOut{
         date: k,
         aggregated: if aggregated { v[0].aggregated.clone() } else { None },
         values: if aggregated { None } else { Some(aggregate_values(v)) },
-    }).collect()
+    }).collect();
+    v.sort_by(|a,b|a.date.cmp(&b.date));
+    v
 }
 
 fn aggregate_values(values: Vec<SensorData>) -> Vec<SensorDataValues> {
@@ -493,12 +496,12 @@ mod tests {
         let mut result = aggregate_by_max_points(source.clone(), 3, true);
         assert_eq!(3, result.len());
         let data = result.remove(0);
-        assert_eq!(data.date, 20250401);
+        assert_eq!(data.date, 20250402);
         assert!(data.aggregated.is_some());
         assert!(data.values.is_none());
         check_aggregated_values(data.aggregated.unwrap(), &source[0..4]);
         let data = result.remove(0);
-        assert_eq!(data.date, 20250405);
+        assert_eq!(data.date, 20250406);
         assert!(data.aggregated.is_some());
         assert!(data.values.is_none());
         check_aggregated_values(data.aggregated.unwrap(), &source[4..8]);
