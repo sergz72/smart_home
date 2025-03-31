@@ -29,6 +29,26 @@ struct Aggregated {
     max: i32
 }
 
+impl Aggregated {
+    fn new() -> Aggregated {
+        Aggregated{min: i32::MAX, avg: 0, max: i32::MIN}
+    }
+    
+    fn add(&mut self, value: &Aggregated) {
+        self.avg += value.avg;
+        if value.min < self.min {
+            self.min = value.min;
+        }
+        if value.max > self.max {
+            self.max = value.max;
+        }
+    }
+
+    fn calculate_average(&mut self, n: i32) {
+        self.avg /= n;
+    }
+}
+
 #[derive(Clone)]
 struct SensorDataValues {
     time: i32,
@@ -37,10 +57,18 @@ struct SensorDataValues {
 
 impl SensorDataValues {
     fn add(&mut self, values: &HashMap<String, i32>) {
-        todo!()
+        for (key, value) in values {
+            *self.values.entry(key.clone()).or_insert(0) += value;
+        }
+    }
+    
+    fn calculate_average(&mut self, n: i32, new_time: i32) {
+        self.values = self.values.iter().map(|(k, v)| (k.clone(), *v / n)).collect();
+        self.time = new_time;
     }
 }
 
+#[derive(Clone)]
 struct SensorData {
     date: i32,
     values: Option<SensorDataValues>,
@@ -64,9 +92,19 @@ impl SensorData {
             values.add(&data.values.as_ref().unwrap().values);
         }
         if let Some(aggregated) = &mut self.aggregated {
-            for (k, v) in aggregated {
-                todo!()
-                //aggregated.g
+            for (key, value) in data.aggregated.as_ref().unwrap() {
+                aggregated.entry(key.clone()).or_insert(Aggregated::new()).add(value);
+            }
+        }
+    }
+    
+    fn calculate_average(&mut self, n: i32, new_time: i32) {
+        if let Some(values) = &mut self.values {
+            values.calculate_average(n, new_time);
+        }
+        if let Some(aggregated) = &mut self.aggregated {
+            for (_key, value) in aggregated {
+                value.calculate_average(n);
             }
         }
     }
@@ -99,6 +137,7 @@ impl SensorDataOut {
         result
     }
 }
+
 fn append_key(key: &String, result: &mut Vec<u8>) {
     let bytes = key.as_bytes();
     result.push(bytes[0]);
@@ -160,17 +199,26 @@ impl CommandProcessor {
     }
 }
 
-fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize, aggregated: bool) -> Vec<SensorDataOut> {
+fn aggregate_by_max_points(data: Vec<SensorData>, max_points: usize, aggregated: bool)
+    -> Vec<SensorDataOut> {
     let factor = data.len() / max_points + 1;
     let mut idx = 0;
     let mut result = Vec::new();
     while idx < data.len() {
+        let start = idx;
         let mut sd = SensorData::from(data.get(idx).unwrap());
         idx += 1;
         for _i in 1..factor {
+            if idx >= data.len() {
+                break;
+            }
             sd.add(data.get(idx).unwrap());
             idx += 1;
         }
+        let n = idx - start;
+        let d = data.get(start + n / 2).unwrap();
+        sd.calculate_average(n as i32, 
+                             d.values.as_ref().map(|v|v.time).unwrap_or(0));
         result.push(sd);
     }
     to_sensor_data_out(result, aggregated)
@@ -345,9 +393,12 @@ fn parse_period(start_datetime: DateTime<Local>, period: i32, period_unit: i32)
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::io::Error;
+    use rand::rngs::OsRng;
+    use rand::TryRngCore;
     use smart_home_common::db::DB;
-    use crate::command_processor::{CommandProcessor, SensorDataQuery};
+    use crate::command_processor::{aggregate_by_max_points, CommandProcessor, SensorData, SensorDataQuery, SensorDataValues};
 
     #[test]
     fn test_get_sensor_data() -> Result<(), Error> {
@@ -360,5 +411,57 @@ mod tests {
         )?;
         assert_eq!(true, aggregated);
         Ok(())
+    }
+    
+    fn generate_values(time: i32, value_types: &[&str]) -> SensorDataValues {
+        SensorDataValues{time, 
+            values: value_types.into_iter().map(|v|(v.to_string(), OsRng.try_next_u32().unwrap() as i32)).collect()}
+    }
+    
+    #[test]
+    fn test_aggregate_by_max_points_raw() {
+        let source = vec![
+            SensorData{date:20250331, values: Some(generate_values(100000, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(100500, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(101000, &["humi", "pres", "temp", "co2"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(101500, &["humi", "pres", "temp", "co2"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(102000, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(102500, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(103000, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(103500, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(104000, &["humi", "pres", "temp"])), aggregated: None},
+            SensorData{date:20250331, values: Some(generate_values(104500, &["humi", "pres", "temp"])), aggregated: None},
+        ];
+        let mut result = aggregate_by_max_points(source.clone(), 3, false);
+        assert_eq!(1, result.len());
+        let data = result.remove(0);
+        assert_eq!(data.date, 20250331);
+        assert!(data.aggregated.is_none());
+        assert!(data.values.is_some());
+        let mut values = data.values.unwrap();
+        assert_eq!(3, values.len());
+        let value = values.remove(0);
+        assert_eq!(value.time, 101000);
+        check_values(value.values, &source[0..4]);
+        let value = values.remove(0);
+        assert_eq!(value.time, 103000);
+        check_values(value.values, &source[4..8]);
+        let value = values.remove(0);
+        assert_eq!(value.time, 104500);
+        check_values(value.values, &source[8..10]);
+    }
+
+    fn check_values(values: HashMap<String, i32>, data: &[SensorData]) {
+        let mut average = HashMap::new();
+        for value in data {
+            for (key, data) in &value.values.as_ref().unwrap().values {
+                *average.entry(key.clone()).or_insert(0) += *data;
+            }
+        }
+        average = average.into_iter().map(|(k, v)| (k, v / (data.len() as i32))).collect();
+        assert_eq!(average.len(), values.len());
+        for (k, v) in average {
+            assert_eq!(*values.get(&k).unwrap(), v);
+        }
     }
 }
