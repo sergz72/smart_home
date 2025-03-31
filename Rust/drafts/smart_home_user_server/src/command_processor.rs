@@ -106,11 +106,11 @@ impl SensorData {
     }
     
     fn calculate_average(&mut self, n: i32, new_time: i32, new_date: i32) {
+        self.date = new_date;
         if let Some(values) = &mut self.values {
             values.calculate_average(n, new_time);
         }
         if let Some(aggregated) = &mut self.aggregated {
-            self.date = new_date;
             for (_key, value) in aggregated {
                 value.calculate_average(n);
             }
