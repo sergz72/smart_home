@@ -31,9 +31,9 @@ fun parsePeriod(periodStr: String?): DateOffset? {
         return null
     }
     val unit: TimeUnit = when (periodStr.last()) {
-        'd' -> TimeUnit.day
-        'm' -> TimeUnit.month
-        'y' -> TimeUnit.year
+        'd' -> TimeUnit.Day
+        'm' -> TimeUnit.Month
+        'y' -> TimeUnit.Year
         else -> throw IllegalArgumentException("Invalid period $periodStr")
     }
     val value = periodStr.substring(0, periodStr.length - 1).toInt()

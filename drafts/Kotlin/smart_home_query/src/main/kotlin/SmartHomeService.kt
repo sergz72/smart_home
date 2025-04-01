@@ -10,15 +10,12 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import javax.crypto.Cipher
-import javax.crypto.spec.ChaCha20ParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
 enum class TimeUnit {
-    day,
-    month,
-    year
+    Day,
+    Month,
+    Year
 }
 
 data class DateTime (
@@ -45,8 +42,7 @@ data class Sensor(
     val location: String
 )
 
-class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: Int) {
-    private val key = SecretKeySpec(keyBytes, 0, keyBytes.size, "ChaCha20")
+class SmartHomeService(private val key: ByteArray, hostName: String, private val port: Int) {
     private val address: InetAddress = InetAddress.getByName(hostName)
 
     private fun sendUDP(data: ByteArray): ByteArray {
@@ -61,12 +57,10 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
     }
 
     internal fun encrypt(request: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance("ChaCha20")
         val iv = buildIV()
         val transformed = transformIV(iv)
-        val param = ChaCha20ParameterSpec(iv, 0)
-        cipher.init(Cipher.ENCRYPT_MODE, key, param)
-        val encrypted = cipher.doFinal(request)
+        val cipher = ChaCha20(key, iv, 0u)
+        val encrypted = cipher.encrypt(request)
         val data = ByteBuffer
             .allocate(encrypted.size + iv.size)
             .put(transformed)
@@ -81,10 +75,8 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
             .put(iv.sliceArray(0..3))
             .put(iv.sliceArray(0..3))
             .array()
-        val cipher = Cipher.getInstance("ChaCha20")
-        val param = ChaCha20ParameterSpec(iv3, 0)
-        cipher.init(Cipher.ENCRYPT_MODE, key, param)
-        val transformed = cipher.doFinal(iv.sliceArray(4..11))
+        val cipher = ChaCha20(key, iv3, 0u)
+        val transformed = cipher.encrypt(iv.sliceArray(4..11))
         transformed.copyInto(iv3, 4, 0)
         return iv3
     }
@@ -93,11 +85,9 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
         if (response.size < 13) {
             throw IOException("Invalid response")
         }
-        val cipher = Cipher.getInstance("ChaCha20")
         val iv = transformIV(response.sliceArray(0..12))
-        val param = ChaCha20ParameterSpec(iv, 0)
-        cipher.init(Cipher.DECRYPT_MODE, key, param)
-        return cipher.doFinal(response.sliceArray(12..<response.size))
+        val cipher = ChaCha20(key, iv, 0u)
+        return cipher.encrypt(response.sliceArray(12..<response.size))
     }
 
     private fun decompress(decrypted: ByteArray): ByteArray {
