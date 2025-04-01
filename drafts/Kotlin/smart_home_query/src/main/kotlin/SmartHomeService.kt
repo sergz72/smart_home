@@ -146,41 +146,49 @@ class SmartHomeService(keyBytes: ByteArray, hostName: String, private val port: 
         return buffer.array()
     }
 
-    fun send(query: SmartHomeQuery): SensorDataResponse {
-        val request = buildRequest(query)
+    fun send(request: ByteArray): ByteArray {
         val sendData = encrypt(request)
         val response = sendUDP(sendData)
+        println("Response size: ${response.size}")
         val decrypted = decrypt(response)
         val decompressed = decompress(decrypted)
+        println("Decompressed size: ${decompressed.size}")
+        return decompressed
+    }
+
+    fun send(query: SmartHomeQuery): SensorDataResponse {
+        val request = buildRequest(query)
+        val decompressed = send(request)
         return when (decompressed[0]) {
             //not aggregated
             0.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), false, ::buildFromResponse)
             // aggregated
             1.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), true, ::buildFromAggregatedResponse)
             // error
-            2.toByte() -> {
-                val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
-                throw IOException("Error: $message")
-            }
-            else -> throw IOException("Wrong response type ${decrypted[0]}")
+            else -> throw ResponseError(decompressed)
         }
     }
 
     fun getSensors(): List<Sensor> {
         val request = byteArrayOf(0)
-        val sendData = encrypt(request)
-        val response = sendUDP(sendData)
-        val decrypted = decrypt(response)
-        val decompressed = decompress(decrypted)
+        val decompressed = send(request)
         return when (decompressed[0]) {
             //no error
             0.toByte() -> SensorsResponse.parseResponse(decompressed.drop(1))
             // error
-            2.toByte() -> {
+            else -> throw ResponseError(decompressed)
+        }
+    }
+}
+
+class ResponseError(decompressed: ByteArray) : IOException(buildMessage(decompressed)) {
+    companion object {
+        fun buildMessage(decompressed: ByteArray): String {
+            if (decompressed[0] == 2.toByte()) {
                 val message = decompressed.drop(1).toByteArray().toString(Charsets.UTF_8)
-                throw IOException("Error: $message")
+                return "Error: $message"
             }
-            else -> throw IOException("Wrong response type ${decrypted[0]}")
+            return "Wrong response type ${decompressed[0]}"
         }
     }
 }
