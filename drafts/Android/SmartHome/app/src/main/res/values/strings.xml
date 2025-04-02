@@ -1,0 +1,48 @@
+<resources>
+    <string name="app_name">SmartHome</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_filters">Filters</string>
+    <string name="title_activity_settings">Settings</string>
+    <string name="title_activity_filters">Filters</string>
+
+    <string name="env_sensors">Environmental sensors</string>
+    <string name="wat_sensors">Water sensors</string>
+    <string name="ele_sensors">Electrical sensors</string>
+    <string name="temp">Temperature</string>
+    <string name="humi">Humidity</string>
+    <string name="pres">Pressure</string>
+    <string name="time">Time</string>
+    <string name="home">Home page</string>
+    <string name="volt">Voltage</string>
+    <string name="vbat">Battery voltage</string>
+    <string name="vcc">Power supply voltage</string>
+    <string name="icc">Current</string>
+    <string name="pwr">Power</string>
+    <string name="total">Total: %1$d</string>
+    <string name="co2">CO2</string>
+    <string name="lux">Luminosity</string>
+
+    <string name="select_date_start">Start date</string>
+    <string name="select_date_end">End date</string>
+    <string name="filter_type">Filter type</string>
+    <string name="period">Period</string>
+    <string name="set">Set</string>
+
+    <string name="serverListTitle">Server</string>
+
+    <!-- Strings related to Settings -->
+
+    <string name="pref_title_server_1">Server 1 address</string>
+    <string name="pref_title_server_name1">Server 1 name</string>
+    <string name="pref_title_server_2">Server 2 address</string>
+    <string name="pref_title_server_name2">Server 2 name</string>
+    <string name="pref_title_server_3">Server 3 address</string>
+    <string name="pref_title_server_name3">Server 3 name</string>
+    <string name="pref_title_default_server">Default server</string>
+    <string name="pref_title_server_protocol1">Server 1 protocol version</string>
+    <string name="pref_title_server_protocol2">Server 2 protocol version</string>
+    <string name="pref_title_server_protocol3">Server 3 protocol version</string>
+</resources>

@@ -74,7 +74,7 @@ fun printResponse(response: SensorDataResponse) {
 fun printResponse(response: List<Sensor>) {
     println("Response: sensor count: ${response.size}")
     for (v in response) {
-        println("Sensor ${v.id}: ${v.dataType} ${v.location}")
+        println("Sensor ${v.id}: ${v.dataType} ${v.location} ${v.locationType}")
     }
 }
 

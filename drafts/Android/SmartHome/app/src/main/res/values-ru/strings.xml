@@ -1,0 +1,49 @@
+<resources>
+    <string name="app_name">Умный дом</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="action_settings">Настройки</string>
+    <string name="action_refresh">Обновить</string>
+    <string name="action_filters">Фильтры</string>
+    <string name="title_activity_settings">Настройки</string>
+    <string name="title_activity_filters">Фильтры</string>
+
+    <string name="env_sensors">Датчики параметров окружающей среды</string>
+    <string name="wat_sensors">Датчики параметров насоса</string>
+    <string name="ele_sensors">Датчики электрических параметров</string>
+    <string name="temp">Температура</string>
+    <string name="humi">Влажность</string>
+    <string name="pres">Давление</string>
+    <string name="time">Время</string>
+    <string name="home">Начальная страница</string>
+    <string name="volt">Напряжение</string>
+    <string name="vbat">Напряжение батареи</string>
+    <string name="vcc">Напряжение питания</string>
+    <string name="icc">Ток</string>
+    <string name="pwr">Мощность</string>
+    <string name="total">Всего: %1$d</string>
+    <string name="co2">CO2</string>
+    <string name="lux">Освещенность</string>
+
+    <string name="select_date_start">Начальная дата</string>
+    <string name="select_date_end">Конечная дата</string>
+    <string name="filter_type">Тип фильтра</string>
+    <string name="period">Период</string>
+    <string name="set">Установить</string>
+
+    <string name="serverListTitle">Сервер</string>
+
+    <!-- Strings related to Settings -->
+
+    <string name="pref_title_server_1">Адрес сервера 1</string>
+    <string name="pref_title_server_name1">Имя сервера 1</string>
+    <string name="pref_title_server_2">Адрес сервера 2</string>
+    <string name="pref_title_server_name2">Имя сервера 2</string>
+    <string name="pref_title_server_3">Адрес сервера 3</string>
+    <string name="pref_title_server_name3">Имя сервера 3</string>
+    <string name="pref_title_default_server">Основной сервер</string>
+    <string name="pref_title_server_protocol1">Протокол сервера 1</string>
+    <string name="pref_title_server_protocol2">Протокол сервера 2</string>
+    <string name="pref_title_server_protocol3">Протокол сервера 3</string>
+
+</resources>

@@ -1,0 +1,38 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion 35
+    defaultConfig {
+        applicationId "smart_home.smarthome"
+        minSdkVersion 34
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    productFlavors {
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    namespace 'smart_home.smarthome'
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support.constraint:constraint-layout:2.0.4'
+    implementation 'androidx.navigation:navigation-ui-ktx:2.8.9'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation(name:'szcharts', ext:'aar')
+    api 'com.google.code.gson:gson:2.10.1'
+    api 'org.apache.commons:commons-compress:1.21'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}
+

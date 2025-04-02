@@ -46,7 +46,7 @@ impl CommandProcessor {
     
     fn get_sensors(&self) -> Result<Vec<Row>, Error> {
         let mut client = self.db.get_database_connection()?;
-        let sql = "select s.id, s.data_type, l.name from sensors s, locations l
+        let sql = "select s.id, s.data_type, l.name, l.location_type from sensors s, locations l
 where s.location_id = l.id";
         client.query(sql, &[])
             .map_err(|e| Error::new(ErrorKind::Other, e))
@@ -146,6 +146,7 @@ fn sensor_rows_to_binary(rows: Vec<Row>) -> Vec<u8> {
         let id: i16 = row.get(0);
         let data_type: String = row.get(1);
         let location: String = row.get(2);
+        let location_type: String = row.get(3);
         result.push(id as u8);
         let bytes = data_type.as_bytes(); 
         result.push(bytes[0]);
@@ -153,6 +154,10 @@ fn sensor_rows_to_binary(rows: Vec<Row>) -> Vec<u8> {
         result.push(bytes[2]);
         result.push(location.len() as u8);
         result.extend_from_slice(location.as_bytes());
+        let bytes = location_type.as_bytes();
+        result.push(bytes[0]);
+        result.push(bytes[1]);
+        result.push(bytes[2]);
     }
     result
 }

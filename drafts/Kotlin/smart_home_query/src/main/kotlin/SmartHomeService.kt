@@ -39,7 +39,8 @@ data class SmartHomeQuery(
 data class Sensor(
     val id: Int,
     val dataType: String,
-    val location: String
+    val location: String,
+    val locationType: String
 )
 
 class SmartHomeService(private val key: ByteArray, hostName: String, private val port: Int) {

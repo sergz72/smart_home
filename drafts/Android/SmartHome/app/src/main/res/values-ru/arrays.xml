@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="filterTypeNames">
+        <item>Период</item>
+        <item>Даты</item>
+    </string-array>
+    <string-array name="periodNames">
+        <item>Один день</item>
+        <item>Два дня</item>
+        <item>Неделя</item>
+        <item>Две недели</item>
+        <item>Месяц</item>
+    </string-array>
+</resources>

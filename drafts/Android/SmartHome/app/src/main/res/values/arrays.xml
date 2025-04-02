@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="filterTypeNames">
+        <item>Period</item>
+        <item>Dates</item>
+    </string-array>
+    <string-array name="filterTypeValues">
+        <item>Period</item>
+        <item>Dates</item>
+    </string-array>
+    <string-array name="periodNames">
+        <item>One day</item>
+        <item>Two days</item>
+        <item>Week</item>
+        <item>Two weeks</item>
+        <item>Month</item>
+    </string-array>
+    <integer-array name="periodValues">
+        <item>24</item>
+        <item>48</item>
+        <item>168</item>
+        <item>336</item>
+        <item>720</item>
+    </integer-array>
+    <string-array name="chartLineColors">
+        <item>Red,Green</item>
+        <item>Yellow,Blue</item>
+        <item>Cyan,Magenta</item>
+        <item>Black,#800080</item>
+        <item>Green,Cyan</item>
+        <item>Blue,Yellow</item>
+    </string-array>
+    <string-array name="servers">
+        <item>Server 1</item>
+        <item>Server 2</item>
+        <item>Server 3</item>
+    </string-array>
+    <string-array name="serverIds">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string-array name="protocolVersions">
+        <item>v1</item>
+        <item>v2</item>
+    </string-array>
+    <string-array name="protocolVersionIds">
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+</resources>
