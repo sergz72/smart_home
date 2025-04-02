@@ -78,6 +78,13 @@ fun printResponse(response: List<Sensor>) {
     }
 }
 
+fun printResponse(response: Map<Int, LastSensorData>) {
+    println("Response:")
+    for ((k, v) in response) {
+        println("Sensor $k: ${v.date} ${v.value.time} ${v.value.values}")
+    }
+}
+
 fun main(args: Array<String>) {
     if (args.size != 4) {
         usage()
@@ -92,6 +99,9 @@ fun main(args: Array<String>) {
 
     if (query == "sensors") {
         val response = service.getSensors()
+        printResponse(response)
+    } else if (query.startsWith("last_data_from=")) {
+        val response = service.getLastSensorData(query.split("=")[1].toByte())
         printResponse(response)
     } else {
         val request = buildRequest(query)

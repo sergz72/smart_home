@@ -30,13 +30,14 @@ impl CommandProcessor {
     pub fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
         match command[0] {
             0 => self.execute_sensors_query(command.len()),
-            1 => self.execute_sensor_data_query(command[1..].to_vec()),
+            1 => self.execute_last_data_query(command[1..].to_vec()),
+            2 => self.execute_sensor_data_query(command[1..].to_vec()),
             _ => Err(Error::new(ErrorKind::InvalidInput, "Invalid command"))
         }
     }
 
     fn execute_sensors_query(&self, command_length: usize) -> Result<Vec<u8>, Error> {
-        if command_length != 1 {
+        if command_length != 2 {
             return Err(Error::new(ErrorKind::InvalidInput, "Invalid sensors command length"));
         }
         let rows = self.get_sensors()?;
@@ -50,7 +51,30 @@ where s.location_id = l.id";
         client.query(sql, &[])
             .map_err(|e| Error::new(ErrorKind::Other, e))
     }
+
+    fn execute_last_data_query(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
+        if command.len() != 1 {
+            return Err(Error::new(ErrorKind::InvalidInput, "Invalid last data command length"));
+        }
+        let now = Local::now() - Days::new(command[0] as u64);
+        let (date, _time) = split_datetime(now);
+        let data = self.get_last_sensor_data(date)?;
+        let mut result = Vec::new();
+        result.push(0); // no error
+        result.push(data.len() as u8);
+        for (sensor_id, sdata) in data {
+            result.push(sensor_id as u8);
+            result.extend_from_slice(&sdata.to_binary());
+        }
+        Ok(result)
+    }
     
+    fn get_last_sensor_data(&self, date: i32) -> Result<HashMap<i16, SensorData>, Error> {
+        let client = self.db.get_database_connection()?;
+        let rows = run_last_query(client, date)?;
+        Ok(rows.into_iter().map(|row|(row.get(0), to_sensor_data(row, false))).collect())
+    }
+
     pub fn execute_sensor_data_query(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (data, aggregated) = self.get_sensor_data(build_sensor_data_query(command)?)?;
         let mut result = Vec::new();
@@ -95,8 +119,23 @@ where s.location_id = l.id";
     }
 
     pub fn check_message_length(&self, length: usize) -> bool {
-        length == 17 || length == 1
+        length == 17 || length == 2
     }
+}
+
+fn run_last_query(mut client: Client, date: i32) -> Result<Vec<Row>, Error> {
+    let sql = "with last_data as (
+    select sensor_id, max(event_date::bigint * 1000000 + event_time::bigint) max_datetime
+      from sensor_events
+     where event_date >= $1
+    group by sensor_id
+)
+select e.sensor_id, e.event_date, e.event_time, json_agg(json_build_object('value_type', value_type, 'value', value)) values
+  from sensor_events e, last_data l
+ where l.sensor_id = e.sensor_id and l.max_datetime / 1000000 = e.event_date and l.max_datetime % 1000000 = e.event_time
+group by e.sensor_id, e.event_date, e.event_time";
+    client.query(sql, &[&date])
+        .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
 fn sensor_rows_to_binary(rows: Vec<Row>) -> Vec<u8> {
@@ -148,7 +187,7 @@ fn parse_values(values_json: serde_json::Value) -> HashMap<String, i32> {
     let mut result = HashMap::new();
     for element in values_json.as_array().unwrap() {
         let map = element.as_object().unwrap();
-        result.insert(map["value_type"].to_string(), map["value"].as_i64().unwrap() as i32);
+        result.insert(map["value_type"].as_str().unwrap().to_string(), map["value"].as_i64().unwrap() as i32);
     }
     result
 }
@@ -157,7 +196,7 @@ fn parse_aggregated_values(values_json: serde_json::Value) -> HashMap<String, Ag
     let mut result = HashMap::new();
     for element in values_json.as_array().unwrap() {
         let map = element.as_object().unwrap();
-        result.insert(map["value_type"].to_string(), Aggregated{
+        result.insert(map["value_type"].as_str().unwrap().to_string(), Aggregated{
             min: map["min"].as_i64().unwrap() as i32,
             avg: map["avg"].as_i64().unwrap() as i32,
             max: map["max"].as_i64().unwrap() as i32
@@ -293,6 +332,16 @@ mod tests {
         );
         let result = processor.get_sensors()?;
         assert_eq!(result.len(), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_last_sensor_data() -> Result<(), Error> {
+        let processor = CommandProcessor::new(
+            DB::new("postgresql://postgres@localhost/smart_home".to_string())
+        );
+        let result = processor.get_last_sensor_data(20250301)?;
+        assert_eq!(result.len(), 4);
         Ok(())
     }
 }

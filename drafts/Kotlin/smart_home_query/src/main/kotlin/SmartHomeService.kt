@@ -113,7 +113,7 @@ class SmartHomeService(private val key: ByteArray, hostName: String, private val
         if (query.dataType.length < 3)
             throw IllegalArgumentException("dataType must be more than 2 characters")
         val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.put(1)
+        buffer.put(2)
         buffer.putShort(query.maxPoints)
         val bytes = query.dataType.toByteArray()
         buffer.put(bytes[0])
@@ -160,11 +160,22 @@ class SmartHomeService(private val key: ByteArray, hostName: String, private val
     }
 
     fun getSensors(): List<Sensor> {
-        val request = byteArrayOf(0)
+        val request = byteArrayOf(0, 0)
         val decompressed = send(request)
         return when (decompressed[0]) {
             //no error
             0.toByte() -> SensorsResponse.parseResponse(decompressed.drop(1))
+            // error
+            else -> throw ResponseError(decompressed)
+        }
+    }
+
+    fun getLastSensorData(days: Byte): Map<Int, LastSensorData> {
+        val request = byteArrayOf(1, days)
+        val decompressed = send(request)
+        return when (decompressed[0]) {
+            //no error
+            0.toByte() -> LastSensorData.parseResponse(decompressed.drop(1))
             // error
             else -> throw ResponseError(decompressed)
         }

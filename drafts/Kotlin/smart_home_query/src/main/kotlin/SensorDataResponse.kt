@@ -6,7 +6,23 @@ import java.nio.ByteOrder
 data class SensorDataValues(
     val time: Int,
     val values: Map<String, Int>
-)
+) {
+    companion object {
+        fun fromBinary(buffer: ByteBuffer): SensorDataValues {
+            val map = mutableMapOf<String, Int>()
+            var valuesCount = buffer.get()
+            val time = buffer.getInt()
+            while (valuesCount-- > 0) {
+                val keyArray = ByteArray(4)
+                buffer.get(keyArray)
+                val key = String(keyArray)
+                val value = buffer.getInt()
+                map[key] = value
+            }
+            return SensorDataValues(time, map)
+        }
+    }
+}
 
 data class Aggregated(
     val min: Int,
@@ -41,17 +57,7 @@ data class SensorData(
             var dataCount = buffer.getInt()
             val list = mutableListOf<SensorDataValues>()
             while (dataCount-- > 0) {
-                val map = mutableMapOf<String, Int>()
-                var valuesCount = buffer.get()
-                val time = buffer.getInt()
-                while (valuesCount-- > 0) {
-                    val keyArray = ByteArray(4)
-                    buffer.get(keyArray)
-                    val key = String(keyArray)
-                    val value = buffer.getInt()
-                    map[key] = value
-                }
-                list.add(SensorDataValues(time, map))
+                list.add(SensorDataValues.fromBinary(buffer))
             }
             return SensorData(date, list, null)
         }
@@ -78,6 +84,26 @@ data class SensorDataResponse(
                 data[sensor_id.toInt()] = list
             }
             return SensorDataResponse(aggregated, data)
+        }
+    }
+}
+
+data class LastSensorData(
+    val date: Int,
+    val value: SensorDataValues
+) {
+    companion object {
+        internal fun parseResponse(decompressed: List<Byte>): Map<Int, LastSensorData> {
+            val buffer = ByteBuffer.wrap(decompressed.toByteArray()).order(ByteOrder.LITTLE_ENDIAN)
+            val data = mutableMapOf<Int, LastSensorData>()
+            var length = buffer.get()
+            while (length-- > 0) {
+                val sensorId = buffer.get()
+                val date = buffer.getInt()
+                val value = SensorDataValues.fromBinary(buffer)
+                data[sensorId.toInt()] = LastSensorData(date, value)
+            }
+            return data
         }
     }
 }

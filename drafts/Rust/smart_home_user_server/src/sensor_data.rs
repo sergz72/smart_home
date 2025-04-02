@@ -51,6 +51,15 @@ impl SensorDataValues {
         self.values = self.values.iter().map(|(k, v)| (k.clone(), *v / n)).collect();
         self.time = new_time;
     }
+    
+    fn to_binary(&self, result: &mut Vec<u8>) {
+        result.push(self.values.len() as u8);
+        result.extend_from_slice(&self.time.to_le_bytes());
+        for (key, value) in &self.values {
+            append_key(key, result);
+            result.extend_from_slice(&value.to_le_bytes());
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -94,6 +103,15 @@ impl SensorData {
             }
         }
     }
+
+    pub fn to_binary(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        result.extend_from_slice(&self.date.to_le_bytes());
+        if let Some(value) = &self.values {
+            value.to_binary(&mut result);
+        }
+        result
+    }
 }
 
 impl SensorDataOut {
@@ -103,12 +121,7 @@ impl SensorDataOut {
         if let Some(values) = &self.values {
             result.extend_from_slice(&(values.len() as u32).to_le_bytes());
             for value in values {
-                result.push(value.values.len() as u8);
-                result.extend_from_slice(&value.time.to_le_bytes());
-                for (key, value) in &value.values {
-                    append_key(key, &mut result);
-                    result.extend_from_slice(&value.to_le_bytes());
-                }
+                value.to_binary(&mut result);
             }
         }
         if let Some(aggregated) = &self.aggregated {
@@ -288,6 +301,33 @@ mod tests {
             assert_eq!(v.min, a.min);
             assert_eq!(v.avg, a.avg);
             assert_eq!(v.max, a.max);
+        }
+    }
+
+    #[test]
+    fn test_sensor_data_values() {
+        let values = SensorDataValues{time: 112233, values: HashMap::from([
+            ("temp".to_string(), 555),
+            ("humi".to_string(), 777),
+            ("lux".to_string(), 999)
+        ])};
+        let mut binary = Vec::new();
+        values.to_binary(&mut binary);
+        assert_eq!(binary.len(), 29);
+        let count = binary[0];
+        assert_eq!(count, 3);
+        let mut buffer32 = [0u8; 4];
+        buffer32.copy_from_slice(&binary[1..5]);
+        let time = i32::from_le_bytes(buffer32);
+        assert_eq!(time, 112233);
+        let mut idx = 5;
+        for _i in 0..values.values.len() {
+            let key = String::from_utf8(binary[idx..idx+4].to_vec()).unwrap().trim().to_string();
+            idx += 4;
+            buffer32.copy_from_slice(&binary[idx..idx+4]);
+            idx += 4;
+            let value = i32::from_le_bytes(buffer32);
+            assert_eq!(values.values[&key], value);
         }
     }
 }
