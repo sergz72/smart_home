@@ -8,6 +8,7 @@
 #include "bme280.h"
 #include "mh_z19b.h"
 #include "driver/uart.h"
+#include "esp_adc/adc_oneshot.h"
 
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          100000                     /*!< I2C master clock frequency */
@@ -20,7 +21,10 @@
 #define UART1_BAUD_RATE   9600
 #define UART1_BUFFER_SIZE 1024
 
+#define ADC_VREF 3300
+
 static spi_device_handle_t spi_handle;
+static adc_oneshot_unit_handle_t adc_handle;
 
 esp_err_t i2c_master_init(void)
 {
@@ -98,6 +102,22 @@ void uart1_init(void)
   uart_driver_install(1, UART1_BUFFER_SIZE, UART1_BUFFER_SIZE, 0, NULL, ESP_INTR_FLAG_IRAM);
   uart_param_config(1, &uart_config);
   uart_set_pin(1, PIN_UART1_TXD, PIN_UART1_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+}
+
+void adc_init(void)
+{
+  adc_oneshot_unit_init_cfg_t init_config2 = {
+    .unit_id = ADC_UNIT_1,
+    .ulp_mode = ADC_ULP_MODE_DISABLE,
+    .clk_src = ADC_RTC_CLK_SRC_DEFAULT
+  };
+  adc_oneshot_new_unit(&init_config2, &adc_handle);
+
+  adc_oneshot_chan_cfg_t config = {
+    .atten = ADC_ATTEN_DB_0,
+    .bitwidth = ADC_BITWIDTH_12
+  };
+  adc_oneshot_config_channel(adc_handle, ADC_CHANNEL_3, &config);
 }
 
 void gpio_init(void)
@@ -188,4 +208,11 @@ void mh_z19b_send(unsigned char *data, int len)
 int mh_z19b_read(unsigned char *data, int data_size)
 {
   return uart_read_bytes(1, data, data_size, 100 / portTICK_PERIOD_MS);
+}
+
+unsigned int temt6000_get_mv(void)
+{
+  int value;
+  adc_oneshot_read(adc_handle, ADC_CHANNEL_3, &value);
+  return (value * ADC_VREF) >> 12;
 }

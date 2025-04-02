@@ -17,6 +17,7 @@ extern int16_t ext_temp_val2;
 extern int16_t ext_temp_val3;
 extern uint16_t ext_humi_val3;
 extern uint32_t co2_level;
+extern uint32_t luminocity;
 
 int get_env(void);
 void init_env(void);

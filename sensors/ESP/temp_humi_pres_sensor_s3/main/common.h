@@ -13,10 +13,10 @@
 #else
 #define CONFIG_SERVER_ADDRESS_SUFFIX 254
 #define SEND_INTERVAL 270000 // 4.5 minutes
-#define HOST_IP_ADDR "152.67.67.107"
+#define HOST_IP_ADDR ""
 #endif
 
-#define PORT 60002
+#define PORT 0
 
 #define BLE_ENV
 

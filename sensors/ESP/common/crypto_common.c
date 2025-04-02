@@ -1,12 +1,34 @@
 #include <crypto.h>
-#include <net_client.h>
+#include <string.h>
 
 const unsigned char default_aes_key[] =
     {};
-esp_aes_context aes_ctx;
 
-void crypto_init(void)
+unsigned int key_sum;
+
+void crc_init(const unsigned char* key)
 {
-  esp_aes_init(&aes_ctx);
-  esp_aes_setkey(&aes_ctx, server_params.aes_key, 128);
+  unsigned int ikey[AES_KEY_LENGTH / 4];
+
+  memcpy(ikey, key, AES_KEY_LENGTH);
+
+  key_sum = 0;
+
+  for (int i = 0; i < AES_KEY_LENGTH / 4; i++)
+    key_sum += ikey[i];
+}
+
+void calculateCRC(sensor_data *data, int length)
+{
+  unsigned int crc = 0;
+  unsigned int *idata = (unsigned int*)data;
+
+  int i = length - 4;
+  while (i > 0)
+  {
+    crc += *++idata;
+    i -= 4;
+  }
+
+  data->crc = crc * key_sum;
 }

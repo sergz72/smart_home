@@ -6,9 +6,11 @@
 #define DEVICE_ID 4
 
 #ifdef TEST
+#define CONFIG_SERVER_ADDRESS_SUFFIX 200
 #define HOST_IP_ADDR "192.168.178.200"
 #define SEND_INTERVAL 5000 // 5 seconds
 #else
+#define CONFIG_SERVER_ADDRESS_SUFFIX 254
 #define SEND_INTERVAL 300000 // 5 minutes
 #define HOST_IP_ADDR ""
 #endif

@@ -16,6 +16,7 @@
 #include "laCrosseDecoder.h"
 #include "bme280.h"
 #include "mh_z19b.h"
+#include "temt6000.h"
 #include "driver/uart.h"
 
 static const char *TAG = "env";
@@ -34,6 +35,7 @@ int16_t ext_temp_val2 = 0;
 int16_t ext_temp_val3 = 0;
 uint16_t ext_humi_val3 = 0;
 uint32_t co2_level = 0;
+uint32_t luminocity = 0;
 
 void post_init_env(void) {}
 
@@ -60,6 +62,7 @@ void init_env(void)
 
   gpio_init();
   uart1_init();
+  adc_init();
 
   rc = i2c_master_init();
   if (rc != ESP_OK)
@@ -246,6 +249,10 @@ int get_env(void)
     co2_level = (unsigned int)level * 100;
   ESP_LOGI(TAG, "CO2 level: %d, rc = %d", (int)co2_level, rc);
 
+  unsigned int mv = temt6000_get_mv();
+  luminocity = temt6000_get_lux(mv, 5000) * 100;
+  ESP_LOGI(TAG, "Luminocity: %d", (int)luminocity);
+
   return get_ext_env();
 }
 #else
@@ -258,6 +265,7 @@ int16_t ext_temp_val2 = 0;
 int16_t ext_temp_val3 = 0;
 uint16_t ext_humi_val3 = 0;
 uint16_t co2_level = 0;
+uint32_t luminocity = 0;
 
 void init_env(void)
 {

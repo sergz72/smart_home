@@ -12,5 +12,6 @@ extern uint16_t current_val;
 
 int get_env(void);
 void init_env(void);
+void post_init_env(void);
 
 #endif //CURRENT_SENSOR_ENV_H

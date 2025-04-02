@@ -3,6 +3,7 @@
 #include "crypto.h"
 #include "env.h"
 #include "common.h"
+#include "net_client.h"
 
 #define KEY_LENGTH 16
 #ifdef SEND_PRESSURE
@@ -38,21 +39,12 @@ typedef struct __attribute__((__packed__)) __attribute__ ((aligned (sizeof(uint3
 } sensor_data;
 #endif
 
-static const unsigned char key[] =
-    { };
 static unsigned char encrypted[ENCRYPTED_LENGTH];
-static esp_aes_context ctx;
-
-void crypto_init(void)
-{
-  esp_aes_init(&ctx);
-  esp_aes_setkey(&ctx, key, 128);
-}
 
 static void calculateCRC(sensor_data *data)
 {
   unsigned int crc = 0;
-  unsigned int k = 0, *pk = (unsigned int*)key;
+  unsigned int k = 0, *pk = (unsigned int*)server_params.aes_key;
   int i = KEY_LENGTH;
   unsigned int *idata = (unsigned int*)data;
 
@@ -74,9 +66,9 @@ static void calculateCRC(sensor_data *data)
 
 static void encrypt(unsigned char *data)
 {
-  esp_aes_crypt_ecb(&ctx, ESP_AES_ENCRYPT, data, encrypted);
+  esp_aes_crypt_ecb(&aes_ctx, ESP_AES_ENCRYPT, data, encrypted);
 #ifdef SEND_PRESSURE
-  esp_aes_crypt_ecb(&ctx, ESP_AES_ENCRYPT, data + 16, encrypted + 16);
+  esp_aes_crypt_ecb(&aes_ctx, ESP_AES_ENCRYPT, data + 16, encrypted + 16);
 #endif
 }
 

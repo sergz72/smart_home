@@ -79,6 +79,8 @@ static void periodic_timer_callback(void* arg)
   xSemaphoreGive(env_semaphore);
 }
 
+void post_init_env(void) {}
+
 void init_env(void)
 {
   esp_err_t rc;

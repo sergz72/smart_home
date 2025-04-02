@@ -5,13 +5,9 @@
 
 static const char *TAG = "udp_client";
 
-static struct sockaddr_in dest_addr;
-
 void net_client_init(void)
 {
-  dest_addr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
-  dest_addr.sin_family = AF_INET;
-  dest_addr.sin_port = htons(PORT);
+  net_client_common_init();
 }
 
 void send_env(void *data, int len)
