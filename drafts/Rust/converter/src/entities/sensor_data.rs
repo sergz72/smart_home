@@ -83,9 +83,12 @@ fn read_sensor_data_from_zip(file_name: PathBuf) -> Result<Vec<SensorDataDay>, E
     Ok(result.into_iter().map(|(k, v)|SensorDataDay{date: k, data: v}).collect())
 }
 
-fn insert_sensor_data(client: &mut Client, sensor_data: Vec<SensorDataDay>, file_name: &str) -> Result<(), Error> {
+fn insert_sensor_data(client: &mut Client, sensor_data: Vec<SensorDataDay>, file_name: &str,
+                      date: i32) -> Result<(), Error> {
     let mut events_file = File::create(file_name)?;
-    for day in sensor_data {
+    let mut exists = false;
+    for day in sensor_data.into_iter().filter(|d| d.date >= date as usize) {
+        exists = true;
         for (sensor_id, sensor_data_vec) in &day.data {
             for sensor_data in sensor_data_vec {
                 for (value_type, value) in &sensor_data.data {
@@ -95,28 +98,40 @@ fn insert_sensor_data(client: &mut Client, sensor_data: Vec<SensorDataDay>, file
             }
         }
     }
-    let statement = 
-        "copy sensor_events(sensor_id, event_date, event_time, value_type, value) from '".to_string()
-            + file_name + "' DELIMITER ',' CSV";
-    client.execute(&statement, &[])
-        .map_err(|e|Error::new(ErrorKind::Other, e))?;
+    if exists {
+        let statement =
+            "copy sensor_events(sensor_id, event_date, event_time, value_type, value) from '".to_string()
+                + file_name + "' DELIMITER ',' CSV";
+        client.execute(&statement, &[])
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    }
     Ok(())
 }
 
-fn reset_table_and_sequence(client: &mut Client) -> Result<(), Error> {
-    client.execute("TRUNCATE TABLE sensor_events", &[])
-        .map_err(|e|Error::new(ErrorKind::Other, e))?;
-    client.execute("SELECT setval('sensor_events_id_seq', 1)", &[])
-        .map_err(|e|Error::new(ErrorKind::Other, e))?;
+fn reset_table_and_sequence(client: &mut Client, date: i32) -> Result<(), Error> {
+    if date != 0 {
+        client.execute("DELETE FROM sensor_events where event_date >= $1", &[&date])
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    } else {
+        client.execute("TRUNCATE TABLE sensor_events", &[])
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        client.execute("SELECT setval('sensor_events_id_seq', 1)", &[])
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    }
     Ok(())
 }
 
-pub fn convert_sensor_data(mut client: Client, folder_name: &String) -> Result<(), Error> {
+pub fn convert_sensor_data(mut client: Client, folder_name: &String, from: Option<&String>)
+    -> Result<(), Error> {
+    let mut date = 0;
+    if let Some(from) = from {
+        date = from.parse::<i32>().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    }
     let file_data =
         read_sensor_data_from_folder(Path::new(folder_name).join("dates_new"))?;
     let zip_data =
         read_sensor_data_from_zip(Path::new(folder_name).join("db.zip"))?;
-    reset_table_and_sequence(&mut client)?;
-    insert_sensor_data(&mut client, file_data, "/tmp/sensor_events1.csv")?;
-    insert_sensor_data(&mut client, zip_data, "/tmp/sensor_events2.csv")
+    reset_table_and_sequence(&mut client, date)?;
+    insert_sensor_data(&mut client, file_data, "/tmp/sensor_events1.csv", date)?;
+    insert_sensor_data(&mut client, zip_data, "/tmp/sensor_events2.csv", date)
 }

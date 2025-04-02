@@ -14,14 +14,14 @@ fn get_database_connection() -> Result<Client, Error> {
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        println!("Usage: converter source_folder entity_name");
+    if args.len() < 3 {
+        println!("Usage: converter source_folder entity_name [params]");
         return Ok(());
     }
     match args[2].as_str() {
         "locations" => convert_locations(get_database_connection()?, &args[1]),
         "sensors" => convert_sensors(get_database_connection()?, &args[1]),
-        "sensor_data" => convert_sensor_data(get_database_connection()?, &args[1]),
+        "sensor_data" => convert_sensor_data(get_database_connection()?, &args[1], args.get(3)),
         _ => { println!("unknown entity name"); Ok(()) }
     }
 }
