@@ -126,9 +126,13 @@ data class LastSensorData(
                 else -> throw ResponseError(decompressed)
             }
         }
+
+        private fun toDouble(map: Map<String, Int>): Map<String, Double> {
+            return map.map { (k, v) -> Pair(k, v.toDouble() / 100) }.toMap()
+        }
     }
 
     internal fun toTimeData(): List<SensorTimeData> {
-        return listOf(SensorTimeData(date, listOf(SensorDataArray(value.time, value.values))))
+        return listOf(SensorTimeData(date, listOf(SensorDataArray(value.time, toDouble(value.values)))))
     }
 }

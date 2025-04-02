@@ -195,8 +195,9 @@ class SmartHomeServiceV2<T> {
                         break
                     }
                     if (exc == null) {
-                        val body = Chacha.decode(inPacket.data, inPacket.length)
-                        callback.onResponse(callback.deserialize(mRequest!!, body))
+                        val decrypted = Chacha.decode(inPacket.data, inPacket.length)
+                        val decompressed = decompress(decrypted)
+                        callback.onResponse(callback.deserialize(mRequest!!, decompressed))
                     } else {
                         callback.onFailure(exc)
                     }
