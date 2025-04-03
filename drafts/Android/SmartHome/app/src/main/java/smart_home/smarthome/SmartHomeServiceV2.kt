@@ -2,7 +2,6 @@ package smart_home.smarthome
 
 import android.app.Activity
 import android.content.Context
-import android.hardware.SensorPrivacyManager.Sensors
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.NetworkOnMainThreadException
@@ -45,7 +44,7 @@ data class SmartHomeQuery(
         if (dataType.length < 3)
             throw IllegalArgumentException("dataType must be more than 2 characters")
         val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.put(1)
+        buffer.put(2)
         buffer.putShort(maxPoints)
         val bytes = dataType.toByteArray()
         buffer.put(bytes[0])

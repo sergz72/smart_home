@@ -70,7 +70,12 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
         }
 
         internal fun from(data: SensorDataResponse): List<SensorData> {
-            return listOf()
+            return data.data.map { (k, v) -> from(data.aggregated, k, v) }
+        }
+
+        private fun from(aggregated: Boolean, sensorId: Int, data: List<SensorDataV2>): SensorData {
+            val sensor = SmartHomeServiceV2.mSensors!!.get(sensorId)!!
+            return SensorData(sensor.location, sensor.locationType, sensor.dataType, 0, data.map { it.toTimeData() })
         }
 
         private fun from(sensorId: Int, data: LastSensorData): SensorData {
@@ -78,6 +83,7 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
             return SensorData(sensor.location, sensor.locationType, sensor.dataType, 0, data.toTimeData())
         }
     }
+
     private var _series: List<SensorDataEvent>? = null
 
     val series get() = buildSeries()

@@ -63,6 +63,25 @@ data class SensorDataV2(
             return SensorDataV2(date, list, null)
         }
     }
+
+    fun toTimeData(): SensorTimeData {
+        if (values != null) {
+            return SensorTimeData(date, values.map { SensorDataArray(it.time, LastSensorData.toDouble(it.values))})
+        }
+        return SensorTimeData(date, listOf(SensorDataArray(0, transformAggregated())))
+    }
+
+    fun transformAggregated(): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        if (aggregated != null) {
+            for ((k, v) in aggregated) {
+                result.put(k + "Min", v.min)
+                result.put(k + "Avg", v.avg)
+                result.put(k + "Max", v.max)
+            }
+        }
+        return result
+    }
 }
 
 data class SensorDataResponse(
@@ -127,7 +146,7 @@ data class LastSensorData(
             }
         }
 
-        private fun toDouble(map: Map<String, Int>): Map<String, Double> {
+        internal fun toDouble(map: Map<String, Int>): Map<String, Double> {
             return map.map { (k, v) -> Pair(k, v.toDouble() / 100) }.toMap()
         }
     }

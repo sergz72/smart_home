@@ -49,15 +49,14 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
     }
 
     private fun buildRequestV2(): ByteArray {
-        /*var startDate: DateTime? = null
-        var offset: DateOffset? = null
-        var period: DateOffset? = null
-        if (params != null) {
-            //todo
+        if (params == null)
+            return byteArrayOf(1, 1) // get last sensor data
+        if (params.getData().mUsePeriod) {
+            return SmartHomeQuery(maxPoints.toShort(), dataType, null,
+                            DateOffset(params.getData().mPeriod / 24, TimeUnit.Day), null).toBinary()
         }
-        val query = SmartHomeQuery(maxPoints.toShort(), dataType, startDate, offset, period)
-        return query.toBinary()*/
-        return byteArrayOf(1, 1)
+        return SmartHomeQuery(maxPoints.toShort(), dataType, DateTime(params.getData().getFromDate(), 0),
+                                null, null).toBinary()
     }
 
     private fun buildRequest(): String {
