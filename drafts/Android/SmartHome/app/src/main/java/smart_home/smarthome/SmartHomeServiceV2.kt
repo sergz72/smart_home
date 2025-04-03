@@ -26,7 +26,15 @@ enum class TimeUnit {
 data class DateOffset (
     val offset: Int,
     val unit: TimeUnit
-)
+) {
+    fun toHours(): Int {
+        return when (unit) {
+            TimeUnit.Day -> offset * 24
+            TimeUnit.Month -> 24
+            TimeUnit.Year -> 24
+        }
+    }
+}
 
 data class SmartHomeQuery(
     val maxPoints: Short,

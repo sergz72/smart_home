@@ -55,26 +55,29 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
     private fun buildRequestV2(): ByteArray {
         if (params == null)
             return byteArrayOf(1, 1) // get last sensor data
-        //todo
-        /*if (params.getData().mUsePeriod) {
+        val period = params.getData().getPeriod()
+        if (params.getData().mDateStart == null) {
             return SmartHomeQuery(maxPoints.toShort(), dataType, null,
-                            DateOffset(params.getData().mPeriod / 24, TimeUnit.Day), null).toBinary()
-        }*/
+                                    params.getData().getDateOffset(), period).toBinary()
+        }
         return SmartHomeQuery(maxPoints.toShort(), dataType, params.getData().getFromDate(),
-                                null, null).toBinary()
+                                null, period).toBinary()
     }
 
     private fun buildRequest(): String {
         var requestString = "GET /sensor_data?data_type=$dataType"
         //todo set aggregated
-        /*if (params != null) {
-            if (params.getData().mUsePeriod) {
-                requestString += "&period=" + params.getData().mPeriod
-            } else {
+        if (params != null) {
+            val period = params.getData().getPeriod()
+            aggregated = period == null
+            if (aggregated) {
                 requestString += "&start=" + params.getData().getFromDate() + "&end=" + params.getData().getToDate()
+            } else {
+                requestString += "&period=" + period!!.toHours()
             }
             requestString += "&maxPoints=$maxPoints"
-        }*/
+        } else
+            aggregated = false
         return requestString
     }
 

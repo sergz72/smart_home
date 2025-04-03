@@ -24,10 +24,12 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
     class Data(var mResult: Int, var mDateStart: LocalDate?, var mDateOffset: Int,
         var mDateOffsetUnit: TimeUnit, var mPeriod: Int, var mPeriodUnit: TimeUnit) : Parcelable {
 
-        constructor(): this(RESULT_CANCELED, null, 1, TimeUnit.Day, 0, TimeUnit.Day)
+        constructor() : this(RESULT_CANCELED, null, 1, TimeUnit.Day, 0, TimeUnit.Day)
 
-        constructor(parcel: Parcel) : this(parcel.readInt(), readDate(parcel), parcel.readInt(),
-            TimeUnit.entries[parcel.readInt()], parcel.readInt(), TimeUnit.entries[parcel.readInt()])
+        constructor(parcel: Parcel) : this(
+            parcel.readInt(), readDate(parcel), parcel.readInt(),
+            TimeUnit.entries[parcel.readInt()], parcel.readInt(), TimeUnit.entries[parcel.readInt()]
+        )
 
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(mResult)
@@ -53,7 +55,11 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
 
             fun readDate(parcel: Parcel): LocalDate? {
                 val date = parcel.readLong()
-                return if (date == 0L) { null } else { LocalDate.ofEpochDay(date) }
+                return if (date == 0L) {
+                    null
+                } else {
+                    LocalDate.ofEpochDay(date)
+                }
             }
 
             fun parsePeriod(date: LocalDate, offset: Int, unit: TimeUnit): LocalDate {
@@ -75,10 +81,24 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         }
 
         fun getToDate(): Int {
-            val date = if (mPeriod == 0) { LocalDate.now() } else {
+            val date = if (mPeriod == 0) {
+                LocalDate.now()
+            } else {
                 parsePeriod(getFromDateDate(), mPeriod, mPeriodUnit)
             }
             return date.year * 10000 + date.month.value * 100 + date.dayOfMonth
+        }
+
+        fun getPeriod(): DateOffset? {
+            return if (mPeriod == 0) {
+                null
+            } else {
+                DateOffset(mPeriod, mPeriodUnit)
+            }
+        }
+
+        fun getDateOffset(): DateOffset? {
+            return if (mDateOffset == 0) { null } else { DateOffset(mDateOffset, mDateOffsetUnit) }
         }
     }
 
