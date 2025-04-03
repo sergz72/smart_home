@@ -55,7 +55,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
             return SmartHomeQuery(maxPoints.toShort(), dataType, null,
                             DateOffset(params.getData().mPeriod / 24, TimeUnit.Day), null).toBinary()
         }
-        return SmartHomeQuery(maxPoints.toShort(), dataType, DateTime(params.getData().getFromDate(), 0),
+        return SmartHomeQuery(maxPoints.toShort(), dataType, params.getData().getFromDate(),
                                 null, null).toBinary()
     }
 

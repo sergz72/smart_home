@@ -16,7 +16,7 @@ data class SensorDataValues(
             while (valuesCount-- > 0) {
                 val keyArray = ByteArray(4)
                 buffer.get(keyArray)
-                val key = String(keyArray)
+                val key = String(keyArray).trimEnd()
                 val value = buffer.getInt()
                 map[key] = value
             }
@@ -94,14 +94,14 @@ data class SensorDataResponse(
             val buffer = ByteBuffer.wrap(decompressed.toByteArray()).order(ByteOrder.LITTLE_ENDIAN)
             val data = mutableMapOf<Int, List<SensorDataV2>>()
             while (buffer.hasRemaining()) {
-                val sensor_id = buffer.get()
+                val sensorId = buffer.get()
                 var length = buffer.getShort()
                 val list = mutableListOf<SensorDataV2>()
                 while (length-- > 0) {
                     val sdata = buildSensorData(buffer)
                     list.add(sdata)
                 }
-                data[sensor_id.toInt()] = list
+                data[sensorId.toInt()] = list
             }
             return SensorDataResponse(aggregated, data)
         }

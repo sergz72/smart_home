@@ -111,9 +111,12 @@ impl BaseServer {
     }
 
     fn handle(&self, connection: NetworkConnection) {
+        let logger = connection.logger.clone();
+        logger.info("Received connection request.");
         if let Err(e) = self.handler(connection) {
-            self.logger.error(e.to_string());
+            logger.error(e.to_string());
         }
+        logger.info("Connection closed.");
     }
 
     fn handler(&self, mut connection: NetworkConnection) -> Result<(), Error> {

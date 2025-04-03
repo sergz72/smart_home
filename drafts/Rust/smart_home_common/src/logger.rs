@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use chrono::Local;
 
+#[derive(Clone)]
 pub struct Logger {
     target: String
 }

@@ -23,11 +23,6 @@ enum class TimeUnit {
     Year
 }
 
-data class DateTime (
-    val date: Int,
-    val time: Int
-)
-
 data class DateOffset (
     val offset: Int,
     val unit: TimeUnit
@@ -36,27 +31,25 @@ data class DateOffset (
 data class SmartHomeQuery(
     val maxPoints: Short,
     val dataType: String,
-    val startDate: DateTime?,
+    val startDate: Int?,
     val startDateOffset: DateOffset?,
     val period: DateOffset?
 ) {
     internal fun toBinary(): ByteArray {
         if (dataType.length < 3)
             throw IllegalArgumentException("dataType must be more than 2 characters")
-        val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
+        val buffer = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put(2)
         buffer.putShort(maxPoints)
         val bytes = dataType.toByteArray()
         buffer.put(bytes[0])
         buffer.put(bytes[1])
         buffer.put(bytes[2])
-        buffer.put(if (bytes.size > 3) { bytes[3] } else { 0x20 })
         if (startDate != null) {
-            buffer.putInt(startDate.date)
-            buffer.putInt(startDate.time)
+            buffer.putInt(startDate)
         } else {
-            buffer.putInt(-startDateOffset!!.offset)
-            buffer.putInt(startDateOffset.unit.ordinal)
+            val offset = (-startDateOffset!!.offset shl 8) or startDateOffset.unit.ordinal
+            buffer.putInt(offset)
         }
         if (period != null) {
             buffer.put(period.offset.toByte())
