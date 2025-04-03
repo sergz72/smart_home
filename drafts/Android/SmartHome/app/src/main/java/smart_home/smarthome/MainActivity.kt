@@ -236,7 +236,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                 }
                 FILTERS -> {
                     if (result.data != null) {
-                        filters = result.data!!.getParcelableExtra("data")!!
+                        filters = result.data!!.getParcelableExtra("data", FiltersActivity.Data::class.java)!!
                         refreshFragment()
                     }
                 }

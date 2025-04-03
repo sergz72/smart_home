@@ -29,6 +29,7 @@
     <string name="select_date_end">End date</string>
     <string name="filter_type">Filter type</string>
     <string name="period">Period</string>
+    <string name="offset">Offset</string>
     <string name="set">Set</string>
 
     <string name="serverListTitle">Server</string>

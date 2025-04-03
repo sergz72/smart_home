@@ -9,6 +9,7 @@ import android.widget.Button
 import com.sz.charts.LineChart
 
 import smart_home.smarthome.entities.SensorData
+import smart_home.smarthome.entities.SensorDataResponseV1
 
 class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fragment_env_sensors, params, "env"), View.OnClickListener {
     private var mNextTempIntGraph: Button? = null
@@ -27,6 +28,7 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
     private var mHumiSensorIdx: Int = 0
     private var mCO2SensorIdx: Int = 0
     private var mLuxSensorIdx: Int = 0
+    private var mAggregated: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
@@ -44,8 +46,9 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         return rootView
     }
 
-    override fun showResults(results: List<SensorData>) {
-        buildSensorLists(results)
+    override fun showResults(results: SensorDataResponseV1) {
+        mAggregated = results.aggregated
+        buildSensorLists(results.response)
         mIntTempSensorIdx = 0
         mExtTempSensorIdx = 0
         mHumiSensorIdx = 0
@@ -70,20 +73,20 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
         showCO2Sensors(v)
         showLuxSensors(v)
         val plot = v.findViewById<LineChart>(R.id.plot_pres)
-        Graph.buildGraph(plot, mPresSensor, "pres", false, !params!!.getData().mUsePeriod, false)
+        Graph.buildGraph(plot, mPresSensor, "pres", false, mAggregated, false)
     }
 
     private fun showIntTempSensors(v: View) {
         if (mIntTempSensors != null && mIntTempSensorIdx < mIntTempSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_temp_int)
-            Graph.buildGraph(plot, mIntTempSensors!![mIntTempSensorIdx], "temp", false, !params!!.getData().mUsePeriod, false)
+            Graph.buildGraph(plot, mIntTempSensors!![mIntTempSensorIdx], "temp", false, mAggregated, false)
         }
     }
 
     private fun showExtTempSensors(v: View) {
         val plot = v.findViewById<LineChart>(R.id.plot_temp_ext)
         if (mExtTempSensors != null && mExtTempSensorIdx < mExtTempSensors!!.size) {
-            Graph.buildGraph(plot, mExtTempSensors!![mExtTempSensorIdx], "temp", false, !params!!.getData().mUsePeriod, false)
+            Graph.buildGraph(plot, mExtTempSensors!![mExtTempSensorIdx], "temp", false, mAggregated, false)
         } else {
             plot.clearSeries()
         }
@@ -92,21 +95,21 @@ class EnvSensorsFragment(params: IGraphParameters) : SensorsFragment(R.layout.fr
     private fun showHumiSensors(v: View) {
         if (mHumiSensors != null && mHumiSensorIdx < mHumiSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_humi)
-            Graph.buildGraph(plot, mHumiSensors!![mHumiSensorIdx], "humi", false, !params!!.getData().mUsePeriod, false)
+            Graph.buildGraph(plot, mHumiSensors!![mHumiSensorIdx], "humi", false, mAggregated, false)
         }
     }
 
     private fun showCO2Sensors(v: View) {
         if (mCO2Sensors != null && mCO2SensorIdx < mCO2Sensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_co2)
-            Graph.buildGraph(plot, mCO2Sensors!![mCO2SensorIdx], "co2", false, !params!!.getData().mUsePeriod, false)
+            Graph.buildGraph(plot, mCO2Sensors!![mCO2SensorIdx], "co2", false, mAggregated, false)
         }
     }
 
     private fun showLuxSensors(v: View) {
         if (mLuxSensors != null && mLuxSensorIdx < mLuxSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_lux)
-            Graph.buildGraph(plot, mLuxSensors!![mLuxSensorIdx], "lux", false, !params!!.getData().mUsePeriod, false)
+            Graph.buildGraph(plot, mLuxSensors!![mLuxSensorIdx], "lux", false, mAggregated, false)
         }
     }
 

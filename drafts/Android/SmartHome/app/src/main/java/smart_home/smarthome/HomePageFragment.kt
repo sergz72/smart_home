@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 import smart_home.smarthome.entities.SensorData
+import smart_home.smarthome.entities.SensorDataResponseV1
 
 class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, null, "all") {
     private var mSensorsView: RecyclerView? = null
@@ -33,8 +34,8 @@ class HomePageFragment : SensorsFragment(R.layout.fragment_home_page, null, "all
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    override fun showResults(results: List<SensorData>) {
-        val dataMap = results.groupBy {  it.locationName }
+    override fun showResults(results: SensorDataResponseV1) {
+        val dataMap = results.response.groupBy {  it.locationName }
         mSensorsViewAdapter!!.setData(dataMap)
         mSensorsViewAdapter!!.notifyDataSetChanged()
     }

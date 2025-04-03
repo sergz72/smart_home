@@ -21,27 +21,21 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         val UI_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy")
     }
 
-    class Data() : Parcelable {
-        var mResult: Int = Activity.RESULT_CANCELED
-        var mDateStart: LocalDate = LocalDate.now().minusMonths(5).withDayOfMonth(1)
-        var mDateEnd: LocalDate = LocalDate.now()
-        var mPeriod: Int = 24
-        var mUsePeriod: Boolean = true
+    class Data(var mResult: Int, var mDateStart: LocalDate?, var mDateOffset: Int,
+        var mDateOffsetUnit: TimeUnit, var mPeriod: Int, var mPeriodUnit: TimeUnit) : Parcelable {
 
-        constructor(parcel: Parcel) : this() {
-            mResult = parcel.readInt()
-            mDateStart = LocalDate.ofEpochDay(parcel.readLong())
-            mDateEnd = LocalDate.ofEpochDay(parcel.readLong())
-            mPeriod = parcel.readInt()
-            mUsePeriod = parcel.readBoolean()
-        }
+        constructor(): this(RESULT_CANCELED, null, 1, TimeUnit.Day, 0, TimeUnit.Day)
+
+        constructor(parcel: Parcel) : this(parcel.readInt(), readDate(parcel), parcel.readInt(),
+            TimeUnit.entries[parcel.readInt()], parcel.readInt(), TimeUnit.entries[parcel.readInt()])
 
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(mResult)
-            parcel.writeLong(mDateStart.toEpochDay())
-            parcel.writeLong(mDateEnd.toEpochDay())
+            parcel.writeLong(mDateStart?.toEpochDay() ?: 0L)
+            parcel.writeInt(mDateOffset)
+            parcel.writeInt(mDateOffsetUnit.ordinal)
             parcel.writeInt(mPeriod)
-            parcel.writeBoolean(mUsePeriod)
+            parcel.writeInt(mPeriodUnit.ordinal)
         }
 
         override fun describeContents(): Int {
@@ -56,14 +50,35 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
             override fun newArray(size: Int): Array<Data?> {
                 return arrayOfNulls(size)
             }
+
+            fun readDate(parcel: Parcel): LocalDate? {
+                val date = parcel.readLong()
+                return if (date == 0L) { null } else { LocalDate.ofEpochDay(date) }
+            }
+
+            fun parsePeriod(date: LocalDate, offset: Int, unit: TimeUnit): LocalDate {
+                return when (unit) {
+                    TimeUnit.Day -> date.plusDays(offset.toLong())
+                    TimeUnit.Month -> date.plusMonths(offset.toLong())
+                    TimeUnit.Year -> date.plusYears(offset.toLong())
+                }
+            }
+        }
+
+        private fun getFromDateDate(): LocalDate {
+            return mDateStart ?: parsePeriod(LocalDate.now(), -mDateOffset, mDateOffsetUnit)
         }
 
         fun getFromDate(): Int {
-            return mDateStart.year * 10000 + mDateStart.month.value * 100 + mDateStart.dayOfMonth
+            val date = getFromDateDate()
+            return date.year * 10000 + date.month.value * 100 + date.dayOfMonth
         }
 
         fun getToDate(): Int {
-            return mDateEnd.year * 10000 + mDateEnd.month.value * 100 + mDateEnd.dayOfMonth
+            val date = if (mPeriod == 0) { LocalDate.now() } else {
+                parsePeriod(getFromDateDate(), mPeriod, mPeriodUnit)
+            }
+            return date.year * 10000 + date.month.value * 100 + date.dayOfMonth
         }
     }
 
@@ -75,19 +90,17 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
-        val selectDateEnd = findViewById<Button>(R.id.select_date_end)
         val set = findViewById<Button>(R.id.set)
         val filterType = findViewById<Spinner>(R.id.filter_type)
         val period = findViewById<Spinner>(R.id.period)
 
         selectDateStart.setOnClickListener(this)
-        selectDateEnd.setOnClickListener(this)
         set.setOnClickListener(this)
         filterType.onItemSelectedListener = this
 
-        mData = intent.getParcelableExtra("data")!!
+        mData = intent.getParcelableExtra("data", Data::class.java)!!
 
-        filterType.setSelection(if (mData.mUsePeriod) {0} else {1})
+        filterType.setSelection(if (mData.mDateStart != null) {0} else {1})
 
         val periods = resources.getIntArray(R.array.periodValues)
         var idx = 0
@@ -111,14 +124,12 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
 
     private fun updateDate() {
         val dateStart = findViewById<TextView>(R.id.date_start)
-        val dateEnd = findViewById<TextView>(R.id.date_end)
-        dateStart.text = mData.mDateStart.format(UI_DATE_FORMAT)
-        dateEnd.text = mData.mDateEnd.format(UI_DATE_FORMAT)
+        dateStart.text = mData.mDateStart?.format(UI_DATE_FORMAT) ?: ""
     }
 
     public override fun onResume() {
         super.onResume()
-        mData.mResult = Activity.RESULT_CANCELED
+        mData.mResult = RESULT_CANCELED
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -134,37 +145,24 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
 
     override fun onClick(v: View?) {
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
-        val selectDateEnd = findViewById<Button>(R.id.select_date_end)
 
         when (v) {
             selectDateStart -> {
                 val dialog = DatePickerDialog(this, { _, year, monthOfYear, dayOfMonth ->
                     mData.mDateStart = LocalDate.of(year, monthOfYear + 1, dayOfMonth)
-                    if (mData.mDateEnd.isBefore(mData.mDateStart)) {
-                        mData.mDateEnd = mData.mDateStart
-                    }
                     updateDate()
-                }, mData.mDateStart.year, mData.mDateStart.monthValue - 1, mData.mDateStart.dayOfMonth)
-                dialog.show()
-            }
-            selectDateEnd -> {
-                val dialog = DatePickerDialog(this, { _, year, monthOfYear, dayOfMonth ->
-                    mData.mDateEnd = LocalDate.of(year, monthOfYear + 1, dayOfMonth)
-                    if (mData.mDateStart.isAfter(mData.mDateEnd)) {
-                        mData.mDateStart = mData.mDateEnd
-                    }
-                    updateDate()
-                }, mData.mDateStart.year, mData.mDateStart.monthValue - 1, mData.mDateStart.dayOfMonth)
+                }, mData.mDateStart!!.year, mData.mDateStart!!.monthValue - 1, mData.mDateStart!!.dayOfMonth)
                 dialog.show()
             }
             else -> { // Generate button
                 val filterTypeView = findViewById<Spinner>(R.id.filter_type)
                 val filterType =  resources.getStringArray(R.array.filterTypeValues)[filterTypeView.selectedItemPosition]
-                mData.mUsePeriod = filterType == "Period"
+                //todo
+                //mData.mUsePeriod = filterType == "Period"
                 val period = findViewById<Spinner>(R.id.period)
                 mData.mPeriod = resources.getIntArray(R.array.periodValues)[period.selectedItemPosition]
                 intent.putExtra("data", mData)
-                setResult(Activity.RESULT_OK, intent)
+                setResult(RESULT_OK, intent)
                 finish()
             }
         }
@@ -175,24 +173,18 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         val periodLabel = findViewById<TextView>(R.id.period_label)
         val period = findViewById<Spinner>(R.id.period)
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
-        val selectDateEnd = findViewById<Button>(R.id.select_date_end)
         val dateStart = findViewById<TextView>(R.id.date_start)
-        val dateEnd = findViewById<TextView>(R.id.date_end)
         val filterType =  resources.getStringArray(R.array.filterTypeValues)[filterTypeView.selectedItemPosition]
         if (filterType == "Period") {
             periodLabel.isEnabled = true
             period.isEnabled = true
             dateStart.isEnabled = false
             selectDateStart.isEnabled = false
-            dateEnd.isEnabled = false
-            selectDateEnd.isEnabled = false
         } else {
             periodLabel.isEnabled = false
             period.isEnabled = false
             dateStart.isEnabled = true
             selectDateStart.isEnabled = true
-            dateEnd.isEnabled = true
-            selectDateEnd.isEnabled = true
         }
     }
 

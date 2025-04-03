@@ -65,12 +65,12 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
                       @SerializedName("total") val total: Int,
                       @SerializedName("timeData") val timeData: List<SensorTimeData>) {
     companion object {
-        internal fun from(data: Map<Int, LastSensorData>): List<SensorData> {
-            return data.map { (k, v) -> from(k, v) }
+        internal fun from(data: Map<Int, LastSensorData>): SensorDataResponseV1 {
+            return SensorDataResponseV1(false, data.map { (k, v) -> from(k, v) })
         }
 
-        internal fun from(data: SensorDataResponse): List<SensorData> {
-            return data.data.map { (k, v) -> from(data.aggregated, k, v) }
+        internal fun from(data: SensorDataResponse): SensorDataResponseV1 {
+            return SensorDataResponseV1(data.aggregated, data.data.map { (k, v) -> from(data.aggregated, k, v) })
         }
 
         private fun from(aggregated: Boolean, sensorId: Int, data: List<SensorDataV2>): SensorData {
@@ -136,3 +136,5 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
         }
     }
 }
+
+data class SensorDataResponseV1(val aggregated: Boolean, val response: List<SensorData>)

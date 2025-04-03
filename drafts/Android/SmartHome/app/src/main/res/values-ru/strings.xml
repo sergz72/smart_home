@@ -29,6 +29,7 @@
     <string name="select_date_end">Конечная дата</string>
     <string name="filter_type">Тип фильтра</string>
     <string name="period">Период</string>
+    <string name="offset">Смещение</string>
     <string name="set">Установить</string>
 
     <string name="serverListTitle">Сервер</string>

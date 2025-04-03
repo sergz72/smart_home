@@ -17,12 +17,16 @@ import smart_home.smarthome.entities.LastSensorData
 
 import smart_home.smarthome.entities.SensorData
 import smart_home.smarthome.entities.SensorDataResponse
+import smart_home.smarthome.entities.SensorDataResponseV1
 
 abstract class SensorsFragment(private val mId: Int, protected val params: IGraphParameters?,
                                private val  dataType: String, private val maxPoints: Int = 200):
     Fragment(), ISmartHomeData {
 
-    companion object { internal var useV2 = false }
+    companion object {
+        internal var useV2 = false
+        private var aggregated = false
+    }
 
     protected val mGson: Gson
     private val mService = buildService()
@@ -44,31 +48,33 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
                 .setRequest(buildRequest())
     }
 
-    private fun buildServiceV2(): SmartHomeServiceV2<List<SensorData>> {
-        return SmartHomeServiceV2<List<SensorData>>()
+    private fun buildServiceV2(): SmartHomeServiceV2<SensorDataResponseV1> {
+        return SmartHomeServiceV2<SensorDataResponseV1>()
     }
 
     private fun buildRequestV2(): ByteArray {
         if (params == null)
             return byteArrayOf(1, 1) // get last sensor data
-        if (params.getData().mUsePeriod) {
+        //todo
+        /*if (params.getData().mUsePeriod) {
             return SmartHomeQuery(maxPoints.toShort(), dataType, null,
                             DateOffset(params.getData().mPeriod / 24, TimeUnit.Day), null).toBinary()
-        }
+        }*/
         return SmartHomeQuery(maxPoints.toShort(), dataType, params.getData().getFromDate(),
                                 null, null).toBinary()
     }
 
     private fun buildRequest(): String {
         var requestString = "GET /sensor_data?data_type=$dataType"
-        if (params != null) {
+        //todo set aggregated
+        /*if (params != null) {
             if (params.getData().mUsePeriod) {
                 requestString += "&period=" + params.getData().mPeriod
             } else {
                 requestString += "&start=" + params.getData().getFromDate() + "&end=" + params.getData().getToDate()
             }
             requestString += "&maxPoints=$maxPoints"
-        }
+        }*/
         return requestString
     }
 
@@ -95,7 +101,7 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
             }
 
             override fun onResponse(response: List<SensorData>) {
-                mHandler.post { showResults(response) }
+                mHandler.post { showResults(SensorDataResponseV1(aggregated, response)) }
             }
 
             override fun onFailure(t: Throwable?, response: String?) {
@@ -112,14 +118,14 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
 
     private fun refreshV2() {
         mServiceV2.setRequest(buildRequestV2())
-        mServiceV2.doInBackground(object : SmartHomeServiceV2.Callback<List<SensorData>> {
-            override fun deserialize(request: ByteArray, response: ByteArray): List<SensorData> {
+        mServiceV2.doInBackground(object : SmartHomeServiceV2.Callback<SensorDataResponseV1> {
+            override fun deserialize(request: ByteArray, response: ByteArray): SensorDataResponseV1 {
                 if (request[0] == 1.toByte()) // last sensor data
                     return SensorData.from(LastSensorData.parseResponse(response))
                 return SensorData.from(SensorDataResponse.parseResponse(response))
             }
 
-            override fun onResponse(response: List<SensorData>) {
+            override fun onResponse(response: SensorDataResponseV1) {
                 mHandler.post { showResults(response) }
             }
 
@@ -136,5 +142,5 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
             refreshV1()
     }
 
-    protected abstract fun showResults(results: List<SensorData>)
+    protected abstract fun showResults(results: SensorDataResponseV1)
 }
