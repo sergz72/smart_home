@@ -15,15 +15,13 @@ fun buildKeyValue(parameter: String): Pair<String, String> {
     return Pair(parts[0], parts[1])
 }
 
-fun parseDate(dateStr: String): Pair<DateTime?, DateOffset?> {
+fun parseDate(dateStr: String): Pair<Int?, DateOffset?> {
     if (dateStr.startsWith("-")) {
         val period = parsePeriod(dateStr.substring(1))
         return Pair(null, period)
     }
-    val datetime = dateStr.toLong()
-    val date = datetime / 1000000
-    val time = datetime % 1000000
-    return Pair(DateTime(date.toInt(), time.toInt()), null)
+    val date = dateStr.toInt()
+    return Pair(date, null)
 }
 
 fun parsePeriod(periodStr: String?): DateOffset? {
@@ -50,8 +48,7 @@ fun buildRequest(query: String): SmartHomeQuery {
     println("dataType: $dataType")
     val (startDate, startDateOffset) = parseDate(parameters.getValue("startDate"))
     if (startDate != null) {
-        println("startDate.date: ${startDate.date}")
-        println("startDate.time: ${startDate.time}")
+        println("startDate: ${startDate}")
     } else {
         println("startDateOffset.offset: ${startDateOffset!!.offset}")
         println("startDateOffset.unit: ${startDateOffset.unit}")

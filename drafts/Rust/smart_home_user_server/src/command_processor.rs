@@ -7,7 +7,6 @@ use crate::sensor_data::{aggregate_by_max_points, Aggregated, SensorData, Sensor
 
 const MAX_UNAGGREGATED_DATA_DAYS: i64 = 7;
 const MIN_DATE: i32 = 20190101;
-const MAX_TIME: i32 = 235959;
 
 pub struct CommandProcessor {
     db: DB
@@ -17,7 +16,7 @@ struct SensorDataQuery {
     max_points: usize,
     data_type: String,
     date_or_offset: i32,
-    time_or_unit: i32,
+    offset_unit: i32,
     period: i32,
     period_unit: i32
 }
@@ -98,7 +97,7 @@ where s.location_id = l.id";
         let now = Local::now();
 
         let start_datetime =
-            parse_datetime(now, query.date_or_offset, query.time_or_unit)?;
+            parse_datetime(now, query.date_or_offset, query.offset_unit)?;
         let mut end_datetime = None;
         if query.period != 0 {
             end_datetime =
@@ -119,7 +118,7 @@ where s.location_id = l.id";
     }
 
     pub fn check_message_length(&self, length: usize) -> bool {
-        length == 17 || length == 2
+        length == 12 || length == 2
     }
 }
 
@@ -266,26 +265,28 @@ fn build_sensor_data_query(command: Vec<u8>) -> Result<SensorDataQuery, Error> {
     let mut buffer16 = [0u8; 2];
     buffer16.copy_from_slice(&command[0..2]);
     let max_points = u16::from_le_bytes(buffer16) as usize;
-    let data_type = String::from_utf8(command[2..6].to_vec())
+    let data_type = String::from_utf8(command[2..5].to_vec())
         .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
     let mut buffer32 = [0u8; 4];
-    buffer32.copy_from_slice(&command[6..10]);
-    let date_or_offset = i32::from_le_bytes(buffer32);
-    buffer32.copy_from_slice(&command[10..14]);
-    let time_or_unit = i32::from_le_bytes(buffer32);
-    let period = command[14] as i32;
-    let period_unit = command[15] as i32;
-    Ok(SensorDataQuery{max_points, data_type, date_or_offset, time_or_unit, period, period_unit})
+    buffer32.copy_from_slice(&command[5..9]);
+    let mut date_or_offset = i32::from_le_bytes(buffer32);
+    let period = command[9] as i32;
+    let period_unit = command[10] as i32;
+    let offset_unit = date_or_offset & 0xFF;
+    if date_or_offset < 0 {
+        date_or_offset >>= 8;
+    }
+    Ok(SensorDataQuery{max_points, data_type, date_or_offset, offset_unit, period, period_unit})
 }
 
-fn parse_datetime(date_now: DateTime<Local>, date: i32, time: i32) -> Result<DateTime<Local>, Error> {
+fn parse_datetime(date_now: DateTime<Local>, date: i32, unit: i32) -> Result<DateTime<Local>, Error> {
     if date >= 0 {
-        if date < MIN_DATE || time < 0 || time > MAX_TIME {
-            return Err(Error::new(ErrorKind::InvalidData, "Invalid date or time"));
+        if date < MIN_DATE {
+            return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
         }
-        Ok(build_datetime(date, time))
+        Ok(build_datetime(date, 0))
     } else {
-        parse_period(date_now, -date, time)
+        parse_period(date_now, date, unit)
     }
 }
 
@@ -300,14 +301,20 @@ fn build_datetime(date: i32, time: i32) -> DateTime<Local> {
 
 fn parse_period(start_datetime: DateTime<Local>, period: i32, period_unit: i32)
                 -> Result<DateTime<Local>, Error> {
-    if period <= 0 {
-        return Err(Error::new(ErrorKind::InvalidData, "Invalid period"));
-    }
-    match period_unit {
-        0 => Ok(start_datetime + Days::new(period as u64)),
-        1 => Ok(start_datetime + Months::new(period as u32)),
-        2 => Ok(start_datetime + Months::new((period * 12) as u32)),
-        _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+    if period >= 0 {
+        match period_unit {
+            0 => Ok(start_datetime + Days::new(period as u64)),
+            1 => Ok(start_datetime + Months::new(period as u32)),
+            2 => Ok(start_datetime + Months::new((period * 12) as u32)),
+            _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+        }
+    } else {
+        match period_unit {
+            0 => Ok(start_datetime - Days::new(-period as u64)),
+            1 => Ok(start_datetime - Months::new(-period as u32)),
+            2 => Ok(start_datetime - Months::new((-period * 12) as u32)),
+            _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+        }
     }
 }
 
@@ -324,7 +331,7 @@ mod tests {
         );
         let (result, aggregated) = processor.get_sensor_data(
             SensorDataQuery{max_points: 200, data_type: "env".to_string(),
-                                    date_or_offset: 20250301, time_or_unit: 0, period: 0, period_unit: 0},
+                                    date_or_offset: 20250301, offset_unit: 0, period: 0, period_unit: 0},
         )?;
         assert_eq!(true, aggregated);
         Ok(())

@@ -18,11 +18,6 @@ enum class TimeUnit {
     Year
 }
 
-data class DateTime (
-    val date: Int,
-    val time: Int
-)
-
 data class DateOffset (
     val offset: Int,
     val unit: TimeUnit
@@ -31,10 +26,35 @@ data class DateOffset (
 data class SmartHomeQuery(
     val maxPoints: Short,
     val dataType: String,
-    val startDate: DateTime?,
+    val startDate: Int?,
     val startDateOffset: DateOffset?,
     val period: DateOffset?
-)
+) {
+    internal fun toBinary(): ByteArray {
+        if (dataType.length < 3)
+            throw IllegalArgumentException("dataType must be more than 2 characters")
+        val buffer = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.put(2)
+        buffer.putShort(maxPoints)
+        val bytes = dataType.toByteArray()
+        buffer.put(bytes[0])
+        buffer.put(bytes[1])
+        buffer.put(bytes[2])
+        if (startDate != null) {
+            buffer.putInt(startDate)
+        } else {
+            val offset = (-startDateOffset!!.offset shl 8) or startDateOffset.unit.ordinal
+            buffer.putInt(offset)
+        }
+        if (period != null) {
+            buffer.put(period.offset.toByte())
+            buffer.put(period.unit.ordinal.toByte())
+        } else {
+            buffer.putShort(0)
+        }
+        return buffer.array()
+    }
+}
 
 data class Sensor(
     val id: Int,
@@ -110,33 +130,6 @@ class SmartHomeService(private val key: ByteArray, hostName: String, private val
         return iv
     }
 
-    private fun buildRequest(query: SmartHomeQuery): ByteArray {
-        if (query.dataType.length < 3)
-            throw IllegalArgumentException("dataType must be more than 2 characters")
-        val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.put(2)
-        buffer.putShort(query.maxPoints)
-        val bytes = query.dataType.toByteArray()
-        buffer.put(bytes[0])
-        buffer.put(bytes[1])
-        buffer.put(bytes[2])
-        buffer.put(if (bytes.size > 3) { bytes[3] } else { 0x20 })
-        if (query.startDate != null) {
-            buffer.putInt(query.startDate.date)
-            buffer.putInt(query.startDate.time)
-        } else {
-            buffer.putInt(-query.startDateOffset!!.offset)
-            buffer.putInt(query.startDateOffset.unit.ordinal)
-        }
-        if (query.period != null) {
-            buffer.put(query.period.offset.toByte())
-            buffer.put(query.period.unit.ordinal.toByte())
-        } else {
-            buffer.putShort(0)
-        }
-        return buffer.array()
-    }
-
     fun send(request: ByteArray): ByteArray {
         val sendData = encrypt(request)
         val response = sendUDP(sendData)
@@ -148,7 +141,7 @@ class SmartHomeService(private val key: ByteArray, hostName: String, private val
     }
 
     fun send(query: SmartHomeQuery): SensorDataResponse {
-        val request = buildRequest(query)
+        val request = query.toBinary()
         val decompressed = send(request)
         return when (decompressed[0]) {
             //not aggregated
