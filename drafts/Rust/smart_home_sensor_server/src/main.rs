@@ -12,7 +12,8 @@ use crate::message_processor::build_message_processor;
 #[derive(Debug)]
 pub struct DeviceSensor {
     pub sensor_id: i16,
-    pub value_type: String
+    pub value_type: String,
+    pub offset_value: i32
 }
 
 // map device id to vector of DeviceSensor
@@ -23,9 +24,14 @@ with s as (
 select id, device_id, unnest(device_sensors) dsensors
 from sensors
 where device_id is not null
+), so as (
+select id, device_id, unnest(offsets) doffsets
+from sensors
+where device_id is not null
 )
-select s.id, s.device_id, (s.dsensors).id idx, (s.dsensors).value_type
-from s", &[])
+select s.id, s.device_id, (s.dsensors).id idx, (s.dsensors).value_type, coalesce((so.doffsets).offset_value, 0) offset_value
+from s left join so
+  on so.id = s.id and so.device_id = s.device_id and (s.dsensors).value_type = (so.doffsets).value_type", &[])
         .map_err(|e|Error::new(ErrorKind::Other, e))?;
     let mut sensor_map = HashMap::new();
     for row in result {
@@ -33,10 +39,11 @@ from s", &[])
         let device_id: i16 = row.get(1);
         let sensor_idx: i16 = row.get(2);
         let value_type: String = row.get(3);
+        let offset_value: i32 = row.get(4);
         let map = sensor_map
             .entry(device_id as usize)
             .or_insert(HashMap::new());
-        map.insert(sensor_idx as usize,DeviceSensor{sensor_id, value_type});
+        map.insert(sensor_idx as usize,DeviceSensor{sensor_id, value_type, offset_value});
     }
     Ok(sensor_map)
 }
