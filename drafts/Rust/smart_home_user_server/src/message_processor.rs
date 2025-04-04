@@ -20,9 +20,9 @@ struct UserMessageProcessor {
 }
 
 impl UserMessageProcessor {
-    fn new(key: [u8; 32], db: DB)
+    fn new(key: [u8; 32], db: DB, time_offset: i64)
         -> Result<UserMessageProcessor, Error> {
-        Ok(UserMessageProcessor {key, command_processor: CommandProcessor::new(db)})
+        Ok(UserMessageProcessor {key, command_processor: CommandProcessor::new(db, time_offset)})
     }
 }
 
@@ -145,9 +145,9 @@ fn build_iv() -> Result<[u8; 12], Error> {
     Ok(iv)
 }
 
-pub fn build_message_processor(key: [u8; 32], db: DB)
+pub fn build_message_processor(key: [u8; 32], db: DB, time_offset: i64)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(UserMessageProcessor::new(key, db)?))
+    Ok(Arc::new(UserMessageProcessor::new(key, db, time_offset)?))
 }
 
 #[cfg(test)]

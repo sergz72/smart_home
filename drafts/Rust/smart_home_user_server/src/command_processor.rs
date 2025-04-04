@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use chrono::{DateTime, Datelike, Days, Local, Months, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
 use postgres::{Client, Row};
 use smart_home_common::db::DB;
 use crate::sensor_data::{aggregate_by_max_points, Aggregated, SensorData, SensorDataOut, SensorDataValues};
@@ -9,7 +9,8 @@ const MAX_UNAGGREGATED_DATA_DAYS: i64 = 7;
 const MIN_DATE: i32 = 20190101;
 
 pub struct CommandProcessor {
-    db: DB
+    db: DB,
+    time_offset: i64
 }
 
 struct SensorDataQuery {
@@ -22,8 +23,8 @@ struct SensorDataQuery {
 }
 
 impl CommandProcessor {
-    pub fn new(db: DB) -> CommandProcessor {
-        CommandProcessor { db }
+    pub fn new(db: DB, time_offset: i64) -> CommandProcessor {
+        CommandProcessor { db, time_offset }
     }
 
     pub fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -97,11 +98,11 @@ where s.location_id = l.id";
         let now = Local::now();
 
         let start_datetime =
-            parse_datetime(now, query.date_or_offset, query.offset_unit)?;
+            self.parse_datetime(now, query.date_or_offset, query.offset_unit)?;
         let mut end_datetime = None;
         if query.period != 0 {
             end_datetime =
-                Some(parse_period(start_datetime, query.period, query.period_unit)?);
+                Some(self.parse_period(start_datetime, query.period, query.period_unit)?);
         }
 
         let aggregated = (end_datetime.unwrap_or(now) - start_datetime).num_days() > MAX_UNAGGREGATED_DATA_DAYS;
@@ -119,6 +120,36 @@ where s.location_id = l.id";
 
     pub fn check_message_length(&self, length: usize) -> bool {
         length == 12 || length == 2
+    }
+
+    fn parse_period(&self, start_datetime: DateTime<Local>, period: i32, period_unit: i32)
+                    -> Result<DateTime<Local>, Error> {
+        if period >= 0 {
+            match period_unit {
+                0 => Ok(start_datetime + Days::new(period as u64)),
+                1 => Ok(start_datetime + Months::new(period as u32)),
+                2 => Ok(start_datetime + Months::new((period * 12) as u32)),
+                _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+            }
+        } else {
+            match period_unit {
+                0 => Ok(start_datetime - TimeDelta::hours((-period * 24) as i64 - self.time_offset)),
+                1 => Ok(start_datetime - Months::new(-period as u32)),
+                2 => Ok(start_datetime - Months::new((-period * 12) as u32)),
+                _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
+            }
+        }
+    }
+
+    fn parse_datetime(&self, date_now: DateTime<Local>, date: i32, unit: i32) -> Result<DateTime<Local>, Error> {
+        if date >= 0 {
+            if date < MIN_DATE {
+                return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
+            }
+            Ok(build_datetime(date, 0))
+        } else {
+            self.parse_period(date_now, date, unit)
+        }
     }
 }
 
@@ -279,17 +310,6 @@ fn build_sensor_data_query(command: Vec<u8>) -> Result<SensorDataQuery, Error> {
     Ok(SensorDataQuery{max_points, data_type, date_or_offset, offset_unit, period, period_unit})
 }
 
-fn parse_datetime(date_now: DateTime<Local>, date: i32, unit: i32) -> Result<DateTime<Local>, Error> {
-    if date >= 0 {
-        if date < MIN_DATE {
-            return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
-        }
-        Ok(build_datetime(date, 0))
-    } else {
-        parse_period(date_now, date, unit)
-    }
-}
-
 fn build_datetime(date: i32, time: i32) -> DateTime<Local> {
     Local.with_ymd_and_hms(date / 10000,
                            ((date / 100) % 100) as u32,
@@ -297,25 +317,6 @@ fn build_datetime(date: i32, time: i32) -> DateTime<Local> {
                            (time / 10000) as u32,
                            ((time / 100) % 100) as u32,
                            (time % 100) as u32).unwrap()
-}
-
-fn parse_period(start_datetime: DateTime<Local>, period: i32, period_unit: i32)
-                -> Result<DateTime<Local>, Error> {
-    if period >= 0 {
-        match period_unit {
-            0 => Ok(start_datetime + Days::new(period as u64)),
-            1 => Ok(start_datetime + Months::new(period as u32)),
-            2 => Ok(start_datetime + Months::new((period * 12) as u32)),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
-        }
-    } else {
-        match period_unit {
-            0 => Ok(start_datetime - Days::new(-period as u64)),
-            1 => Ok(start_datetime - Months::new(-period as u32)),
-            2 => Ok(start_datetime - Months::new((-period * 12) as u32)),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Invalid period_unit"))
-        }
-    }
 }
 
 #[cfg(test)]
@@ -327,7 +328,7 @@ mod tests {
     #[test]
     fn test_get_sensor_data() -> Result<(), Error> {
         let processor = CommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string())
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let (result, aggregated) = processor.get_sensor_data(
             SensorDataQuery{max_points: 200, data_type: "env".to_string(),
@@ -340,7 +341,7 @@ mod tests {
     #[test]
     fn test_get_sensors() -> Result<(), Error> {
         let processor = CommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string())
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let result = processor.get_sensors()?;
         assert_eq!(result.len(), 8);
@@ -350,7 +351,7 @@ mod tests {
     #[test]
     fn test_get_last_sensor_data() -> Result<(), Error> {
         let processor = CommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string())
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let result = processor.get_last_sensor_data(20250301)?;
         assert_eq!(result.len(), 4);

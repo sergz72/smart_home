@@ -13,7 +13,9 @@ pub struct Configuration {
     #[serde(rename = "PortNumber")]
     pub port_number: u16,
     #[serde(rename = "TotalCalculation", default)]
-    pub total_calculation: HashMap<String, i32>
+    pub total_calculation: HashMap<String, i32>,
+    #[serde(rename = "TimeOffset", default)]
+    pub time_offset: i64
 }
 
 pub fn load_configuration(ini_file_name: &String) -> Result<Configuration, Error> {
@@ -48,5 +50,6 @@ mod tests {
         assert_eq!(config.total_calculation.len(), 1, "incorrect total calculation length");
         assert_eq!(config.total_calculation.contains_key("pwr"), true, "total calculation pwr key is misssing");
         assert_eq!(*config.total_calculation.get("pwr").unwrap(), 12, "incorrect total calculation pwr key value");
+        assert_eq!(config.time_offset, -1, "incorrect time offset value");
     }
 }

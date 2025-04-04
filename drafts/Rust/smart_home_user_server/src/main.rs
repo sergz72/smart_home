@@ -22,7 +22,7 @@ fn main() -> Result<(), Error> {
     let db = DB::new(config.connection_string.clone());
     let key = read_key_file32(&config.key_file_name)?;
     let message_processor =
-        build_message_processor(key, db)?;
+        build_message_processor(key, db, config.time_offset)?;
     let udp_server =
         Box::leak(Box::new(BaseServer::new(true, config.port_number,
                                            message_processor.clone(), 0,
