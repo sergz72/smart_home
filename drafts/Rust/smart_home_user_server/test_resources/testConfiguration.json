@@ -2,5 +2,6 @@
   "DBConnectionString": "postgresql://postgres@localhost/smart_home",
   "KeyFileName": "key.dat",
   "PortNumber": 59999,
-  "TotalCalculation": {"pwr": 12}
+  "TotalCalculation": {"pwr": 12},
+  "TimeOffset": -1
 }
