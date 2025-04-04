@@ -131,7 +131,7 @@ fn run_last_query(mut client: Client, date: i32) -> Result<Vec<Row>, Error> {
 )
 select e.sensor_id, e.event_date, e.event_time, json_agg(json_build_object('value_type', value_type, 'value', value)) values
   from sensor_events e, last_data l
- where l.sensor_id = e.sensor_id and l.max_datetime / 1000000 = e.event_date and l.max_datetime % 1000000 = e.event_time
+ where e.event_date >= $1 and l.sensor_id = e.sensor_id and l.max_datetime / 1000000 = e.event_date and l.max_datetime % 1000000 = e.event_time
 group by e.sensor_id, e.event_date, e.event_time";
     client.query(sql, &[&date])
         .map_err(|e| Error::new(ErrorKind::Other, e))
