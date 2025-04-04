@@ -8,3 +8,5 @@ create table sensor_events (
   constraint sensor_events_pk primary key(id, event_date),
   constraint sensor_events_uk unique(sensor_id, event_date, event_time, value_type)
 ) PARTITION BY RANGE (event_date);
+
+create index sensor_events_idx on sensor_events (event_date, event_time);

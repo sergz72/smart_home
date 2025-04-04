@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
+use std::ops::Add;
 use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
 use postgres::{Client, Row};
 use smart_home_common::db::DB;
@@ -153,18 +154,25 @@ where s.location_id = l.id";
     }
 }
 
+fn get_tomorrow() -> i32 {
+    let now = Local::now();
+    let (date, _time) = split_datetime(now.add(TimeDelta::days(1)));
+    date
+}
+
 fn run_last_query(mut client: Client, date: i32) -> Result<Vec<Row>, Error> {
+    let tomorrow = get_tomorrow();
     let sql = "with last_data as (
     select sensor_id, max(event_date::bigint * 1000000 + event_time::bigint) max_datetime
       from sensor_events
-     where event_date >= $1
+     where event_date >= $1 and event_date <= $2
     group by sensor_id
 )
 select e.sensor_id, e.event_date, e.event_time, json_agg(json_build_object('value_type', value_type, 'value', value)) values
   from sensor_events e, last_data l
- where e.event_date >= $1 and l.sensor_id = e.sensor_id and l.max_datetime / 1000000 = e.event_date and l.max_datetime % 1000000 = e.event_time
+ where e.event_date >= $1 and event_date <= $2 and l.sensor_id = e.sensor_id and l.max_datetime / 1000000 = e.event_date and l.max_datetime % 1000000 = e.event_time
 group by e.sensor_id, e.event_date, e.event_time";
-    client.query(sql, &[&date])
+    client.query(sql, &[&date, &tomorrow])
         .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
@@ -252,24 +260,18 @@ fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end
     select sensor_id, event_date, value_type,  min(value)::int min_value, avg(value)::int avg_value,
            max(value)::int max_value
       from sensor_events
-     where event_date >= $1
-       and sensor_id in (select id from sensors where data_type = $2)".to_string() +
-        if end_datetime.is_some() {" and event_date <= $3" } else { "" } +
-"    group by sensor_id, event_date, value_type
+     where event_date >= $1 and event_date <= $3
+       and sensor_id in (select id from sensors where data_type = $2)
+    group by sensor_id, event_date, value_type
 )
 select sensor_id, event_date,
        json_agg(json_build_object('value_type', value_type, 'min', min_value, 'avg', avg_value, 'max', max_value))
   from aggregated
 group by sensor_id, event_date
 order by event_date";
-    if let Some(end_datetime_value) = end_datetime {
-        let (end_date, _end_time) = split_datetime(end_datetime_value);
-        client.query(&sql, &[&start_date, &data_type, &end_date])
-            .map_err(|e| Error::new(ErrorKind::Other, e))
-    } else {
-        client.query(&sql, &[&start_date, &data_type])
-            .map_err(|e| Error::new(ErrorKind::Other, e))
-    }
+    let (end_date, _end_time) = split_datetime(end_datetime.unwrap_or(Local::now().add(TimeDelta::days(1))));
+    client.query(sql, &[&start_date, &data_type, &end_date])
+        .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
 fn run_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
@@ -278,18 +280,13 @@ fn run_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: 
     let sql = "select sensor_id, event_date, event_time, json_agg(json_build_object('value_type', value_type, 'value', value)) values
   from sensor_events
  where ((event_date > $1) or (event_date = $1 and event_time >= $2))
-   and sensor_id in (select id from sensors where data_type = $3)".to_string() +
-        if end_datetime.is_some() { " and (event_date < $4 OR (event_date = $4 AND event_time <= $5))" } else { "" } +
-        " group by sensor_id, event_date, event_time
+   and (event_date < $4 OR (event_date = $4 AND event_time <= $5))
+   and sensor_id in (select id from sensors where data_type = $3)
+group by sensor_id, event_date, event_time
 order by event_date, event_time";
-    if let Some(end_datetime_value) = end_datetime {
-        let (end_date, end_time) = split_datetime(end_datetime_value);
-        client.query(&sql, &[&start_date, &start_time, &data_type, &end_date, &end_time])
-            .map_err(|e| Error::new(ErrorKind::Other, e))
-    } else {
-        client.query(&sql, &[&start_date, &start_time, &data_type])
-            .map_err(|e| Error::new(ErrorKind::Other, e))
-    }
+    let (end_date, end_time) = split_datetime(end_datetime.unwrap_or(Local::now().add(TimeDelta::days(1))));
+    client.query(sql, &[&start_date, &start_time, &data_type, &end_date, &end_time])
+        .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
 fn build_sensor_data_query(command: Vec<u8>) -> Result<SensorDataQuery, Error> {
