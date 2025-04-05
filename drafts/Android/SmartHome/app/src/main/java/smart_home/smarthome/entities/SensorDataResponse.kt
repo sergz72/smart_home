@@ -44,7 +44,7 @@ data class SensorDataV2(
             while (valuesCount-- > 0) {
                 val keyArray = ByteArray(4)
                 buffer.get(keyArray)
-                val key = String(keyArray)
+                val key = String(keyArray).trimEnd()
                 val min = buffer.getInt()
                 val avg = buffer.getInt()
                 val max = buffer.getInt()
