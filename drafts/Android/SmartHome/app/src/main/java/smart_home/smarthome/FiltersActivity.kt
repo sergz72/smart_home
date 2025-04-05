@@ -1,6 +1,5 @@
 package smart_home.smarthome
 
-import android.app.Activity
 import android.app.DatePickerDialog
 import android.os.Bundle
 import android.os.Parcel
@@ -9,6 +8,8 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.NumberPicker
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -19,6 +20,10 @@ import java.time.format.DateTimeFormatter
 class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.OnItemSelectedListener {
     companion object {
         val UI_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy")
+
+        fun findUnitValue(unit: Int): TimeUnit {
+            return TimeUnit.entries.first { it.ordinal == unit }
+        }
     }
 
     class Data(var mResult: Int, var mDateStart: LocalDate?, var mDateOffset: Int,
@@ -112,24 +117,37 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
         val set = findViewById<Button>(R.id.set)
         val filterType = findViewById<Spinner>(R.id.filter_type)
-        val period = findViewById<Spinner>(R.id.period)
+
+        val offset = findViewById<NumberPicker>(R.id.offset)
+        offset.minValue = 1
+        offset.maxValue = 30
+        val offsetUnit = findViewById<Spinner>(R.id.offset_unit)
+
+        val periodBox = findViewById<CheckBox>(R.id.period_box)
+        val period = findViewById<NumberPicker>(R.id.period)
+        period.minValue = 1
+        period.maxValue = 30
+        val periodUnit = findViewById<Spinner>(R.id.period_unit)
 
         selectDateStart.setOnClickListener(this)
         set.setOnClickListener(this)
         filterType.onItemSelectedListener = this
+        periodBox.setOnClickListener(this)
 
         mData = intent.getParcelableExtra("data", Data::class.java)!!
 
         filterType.setSelection(if (mData.mDateStart != null) {0} else {1})
 
-        val periods = resources.getIntArray(R.array.periodValues)
-        var idx = 0
-        for (p in periods) {
-            if (p == mData.mPeriod) {
-                period.setSelection(idx)
-                break
-            }
-            idx++
+        offset.value = mData.mDateOffset
+        setUnit(offsetUnit, mData.mDateOffsetUnit)
+
+        if (mData.mPeriod != 0) {
+            periodBox.isChecked = true
+            period.value = mData.mPeriod
+            setUnit(periodUnit, mData.mPeriodUnit)
+        } else {
+            period.value = 1
+            periodUnit.setSelection(0)
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -140,6 +158,18 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         })
 
         updateDate()
+    }
+
+    private fun setUnit(unit: Spinner, value: TimeUnit) {
+        val units = resources.getIntArray(R.array.periodUnitValues)
+        var idx = 0
+        for (u in units) {
+            if (u == value.ordinal) {
+                unit.setSelection(idx)
+                break
+            }
+            idx++
+        }
     }
 
     private fun updateDate() {
@@ -165,22 +195,30 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
 
     override fun onClick(v: View?) {
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
+        val periodBox = findViewById<CheckBox>(R.id.period_box)
 
         when (v) {
             selectDateStart -> {
+                val now = LocalDate.now()
                 val dialog = DatePickerDialog(this, { _, year, monthOfYear, dayOfMonth ->
                     mData.mDateStart = LocalDate.of(year, monthOfYear + 1, dayOfMonth)
                     updateDate()
-                }, mData.mDateStart!!.year, mData.mDateStart!!.monthValue - 1, mData.mDateStart!!.dayOfMonth)
+                }, mData.mDateStart?.year ?: now.year,
+                    (mData.mDateStart?.monthValue ?: now.monthValue) - 1,
+                    mData.mDateStart?.dayOfMonth ?: now.dayOfMonth)
                 dialog.show()
             }
-            else -> { // Generate button
-                val filterTypeView = findViewById<Spinner>(R.id.filter_type)
-                val filterType =  resources.getStringArray(R.array.filterTypeValues)[filterTypeView.selectedItemPosition]
-                //todo
-                //mData.mUsePeriod = filterType == "Period"
-                val period = findViewById<Spinner>(R.id.period)
-                mData.mPeriod = resources.getIntArray(R.array.periodValues)[period.selectedItemPosition]
+            periodBox -> {
+                val checked = periodBox.isChecked
+                val period = findViewById<NumberPicker>(R.id.period)
+                val periodUnit = findViewById<Spinner>(R.id.period_unit)
+                val periodLabel = findViewById<TextView>(R.id.period_label)
+                period.isEnabled = checked
+                periodUnit.isEnabled = checked
+                periodLabel.isEnabled = checked
+            }
+            else -> { // Set button
+                updateData()
                 intent.putExtra("data", mData)
                 setResult(RESULT_OK, intent)
                 finish()
@@ -188,24 +226,47 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         }
     }
 
+    private fun updateData() {
+        val periodBoxView = findViewById<CheckBox>(R.id.period_box)
+        val checked = periodBoxView.isChecked
+
+        val offsetUnit = findViewById<Spinner>(R.id.offset_unit)
+        val offsetUnitValue = findUnitValue(resources.getIntArray(R.array.periodUnitValues)[offsetUnit.selectedItemPosition])
+        mData.mDateOffsetUnit = offsetUnitValue
+        val offset = findViewById<NumberPicker>(R.id.offset)
+        mData.mDateOffset = offset.value
+
+        if (checked) {
+            val periodUnit = findViewById<Spinner>(R.id.period_unit)
+            val periodUnitValue =
+                findUnitValue(resources.getIntArray(R.array.periodUnitValues)[periodUnit.selectedItemPosition])
+            mData.mPeriodUnit = periodUnitValue
+            val period = findViewById<NumberPicker>(R.id.period)
+            mData.mPeriod = period.value
+        } else {
+            mData.mPeriod = 0
+        }
+    }
+
     override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
         val filterTypeView = findViewById<Spinner>(R.id.filter_type)
-        val periodLabel = findViewById<TextView>(R.id.period_label)
-        val period = findViewById<Spinner>(R.id.period)
+        val offsetLabel = findViewById<TextView>(R.id.offset_label)
+        val offset = findViewById<NumberPicker>(R.id.offset)
+        val offsetUnit = findViewById<Spinner>(R.id.offset_unit)
         val selectDateStart = findViewById<Button>(R.id.select_date_start)
         val dateStart = findViewById<TextView>(R.id.date_start)
         val filterType =  resources.getStringArray(R.array.filterTypeValues)[filterTypeView.selectedItemPosition]
-        if (filterType == "Period") {
-            periodLabel.isEnabled = true
-            period.isEnabled = true
-            dateStart.isEnabled = false
-            selectDateStart.isEnabled = false
-        } else {
-            periodLabel.isEnabled = false
-            period.isEnabled = false
-            dateStart.isEnabled = true
-            selectDateStart.isEnabled = true
-        }
+        val offsetType = filterType == "Offset"
+        offsetLabel.isEnabled = offsetType
+        offset.isEnabled = offsetType
+        offsetUnit.isEnabled = offsetType
+        dateStart.isEnabled = !offsetType
+        selectDateStart.isEnabled = !offsetType
+        if (offsetType)
+            mData.mDateStart = null
+        else
+            mData.mDateStart = LocalDate.now().minusDays(1)
+        updateDate()
     }
 
     override fun onNothingSelected(parent: AdapterView<*>?) {

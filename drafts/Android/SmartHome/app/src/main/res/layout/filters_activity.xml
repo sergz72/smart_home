@@ -54,29 +54,26 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_columnWeight="1"
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="fill"
         android:gravity="center"
         android:text="@string/offset"
         android:layout_row="2"
         android:layout_column="0"
         android:layout_columnSpan="2"
         />
-    <Spinner
+    <NumberPicker
         android:id="@+id/offset"
         android:layout_width="wrap_content"
         android:layout_columnWeight="1"
         android:layout_height="wrap_content"
-        android:layout_gravity="fill_horizontal"
         android:layout_row="2"
         android:layout_column="2"
-        android:entries="@array/periodValues"
-        android:entryValues="@array/periodValues"
         />
     <Spinner
         android:id="@+id/offset_unit"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="fill"
         android:layout_row="2"
         android:layout_column="3"
         android:entries="@array/periodUnitNames"
@@ -87,6 +84,7 @@
         android:id="@+id/period_box"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="fill"
         android:layout_row="3"
         android:layout_column="0"
         />
@@ -95,28 +93,25 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_columnWeight="1"
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="fill"
         android:gravity="center"
         android:text="@string/period"
         android:layout_row="3"
         android:layout_column="1"
         />
-    <Spinner
+    <NumberPicker
         android:id="@+id/period"
         android:layout_width="wrap_content"
         android:layout_columnWeight="1"
         android:layout_height="wrap_content"
-        android:layout_gravity="fill_horizontal"
         android:layout_row="3"
         android:layout_column="2"
-        android:entries="@array/periodValues"
-        android:entryValues="@array/periodValues"
         />
     <Spinner
         android:id="@+id/period_unit"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="fill"
         android:layout_row="3"
         android:layout_column="3"
         android:entries="@array/periodUnitNames"
@@ -131,7 +126,7 @@
         android:text="@string/set"
         android:layout_row="4"
         android:layout_column="0"
-        android:layout_columnSpan="3"
+        android:layout_columnSpan="4"
         />
 
 </GridLayout>
