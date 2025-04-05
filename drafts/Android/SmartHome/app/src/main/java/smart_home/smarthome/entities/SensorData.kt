@@ -9,7 +9,6 @@ import com.sz.charts.IGraphData
 import smart_home.smarthome.SmartHomeServiceV2
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.util.*
 
 data class SensorDataEvent(val date: LocalDateTime, val data: Map<String, Any>) {
     fun getData(dataName: String): Double? {
@@ -70,10 +69,10 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
         }
 
         internal fun from(data: SensorDataResponse): SensorDataResponseV1 {
-            return SensorDataResponseV1(data.aggregated, data.data.map { (k, v) -> from(data.aggregated, k, v) })
+            return SensorDataResponseV1(data.aggregated, data.data.map { (k, v) -> from(k, v) })
         }
 
-        private fun from(aggregated: Boolean, sensorId: Int, data: List<SensorDataV2>): SensorData {
+        private fun from(sensorId: Int, data: List<SensorDataV2>): SensorData {
             val sensor = SmartHomeServiceV2.mSensors!!.get(sensorId)!!
             return SensorData(sensor.location, sensor.locationType, sensor.dataType, 0, data.map { it.toTimeData() })
         }
@@ -88,8 +87,8 @@ data class SensorData(@SerializedName("locationName") val locationName: String,
 
     val series get() = buildSeries()
 
-    fun buildGraphData(title: String, dataName: String): IGraphData {
-        return GraphData(buildSensorData(dataName), title, dataName)
+    fun buildGraphData(title: String, dn: String, dataName: String): IGraphData {
+        return GraphData(buildSensorData(dataName), title, dn)
     }
 
     private fun buildSensorData(dataName: String): SensorData {

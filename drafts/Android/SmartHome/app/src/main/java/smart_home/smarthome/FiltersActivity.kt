@@ -264,7 +264,7 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         selectDateStart.isEnabled = !offsetType
         if (offsetType)
             mData.mDateStart = null
-        else
+        else if (mData.mDateStart == null)
             mData.mDateStart = LocalDate.now().minusDays(1)
         updateDate()
     }

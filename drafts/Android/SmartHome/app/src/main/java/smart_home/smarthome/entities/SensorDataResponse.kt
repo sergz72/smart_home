@@ -71,16 +71,18 @@ data class SensorDataV2(
         return SensorTimeData(date, listOf(SensorDataArray(0, transformAggregated())))
     }
 
-    fun transformAggregated(): Map<String, Any> {
-        val result = mutableMapOf<String, Any>()
-        if (aggregated != null) {
-            for ((k, v) in aggregated) {
-                result.put(k + "Min", v.min)
-                result.put(k + "Avg", v.avg)
-                result.put(k + "Max", v.max)
-            }
-        }
+    private fun buildAggregated(v: Aggregated): Map<String, Double> {
+        val result = mutableMapOf<String, Double>()
+        result.put("Min", v.min.toDouble() / 100)
+        result.put("Avg", v.avg.toDouble() / 100)
+        result.put("Max", v.max.toDouble() / 100)
         return result
+    }
+
+    fun transformAggregated(): Map<String, Any> {
+        if (aggregated != null)
+            return aggregated.map { (k, v) -> Pair(k, buildAggregated(v)) }.toMap()
+        return mapOf()
     }
 }
 

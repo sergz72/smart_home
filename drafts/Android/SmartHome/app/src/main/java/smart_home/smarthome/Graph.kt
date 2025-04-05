@@ -88,7 +88,7 @@ object Graph {
         val result = GraphSeries()
         d.filter { it.series.size > 1 && it.series.last().data.containsKey(dataName) }
          .forEach { data -> buildGraphParameters(data, dataName, isPrefix, isSuffix).forEach { (title, dn) ->
-                    result.addGraph(data.buildGraphData(title, dn))
+                    result.addGraph(data.buildGraphData(title, dn, dataName))
             }
         }
 

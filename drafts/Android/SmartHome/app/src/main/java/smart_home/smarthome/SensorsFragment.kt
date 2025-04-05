@@ -66,14 +66,13 @@ abstract class SensorsFragment(private val mId: Int, protected val params: IGrap
 
     private fun buildRequest(): String {
         var requestString = "GET /sensor_data?data_type=$dataType"
-        //todo set aggregated
         if (params != null) {
-            val period = params.getData().getPeriod()
-            aggregated = period == null
+            val offset = params.getData().getDateOffset()
+            aggregated = params.getData().mDateStart != null
             if (aggregated) {
                 requestString += "&start=" + params.getData().getFromDate() + "&end=" + params.getData().getToDate()
             } else {
-                requestString += "&period=" + period!!.toHours()
+                requestString += "&period=" + offset!!.toHours()
             }
             requestString += "&maxPoints=$maxPoints"
         } else
