@@ -81,6 +81,7 @@ class SmartHomeServiceV2<T> {
         }
 
         fun setupServer(serverAddress: String, port: Int) {
+            mSensors = null
             mAddress = try {
                 InetAddress.getByName(serverAddress)
             } catch (e: NetworkOnMainThreadException) {
