@@ -1,0 +1,11 @@
+[package]
+name = "smart_home_fetcher"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.X", features = ["derive"] }
+serde_json = "1.X"
+smart_home_common = { path = "../smart_home_common" }
+postgres = "0.X"
+chrono = "0.X"
