@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use aes::Aes128;
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::KeyInit;
+use aes_gcm::{Aes128Gcm, KeyInit};
 use postgres::Client;
 use smart_home_common::db::{insert_messages_with_date_to_db, MessageWithDate, DB};
 use smart_home_common::keys::read_key_file16;
@@ -12,12 +10,13 @@ use crate::aes::{aes_decrypt, aes_encrypt};
 use crate::configuration::Configuration;
 use crate::messages::{build_messages, Sensor};
 use crate::network::udp_send;
+use flate2::read::GzDecoder;
 
 pub struct Fetcher {
     config: Configuration,
     client: Client,
     sensors_map: HashMap<String, Sensor>,
-    aes: Aes128,
+    aes: Aes128Gcm,
     time: u64,
     timeout: Duration
 }
@@ -27,9 +26,8 @@ pub fn build_fetcher(config: Configuration) -> Result<Fetcher, Error> {
     let mut client = db.get_database_connection()?;
     let sensors_map = build_sensors_map(&mut client)?;
     let key = read_key_file16(&config.key_file_name)?;
-    let array = GenericArray::from(key);
-    let aes = Aes128::new(&array);
-    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let aes = Aes128Gcm::new(&key.into());
+    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let timeout = Duration::from_secs(config.timeout as u64);
     Ok(Fetcher { config, client, sensors_map, aes, time, timeout })
 }
@@ -54,6 +52,7 @@ impl Fetcher {
             let request = build_request(last_timestamp);
             match self.process_request(&logger, request, address) {
                 Ok(messages) => {
+                    logger.info(format!("messages count {}", messages.len()));
                     if let Err(e) = insert_messages_with_date_to_db(&mut self.client, messages) {
                         logger.error(e.to_string());
                     }
@@ -66,10 +65,16 @@ impl Fetcher {
 
     fn process_request(&self, logger: &Logger, request: Vec<u8>, address: &String)
         -> Result<Vec<MessageWithDate>, Error> {
+        logger.info(format!("Request size {}", request.len()));
         let encrypted = aes_encrypt(&self.aes, request, self.time)?;
+        logger.info(format!("encrypted size {}", encrypted.len()));
         let response = self.send(logger, encrypted, address)?;
+        logger.info(format!("response size {}", response.len()));
         let decrypted = aes_decrypt(&self.aes, response, self.time)?;
-        build_messages(&logger, decrypted, &self.sensors_map)
+        logger.info(format!("decrypted size {}", decrypted.len()));
+        let decompressed = decompress(decrypted)?;
+        logger.info(format!("decompressed size {}", decompressed.len()));
+        build_messages(&logger, decompressed, &self.sensors_map)
     }
     
     fn send(&self, logger: &Logger, request: Vec<u8>, address: &String) -> Result<Vec<u8>, Error> {
@@ -81,6 +86,14 @@ impl Fetcher {
         }
         udp_send(address, &request, self.timeout)
     }
+}
+
+fn decompress(data: Vec<u8>) -> Result<String, Error> {
+    let mut decoder = GzDecoder::new(&data[..]);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)?;
+    String::from_utf8(decompressed)
+        .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))
 }
 
 fn build_request(last_timestamp: i64) -> Vec<u8> {
