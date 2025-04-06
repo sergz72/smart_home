@@ -7,21 +7,21 @@ use crate::entities::sensor_data::convert_sensor_data;
 
 mod entities;
 
-fn get_database_connection() -> Result<Client, Error> {
-    Client::connect("postgresql://postgres@localhost/smart_home", NoTls)
+fn get_database_connection(db_name: &String) -> Result<Client, Error> {
+    Client::connect(format!("postgresql://postgres@localhost/{}", db_name).as_str(), NoTls)
         .map_err(|e| Error::new(ErrorKind::Other, e))
 }
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        println!("Usage: converter source_folder entity_name [params]");
+    if args.len() < 4 {
+        println!("Usage: converter source_folder db_name entity_name [params]");
         return Ok(());
     }
-    match args[2].as_str() {
-        "locations" => convert_locations(get_database_connection()?, &args[1]),
-        "sensors" => convert_sensors(get_database_connection()?, &args[1]),
-        "sensor_data" => convert_sensor_data(get_database_connection()?, &args[1], args.get(3)),
+    match args[3].as_str() {
+        "locations" => convert_locations(get_database_connection(&args[2])?, &args[1]),
+        "sensors" => convert_sensors(get_database_connection(&args[2])?, &args[1]),
+        "sensor_data" => convert_sensor_data(get_database_connection(&args[2])?, &args[1], args.get(4)),
         _ => { println!("unknown entity name"); Ok(()) }
     }
 }

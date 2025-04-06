@@ -9,3 +9,4 @@ serde_json = "1.X"
 smart_home_common = { path = "../smart_home_common" }
 postgres = "0.X"
 chrono = "0.X"
+aes = "0.X"
