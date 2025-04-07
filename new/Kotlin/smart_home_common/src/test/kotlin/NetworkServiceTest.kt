@@ -1,4 +1,4 @@
-import com.sz.smart_home.query.SmartHomeService
+import com.sz.smart_home.common.NetworkService
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 
@@ -8,7 +8,7 @@ class SmartHomeServiceTest {
 
     @Test
     fun ivTest() {
-        val service = SmartHomeService(keyBytes, "localhost", 60000)
+        val service = NetworkService(keyBytes, "localhost", 60000)
         val iv = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
         val transformed = service.transformIV(iv)
         assertArrayEquals(transformed, byteArrayOf(1, 2, 3, 4, 87, 191u.toByte(), 4, 40, 131u.toByte(), 151u.toByte(), 75, 156u.toByte()))
@@ -18,7 +18,7 @@ class SmartHomeServiceTest {
 
     @Test
     fun buildIvTest() {
-        val service = SmartHomeService(keyBytes, "localhost", 60000)
+        val service = NetworkService(keyBytes, "localhost", 60000)
         val iv = service.buildIV()
         val transformed = service.transformIV(iv)
         assertEquals(transformed[0], iv[0])
@@ -33,7 +33,7 @@ class SmartHomeServiceTest {
 
     @Test
     fun encryptTest() {
-        val service = SmartHomeService(keyBytes, "localhost", 60000)
+        val service = NetworkService(keyBytes, "localhost", 60000)
         val data = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
         val encrypted = service.encrypt(data)
         val decrypted = service.decrypt(encrypted)

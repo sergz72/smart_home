@@ -1,4 +1,4 @@
-import com.sz.smart_home.query.ChaCha20
+import com.sz.smart_home.common.ChaCha20
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import javax.crypto.Cipher

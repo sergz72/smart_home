@@ -1,4 +1,4 @@
-package com.sz.smart_home.query
+package com.sz.smart_home.common
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
