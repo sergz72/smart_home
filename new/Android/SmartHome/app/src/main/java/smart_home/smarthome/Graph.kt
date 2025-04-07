@@ -75,7 +75,7 @@ object Graph {
         }
         if (isSuffix) {
             if (dataName == "pwr") {
-                return mapOf(d.locationName to "Sum$dataName")
+                return mapOf(d.locationName to "Avg$dataName")
             }
             return mapOf(d.locationName + ":Min" to "Min$dataName",
                          d.locationName + ":Avg" to "Avg$dataName",
