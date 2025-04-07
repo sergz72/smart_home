@@ -7,22 +7,25 @@ use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::TryRngCore;
 use rand::rngs::OsRng;
-use smart_home_common::base_server::MessageProcessor;
-use smart_home_common::db::DB;
-use smart_home_common::logger::Logger;
-use crate::command_processor::CommandProcessor;
+use crate::base_server::MessageProcessor;
+use crate::logger::Logger;
 
 const MAX_TIME_DIFFERENCE: u64 = 60;
 
+pub trait CommandProcessor {
+    fn check_message_length(&self, length: usize) -> bool;
+    fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error>;
+}
+
 struct UserMessageProcessor {
     key: [u8; 32],
-    command_processor: CommandProcessor
+    command_processor: Box<dyn CommandProcessor + Send + Sync>
 }
 
 impl UserMessageProcessor {
-    fn new(key: [u8; 32], db: DB, time_offset: i64)
+    fn new(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>)
         -> Result<UserMessageProcessor, Error> {
-        Ok(UserMessageProcessor {key, command_processor: CommandProcessor::new(db, time_offset)})
+        Ok(UserMessageProcessor {key, command_processor})
     }
 }
 
@@ -145,9 +148,9 @@ fn build_iv() -> Result<[u8; 12], Error> {
     Ok(iv)
 }
 
-pub fn build_message_processor(key: [u8; 32], db: DB, time_offset: i64)
+pub fn build_message_processor(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(UserMessageProcessor::new(key, db, time_offset)?))
+    Ok(Arc::new(UserMessageProcessor::new(key, command_processor)?))
 }
 
 #[cfg(test)]
@@ -155,16 +158,33 @@ mod tests {
     use std::io::{Error, ErrorKind};
     use rand::rngs::OsRng;
     use rand::TryRngCore;
-    use smart_home_common::db::DB;
-    use crate::message_processor::{build_iv, check_iv, UserMessageProcessor};
+    use crate::user_message_processor::{build_iv, check_iv, CommandProcessor, UserMessageProcessor};
 
+    struct TestCommandProcessor {}
+    
+    impl CommandProcessor for TestCommandProcessor {
+        fn check_message_length(&self, _length: usize) -> bool {
+            true
+        }
+        
+        fn execute(&self, _message: Vec<u8>) -> Result<Vec<u8>, Error> {
+            Ok(Vec::new())
+        }
+    }
+    
+    impl TestCommandProcessor {
+        fn new() -> Box<dyn CommandProcessor + Send + Sync> {
+            return Box::new(TestCommandProcessor{});
+        }
+    }
+    
     #[test]
     fn test_iv() -> Result<(), Error> {
         let mut key = [0u8; 32];
         OsRng.try_fill_bytes(&mut key)
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
         let message_processor =
-            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
         let iv_raw = build_iv()?;
         check_iv(&iv_raw)?;
         let iv = message_processor.encrypt_iv(&iv_raw)?;
@@ -180,7 +200,7 @@ mod tests {
                                 13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
                                 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
         let message_processor =
-            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
         let iv_raw = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
         let iv = message_processor.encrypt_iv(&iv_raw)?;
         assert_eq!(iv.as_slice(), [1, 2, 3, 4, 87, 191, 4, 40, 131, 151, 75, 156]);
@@ -195,7 +215,7 @@ mod tests {
             13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
             24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
         let message_processor =
-            UserMessageProcessor::new(key, DB::new("".to_string()))?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
         let message = vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
         let encrypted = message_processor.encrypt(message.clone())?;
         let decrypted = message_processor.decrypt(&encrypted)?;

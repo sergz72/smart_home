@@ -4,12 +4,13 @@ use std::ops::Add;
 use chrono::{DateTime, Datelike, Days, Local, Months, TimeDelta, TimeZone, Timelike};
 use postgres::{Client, Row};
 use smart_home_common::db::DB;
+use smart_home_common::user_message_processor::CommandProcessor;
 use crate::sensor_data::{aggregate_by_max_points, Aggregated, SensorData, SensorDataOut, SensorDataValues};
 
 const MAX_UNAGGREGATED_DATA_DAYS: i64 = 7;
 const MIN_DATE: i32 = 20190101;
 
-pub struct CommandProcessor {
+pub struct UserCommandProcessor {
     db: DB,
     time_offset: i64
 }
@@ -23,18 +24,24 @@ struct SensorDataQuery {
     period_unit: i32
 }
 
-impl CommandProcessor {
-    pub fn new(db: DB, time_offset: i64) -> CommandProcessor {
-        CommandProcessor { db, time_offset }
+impl CommandProcessor for UserCommandProcessor {
+    fn check_message_length(&self, length: usize) -> bool {
+        length == 12 || length == 2
     }
 
-    pub fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
         match command[0] {
             0 => self.execute_sensors_query(command.len()),
             1 => self.execute_last_data_query(command[1..].to_vec()),
             2 => self.execute_sensor_data_query(command[1..].to_vec()),
             _ => Err(Error::new(ErrorKind::InvalidInput, "Invalid command"))
         }
+    }
+}
+
+impl UserCommandProcessor {
+    pub fn new(db: DB, time_offset: i64) -> Box<UserCommandProcessor> {
+        Box::new(UserCommandProcessor { db, time_offset })
     }
 
     fn execute_sensors_query(&self, command_length: usize) -> Result<Vec<u8>, Error> {
@@ -117,10 +124,6 @@ where s.location_id = l.id";
             .map(|(k,v)|(k, aggregate_by_max_points(v, query.max_points, aggregated)))
             .collect();
         Ok((by_sensor_id, aggregated))
-    }
-
-    pub fn check_message_length(&self, length: usize) -> bool {
-        length == 12 || length == 2
     }
 
     fn parse_period(&self, start_datetime: DateTime<Local>, period: i32, period_unit: i32)
@@ -320,11 +323,11 @@ fn build_datetime(date: i32, time: i32) -> DateTime<Local> {
 mod tests {
     use std::io::Error;
     use smart_home_common::db::DB;
-    use crate::command_processor::{CommandProcessor, SensorDataQuery};
+    use crate::command_processor::{UserCommandProcessor, SensorDataQuery};
 
     #[test]
     fn test_get_sensor_data() -> Result<(), Error> {
-        let processor = CommandProcessor::new(
+        let processor = UserCommandProcessor::new(
             DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let (result, aggregated) = processor.get_sensor_data(
@@ -337,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_get_sensors() -> Result<(), Error> {
-        let processor = CommandProcessor::new(
+        let processor = UserCommandProcessor::new(
             DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let result = processor.get_sensors()?;
@@ -347,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_get_last_sensor_data() -> Result<(), Error> {
-        let processor = CommandProcessor::new(
+        let processor = UserCommandProcessor::new(
             DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
         );
         let result = processor.get_last_sensor_data(20250301)?;

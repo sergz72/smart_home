@@ -1,5 +1,4 @@
 mod configuration;
-mod message_processor;
 mod command_processor;
 mod sensor_data;
 
@@ -7,8 +6,9 @@ use std::io::Error;
 use smart_home_common::base_server::BaseServer;
 use smart_home_common::db::DB;
 use smart_home_common::keys::read_key_file32;
+use smart_home_common::user_message_processor::build_message_processor;
+use crate::command_processor::UserCommandProcessor;
 use crate::configuration::load_configuration;
-use crate::message_processor::build_message_processor;
 
 #[derive(Debug)]
 pub struct DeviceSensor {
@@ -22,7 +22,7 @@ fn main() -> Result<(), Error> {
     let db = DB::new(config.connection_string.clone());
     let key = read_key_file32(&config.key_file_name)?;
     let message_processor =
-        build_message_processor(key, db, config.time_offset)?;
+        build_message_processor(key, UserCommandProcessor::new(db, config.time_offset))?;
     let udp_server =
         Box::leak(Box::new(BaseServer::new(true, config.port_number,
                                            message_processor.clone(), 0,
