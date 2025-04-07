@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use crate::logger::Logger;
 
-const BUFFER_SIZE: usize = 1024;
+const BUFFER_SIZE: usize = 1024 * 200;
 
 pub trait MessageProcessor {
     fn process_message(&self, logger: &Logger, message: &Vec<u8>, time_offset: i64) -> Vec<u8>;
