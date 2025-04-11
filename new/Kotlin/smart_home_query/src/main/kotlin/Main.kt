@@ -1,5 +1,6 @@
 package com.sz.smart_home.query
 
+import com.sz.smart_home.common.NetworkService
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -48,7 +49,7 @@ fun buildRequest(query: String): SmartHomeQuery {
     println("dataType: $dataType")
     val (startDate, startDateOffset) = parseDate(parameters.getValue("startDate"))
     if (startDate != null) {
-        println("startDate: ${startDate}")
+        println("startDate: $startDate")
     } else {
         println("startDateOffset.offset: ${startDateOffset!!.offset}")
         println("startDateOffset.unit: ${startDateOffset.unit}")
@@ -95,14 +96,35 @@ fun main(args: Array<String>) {
     val service = SmartHomeService(keyBytes, hostName, port)
 
     if (query == "sensors") {
-        val response = service.getSensors()
-        printResponse(response)
+        service.getSensors(object: NetworkService.Callback<List<Sensor>> {
+            override fun onResponse(response: List<Sensor>) {
+                printResponse(response)
+            }
+
+            override fun onFailure(t: Throwable) {
+                println(t.message)
+            }
+        })
     } else if (query.startsWith("last_data_from=")) {
-        val response = service.getLastSensorData(query.split("=")[1].toByte())
-        printResponse(response)
+        service.getLastSensorData(query.split("=")[1].toByte(), object: NetworkService.Callback<Map<Int, LastSensorData>> {
+            override fun onResponse(response: Map<Int, LastSensorData>) {
+                printResponse(response)
+            }
+
+            override fun onFailure(t: Throwable) {
+                println(t.message)
+            }
+        })
     } else {
         val request = buildRequest(query)
-        val response = service.send(request)
-        printResponse(response)
+        service.send(request, object: NetworkService.Callback<SensorDataResponse> {
+            override fun onResponse(response: SensorDataResponse) {
+                printResponse(response)
+            }
+
+            override fun onFailure(t: Throwable) {
+                println(t.message)
+            }
+        })
     }
 }

@@ -1,5 +1,6 @@
 package com.sz.smart_home.common
 
+import kotlinx.coroutines.*
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -11,6 +12,11 @@ import java.nio.ByteOrder
 import kotlin.random.Random
 
 open class NetworkService(private val key: ByteArray, hostName: String, private val port: Int) {
+    interface Callback<T> {
+        fun onResponse(response: T)
+        fun onFailure(t: Throwable)
+    }
+
     private val address: InetAddress = InetAddress.getByName(hostName)
 
     private fun sendUDP(data: ByteArray): ByteArray {
@@ -77,14 +83,21 @@ open class NetworkService(private val key: ByteArray, hostName: String, private 
         return iv
     }
 
-    protected fun send(request: ByteArray): ByteArray {
-        val sendData = encrypt(request)
-        val response = sendUDP(sendData)
-        println("Response size: ${response.size}")
-        val decrypted = decrypt(response)
-        val decompressed = decompress(decrypted)
-        println("Decompressed size: ${decompressed.size}")
-        return decompressed
+    @OptIn(DelicateCoroutinesApi::class)
+    protected fun send(request: ByteArray, callback: Callback<ByteArray>) {
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val sendData = encrypt(request)
+                val response = sendUDP(sendData)
+                println("Response size: ${response.size}")
+                val decrypted = decrypt(response)
+                val decompressed = decompress(decrypted)
+                println("Decompressed size: ${decompressed.size}")
+                callback.onResponse(decompressed)
+            } catch (e: Throwable) {
+                callback.onFailure(e)
+            }
+        }
     }
 }
 

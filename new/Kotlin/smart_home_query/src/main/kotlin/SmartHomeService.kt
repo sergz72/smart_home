@@ -59,38 +59,76 @@ data class Sensor(
 )
 
 class SmartHomeService(key: ByteArray, hostName: String, port: Int): NetworkService(key, hostName, port) {
-    fun send(query: SmartHomeQuery): SensorDataResponse {
+    fun send(query: SmartHomeQuery, callback: Callback<SensorDataResponse>) {
         val request = query.toBinary()
-        val decompressed = send(request)
-        return when (decompressed[0]) {
-            //not aggregated
-            0.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), false, ::buildFromResponse)
-            // aggregated
-            1.toByte() -> SensorDataResponse.parseResponse(decompressed.drop(1), true, ::buildFromAggregatedResponse)
-            // error
-            else -> throw ResponseError(decompressed)
-        }
+        send(request, object: Callback<ByteArray> {
+            override fun onResponse(response: ByteArray) {
+                try {
+                    when (response[0]) {
+                        //not aggregated
+                        0.toByte() -> callback.onResponse(SensorDataResponse.parseResponse(response.drop(1), false, ::buildFromResponse))
+                        // aggregated
+                        1.toByte() -> callback.onResponse(SensorDataResponse.parseResponse(
+                            response.drop(1),
+                            true,
+                            ::buildFromAggregatedResponse
+                        ))
+                        // error
+                        else -> throw ResponseError(response)
+                    }
+                } catch (t: Throwable) {
+                    callback.onFailure(t)
+                }
+            }
+
+            override fun onFailure(t: Throwable) {
+                callback.onFailure(t)
+            }
+        })
     }
 
-    fun getSensors(): List<Sensor> {
+    fun getSensors(callback: Callback<List<Sensor>>) {
         val request = byteArrayOf(0, 0)
-        val decompressed = send(request)
-        return when (decompressed[0]) {
-            //no error
-            0.toByte() -> SensorsResponse.parseResponse(decompressed.drop(1))
-            // error
-            else -> throw ResponseError(decompressed)
-        }
+        send(request, object: Callback<ByteArray> {
+            override fun onResponse(response: ByteArray) {
+                try {
+                    when (response[0]) {
+                        //no error
+                        0.toByte() -> callback.onResponse(SensorsResponse.parseResponse(response.drop(1)))
+                        // error
+                        else -> throw ResponseError(response)
+                    }
+                } catch (t: Throwable) {
+                    callback.onFailure(t)
+                }
+            }
+
+            override fun onFailure(t: Throwable) {
+                callback.onFailure(t)
+            }
+        })
     }
 
-    fun getLastSensorData(days: Byte): Map<Int, LastSensorData> {
+    fun getLastSensorData(days: Byte, callback: Callback<Map<Int, LastSensorData>>) {
         val request = byteArrayOf(1, days)
-        val decompressed = send(request)
-        return when (decompressed[0]) {
-            //no error
-            0.toByte() -> LastSensorData.parseResponse(decompressed.drop(1))
-            // error
-            else -> throw ResponseError(decompressed)
-        }
+        send(request, object: Callback<ByteArray> {
+            override fun onResponse(response: ByteArray) {
+                try {
+                    when (response[0]) {
+                        //no error
+                        0.toByte() -> callback.onResponse(LastSensorData.parseResponse(response.drop(1)))
+                        // error
+                        else -> throw ResponseError(response)
+                    }
+                } catch (t: Throwable) {
+                    callback.onFailure(t)
+                }
+            }
+
+            override fun onFailure(t: Throwable) {
+                callback.onFailure(t)
+            }
+
+        })
     }
 }
