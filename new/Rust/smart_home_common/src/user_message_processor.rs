@@ -19,13 +19,14 @@ pub trait CommandProcessor {
 
 struct UserMessageProcessor {
     key: [u8; 32],
-    command_processor: Box<dyn CommandProcessor + Send + Sync>
+    command_processor: Box<dyn CommandProcessor + Send + Sync>,
+    use_bzip2: bool
 }
 
 impl UserMessageProcessor {
-    fn new(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>)
+    fn new(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>, use_bzip2: bool)
         -> Result<UserMessageProcessor, Error> {
-        Ok(UserMessageProcessor {key, command_processor})
+        Ok(UserMessageProcessor {key, command_processor, use_bzip2})
     }
 }
 
@@ -101,7 +102,7 @@ impl UserMessageProcessor {
     }
 
     fn encrypt_response(&self, response: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let compressed = compress(response)?;
+        let compressed = if self.use_bzip2 {compress(response)?} else {response};
         self.encrypt(compressed)
     }
 
@@ -148,9 +149,11 @@ fn build_iv() -> Result<[u8; 12], Error> {
     Ok(iv)
 }
 
-pub fn build_message_processor(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>)
+pub fn build_message_processor(key: [u8; 32],
+                               command_processor: Box<dyn CommandProcessor + Send + Sync>,
+                               use_bzip2: bool)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(UserMessageProcessor::new(key, command_processor)?))
+    Ok(Arc::new(UserMessageProcessor::new(key, command_processor, use_bzip2)?))
 }
 
 #[cfg(test)]
@@ -174,7 +177,7 @@ mod tests {
     
     impl TestCommandProcessor {
         fn new() -> Box<dyn CommandProcessor + Send + Sync> {
-            return Box::new(TestCommandProcessor{});
+            Box::new(TestCommandProcessor{})
         }
     }
     
@@ -184,7 +187,7 @@ mod tests {
         OsRng.try_fill_bytes(&mut key)
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
         let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let iv_raw = build_iv()?;
         check_iv(&iv_raw)?;
         let iv = message_processor.encrypt_iv(&iv_raw)?;
@@ -200,7 +203,7 @@ mod tests {
                                 13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
                                 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
         let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let iv_raw = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
         let iv = message_processor.encrypt_iv(&iv_raw)?;
         assert_eq!(iv.as_slice(), [1, 2, 3, 4, 87, 191, 4, 40, 131, 151, 75, 156]);
@@ -215,7 +218,7 @@ mod tests {
             13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
             24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
         let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new())?;
+            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let message = vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
         let encrypted = message_processor.encrypt(message.clone())?;
         let decrypted = message_processor.decrypt(&encrypted)?;
