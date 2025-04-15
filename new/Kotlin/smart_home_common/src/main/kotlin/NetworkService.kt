@@ -11,13 +11,19 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
 
-open class NetworkService(private val key: ByteArray, hostName: String, private val port: Int) {
+open class NetworkService(private val key: ByteArray, hostName: String, private var port: Int,
+                          private val useBzip2: Boolean = true) {
     interface Callback<T> {
         fun onResponse(response: T)
         fun onFailure(t: Throwable)
     }
 
-    private val address: InetAddress = InetAddress.getByName(hostName)
+    private var address: InetAddress = InetAddress.getByName(hostName)
+
+    fun updateServer(hostname: String, port: Int) {
+        this.port = port
+        address = InetAddress.getByName(hostname)
+    }
 
     private fun sendUDP(data: ByteArray): ByteArray {
         val socket = DatagramSocket()
@@ -91,9 +97,13 @@ open class NetworkService(private val key: ByteArray, hostName: String, private 
                 val response = sendUDP(sendData)
                 println("Response size: ${response.size}")
                 val decrypted = decrypt(response)
-                val decompressed = decompress(decrypted)
-                println("Decompressed size: ${decompressed.size}")
-                callback.onResponse(decompressed)
+                if (useBzip2) {
+                    val decompressed = decompress(decrypted)
+                    println("Decompressed size: ${decompressed.size}")
+                    callback.onResponse(decompressed)
+                } else {
+                    callback.onResponse(decrypted)
+                }
             } catch (e: Throwable) {
                 callback.onFailure(e)
             }
