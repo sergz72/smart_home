@@ -12,7 +12,7 @@ import java.nio.ByteOrder
 import kotlin.random.Random
 
 open class NetworkService(private val key: ByteArray, hostName: String, private var port: Int,
-                          private val useBzip2: Boolean = true) {
+                          private val timeoutMs: Int = 1000, private val useBzip2: Boolean = true) {
     interface Callback<T> {
         fun onResponse(response: T)
         fun onFailure(t: Throwable)
@@ -27,10 +27,10 @@ open class NetworkService(private val key: ByteArray, hostName: String, private 
 
     private fun sendUDP(data: ByteArray): ByteArray {
         val socket = DatagramSocket()
-        socket.soTimeout = 1000
+        socket.soTimeout = timeoutMs
         val sendPacket = DatagramPacket(data, data.size, address, port)
         socket.send(sendPacket)
-        val receiveData = ByteArray(100000)
+        val receiveData = ByteArray(65507)
         val receivePacket = DatagramPacket(receiveData, receiveData.size)
         socket.receive(receivePacket)
         return receiveData.copyOfRange(0, receivePacket.length)
