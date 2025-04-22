@@ -12,7 +12,8 @@ const MIN_DATE: i32 = 20190101;
 
 pub struct UserCommandProcessor {
     db: DB,
-    time_offset: i64
+    time_offset: i64,
+    key: [u8; 32]
 }
 
 struct SensorDataQuery {
@@ -25,11 +26,19 @@ struct SensorDataQuery {
 }
 
 impl CommandProcessor for UserCommandProcessor {
+    fn get_message_prefix_length(&self) -> usize {
+        0
+    }
+
+    fn get_key(&self, _message_prefix: &[u8]) -> Result<[u8; 32], Error> {
+        Ok(self.key.clone())
+    }
+    
     fn check_message_length(&self, length: usize) -> bool {
         length == 12 || length == 2
     }
 
-    fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn execute(&self, command: Vec<u8>, _message_prefix: &[u8]) -> Result<Vec<u8>, Error> {
         match command[0] {
             0 => self.execute_sensors_query(command.len()),
             1 => self.execute_last_data_query(command[1..].to_vec()),
@@ -40,8 +49,8 @@ impl CommandProcessor for UserCommandProcessor {
 }
 
 impl UserCommandProcessor {
-    pub fn new(db: DB, time_offset: i64) -> Box<UserCommandProcessor> {
-        Box::new(UserCommandProcessor { db, time_offset })
+    pub fn new(db: DB, time_offset: i64, key: [u8; 32]) -> Box<UserCommandProcessor> {
+        Box::new(UserCommandProcessor { db, time_offset, key })
     }
 
     fn execute_sensors_query(&self, command_length: usize) -> Result<Vec<u8>, Error> {
@@ -328,7 +337,8 @@ mod tests {
     #[test]
     fn test_get_sensor_data() -> Result<(), Error> {
         let processor = UserCommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0,
+            [0u8; 32]
         );
         let (result, aggregated) = processor.get_sensor_data(
             SensorDataQuery{max_points: 200, data_type: "env".to_string(),
@@ -341,7 +351,8 @@ mod tests {
     #[test]
     fn test_get_sensors() -> Result<(), Error> {
         let processor = UserCommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0,
+            [0u8; 32]
         );
         let result = processor.get_sensors()?;
         assert_eq!(result.len(), 8);
@@ -351,7 +362,8 @@ mod tests {
     #[test]
     fn test_get_last_sensor_data() -> Result<(), Error> {
         let processor = UserCommandProcessor::new(
-            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0
+            DB::new("postgresql://postgres@localhost/smart_home".to_string()), 0,
+            [0u8; 32]
         );
         let result = processor.get_last_sensor_data(20250301)?;
         assert_eq!(result.len(), 4);

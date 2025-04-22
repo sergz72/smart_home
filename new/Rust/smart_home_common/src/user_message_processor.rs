@@ -13,30 +13,43 @@ use crate::logger::Logger;
 const MAX_TIME_DIFFERENCE: u64 = 60;
 
 pub trait CommandProcessor {
+    fn get_message_prefix_length(&self) -> usize;
+    fn get_key(&self, message_prefix: &[u8]) -> Result<[u8; 32], Error>;
     fn check_message_length(&self, length: usize) -> bool;
-    fn execute(&self, command: Vec<u8>) -> Result<Vec<u8>, Error>;
+    fn execute(&self, command: Vec<u8>, message_prefix: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 struct UserMessageProcessor {
-    key: [u8; 32],
     command_processor: Box<dyn CommandProcessor + Send + Sync>,
     use_bzip2: bool
 }
 
 impl UserMessageProcessor {
-    fn new(key: [u8; 32], command_processor: Box<dyn CommandProcessor + Send + Sync>, use_bzip2: bool)
+    fn new(command_processor: Box<dyn CommandProcessor + Send + Sync>, use_bzip2: bool)
         -> Result<UserMessageProcessor, Error> {
-        Ok(UserMessageProcessor {key, command_processor, use_bzip2})
+        Ok(UserMessageProcessor {command_processor, use_bzip2})
     }
 }
 
 impl MessageProcessor for UserMessageProcessor {
     fn process_message(&self, logger: &Logger, message: &Vec<u8>, _time_offset: i64) -> Vec<u8> {
-        if message.len() < 13 || !self.command_processor.check_message_length(message.len() - 12) {
+        let message_prefix_length = self.command_processor.get_message_prefix_length();
+        if message.len() < 13 + message_prefix_length ||
+            !self.command_processor.check_message_length(message.len() - 12 - message_prefix_length) {
             logger.error("Wrong message length");
             return Vec::new();
         }
-        let result = match self.process_message_with_result(logger, message) {
+        let message_prefix = &message[..message_prefix_length];
+        let key = match self.command_processor.get_key(message_prefix) {
+            Ok(key) => key,
+            Err(e) => {
+                logger.error(format!("get_key error: {}", e));
+                return Vec::new()
+            }
+        };
+        let result = match self.process_message_with_result(logger, 
+                                                            &message[message_prefix_length..],
+                                                            &key, message_prefix) {
             Ok(message) => message,
             Err(error) => {
                 logger.error(format!("process_message error: {}", error));
@@ -46,7 +59,7 @@ impl MessageProcessor for UserMessageProcessor {
                 message
             }
         };
-        match self.encrypt_response(result) {
+        match self.encrypt_response(result, &key) {
             Ok(encrypted) => encrypted,
             Err(error) => {
                 logger.error(format!("encrypt_response error: {}", error));
@@ -57,63 +70,61 @@ impl MessageProcessor for UserMessageProcessor {
 }
 
 impl UserMessageProcessor {
-    fn process_message_with_result(&self, logger: &Logger, message: &Vec<u8>)
+    fn process_message_with_result(&self, logger: &Logger, message: &[u8], key: &[u8; 32],
+                                   message_prefix: &[u8])
         -> Result<Vec<u8>, Error> {
-        match self.decrypt(message) {
-            Ok(command) => self.command_processor.execute(command),
+        match decrypt(message, &key) {
+            Ok(command) => self.command_processor.execute(command, message_prefix),
             Err(error) => {
                 logger.error(format!("message decrypt error: {}", error));
                 Ok(Vec::new())
             }
         }
     }
-
-    fn transform(&self, iv: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut cipher = ChaCha20::new((&self.key).into(), iv.into());
-        let mut out_vec = vec![0u8; data.len()];
-        let out_bytes = out_vec.as_mut_slice();
-        cipher.apply_keystream_b2b(data, out_bytes)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        Ok(out_vec)
-    }
-
-    fn decrypt(&self, message: &Vec<u8>) -> Result<Vec<u8>, Error> {
-        if message.len() < 13 {
-            return Err(Error::new(ErrorKind::InvalidData, "message is too short"));
-        }
-        let iv = &message[0..12];
-        let decrypted_iv_vec = self.encrypt_iv(iv)?;
-        let decrypted_iv = decrypted_iv_vec.as_slice();
-        check_iv(decrypted_iv)?;
-        let encrypted = &message[12..];
-        self.transform(decrypted_iv, encrypted)
-    }
-
-    fn encrypt_iv(&self, iv: &[u8]) -> Result<Vec<u8>, Error> {
-        let random_part = &iv[0..4];
-        let mut iv3 = [0u8; 12];
-        iv3[0..4].copy_from_slice(random_part);
-        iv3[4..8].copy_from_slice(random_part);
-        iv3[8..12].copy_from_slice(random_part);
-        let transformed = self.transform(&iv3, &iv[4..12])?;
-        let mut result = Vec::from(random_part);
-        result.extend_from_slice(&transformed);
-        Ok(result)
-    }
-
-    fn encrypt_response(&self, response: Vec<u8>) -> Result<Vec<u8>, Error> {
+    
+    fn encrypt_response(&self, response: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
         let compressed = if self.use_bzip2 {compress(response)?} else {response};
-        self.encrypt(compressed)
+        encrypt(compressed, key)
     }
+}
 
-    fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let iv_raw = build_iv()?;
-        let mut iv = self.encrypt_iv(&iv_raw)?;
-        let bytes = data.as_slice();
-        let mut out_vec = self.transform(&iv_raw, bytes)?;
-        iv.append(&mut out_vec);
-        Ok(iv)
-    }
+fn encrypt(data: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
+    let iv_raw = build_iv()?;
+    let mut iv = encrypt_iv(&iv_raw, key)?;
+    let bytes = data.as_slice();
+    let mut out_vec = transform(key, &iv_raw, bytes)?;
+    iv.append(&mut out_vec);
+    Ok(iv)
+}
+
+fn decrypt(message: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, Error> {
+    let iv = &message[0..12];
+    let decrypted_iv_vec = encrypt_iv(iv, key)?;
+    let decrypted_iv = decrypted_iv_vec.as_slice();
+    check_iv(decrypted_iv)?;
+    let encrypted = &message[12..];
+    transform(key, decrypted_iv, encrypted)
+}
+
+fn encrypt_iv(iv: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, Error> {
+    let random_part = &iv[0..4];
+    let mut iv3 = [0u8; 12];
+    iv3[0..4].copy_from_slice(random_part);
+    iv3[4..8].copy_from_slice(random_part);
+    iv3[8..12].copy_from_slice(random_part);
+    let transformed = transform(key, &iv3, &iv[4..12])?;
+    let mut result = Vec::from(random_part);
+    result.extend_from_slice(&transformed);
+    Ok(result)
+}
+
+fn transform(key: &[u8; 32], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut cipher = ChaCha20::new(key.into(), iv.into());
+    let mut out_vec = vec![0u8; data.len()];
+    let out_bytes = out_vec.as_mut_slice();
+    cipher.apply_keystream_b2b(data, out_bytes)
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    Ok(out_vec)
 }
 
 fn compress(data: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -149,11 +160,10 @@ fn build_iv() -> Result<[u8; 12], Error> {
     Ok(iv)
 }
 
-pub fn build_message_processor(key: [u8; 32],
-                               command_processor: Box<dyn CommandProcessor + Send + Sync>,
+pub fn build_message_processor(command_processor: Box<dyn CommandProcessor + Send + Sync>,
                                use_bzip2: bool)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(UserMessageProcessor::new(key, command_processor, use_bzip2)?))
+    Ok(Arc::new(UserMessageProcessor::new(command_processor, use_bzip2)?))
 }
 
 #[cfg(test)]
@@ -161,37 +171,17 @@ mod tests {
     use std::io::{Error, ErrorKind};
     use rand::rngs::OsRng;
     use rand::TryRngCore;
-    use crate::user_message_processor::{build_iv, check_iv, CommandProcessor, UserMessageProcessor};
+    use crate::user_message_processor::{build_iv, check_iv, decrypt, encrypt, encrypt_iv};
 
-    struct TestCommandProcessor {}
-    
-    impl CommandProcessor for TestCommandProcessor {
-        fn check_message_length(&self, _length: usize) -> bool {
-            true
-        }
-        
-        fn execute(&self, _message: Vec<u8>) -> Result<Vec<u8>, Error> {
-            Ok(Vec::new())
-        }
-    }
-    
-    impl TestCommandProcessor {
-        fn new() -> Box<dyn CommandProcessor + Send + Sync> {
-            Box::new(TestCommandProcessor{})
-        }
-    }
-    
     #[test]
     fn test_iv() -> Result<(), Error> {
         let mut key = [0u8; 32];
         OsRng.try_fill_bytes(&mut key)
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
-        let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let iv_raw = build_iv()?;
         check_iv(&iv_raw)?;
-        let iv = message_processor.encrypt_iv(&iv_raw)?;
-        let decrypted_iv = message_processor.encrypt_iv(iv.as_slice())?;
+        let iv = encrypt_iv(&iv_raw, &key)?;
+        let decrypted_iv = encrypt_iv(iv.as_slice(), &key)?;
         check_iv(decrypted_iv.as_slice())?;
         assert_eq!(iv_raw, decrypted_iv.as_slice());
         Ok(())
@@ -202,12 +192,10 @@ mod tests {
         let key = [0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
                                 13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
                                 24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
-        let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let iv_raw = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
-        let iv = message_processor.encrypt_iv(&iv_raw)?;
+        let iv = encrypt_iv(&iv_raw, &key)?;
         assert_eq!(iv.as_slice(), [1, 2, 3, 4, 87, 191, 4, 40, 131, 151, 75, 156]);
-        let decrypted_iv = message_processor.encrypt_iv(iv.as_slice())?;
+        let decrypted_iv = encrypt_iv(iv.as_slice(), &key)?;
         assert_eq!(iv_raw, decrypted_iv.as_slice());
         Ok(())
     }
@@ -217,11 +205,9 @@ mod tests {
         let key = [0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
             13u8, 14u8, 15u8, 16u8, 17u8, 18u8, 19u8, 20u8, 21u8, 22u8, 23u8,
             24u8, 25u8, 26u8, 27u8, 28u8, 29u8, 30u8, 31u8];
-        let message_processor =
-            UserMessageProcessor::new(key, TestCommandProcessor::new(), true)?;
         let message = vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8];
-        let encrypted = message_processor.encrypt(message.clone())?;
-        let decrypted = message_processor.decrypt(&encrypted)?;
+        let encrypted = encrypt(message.clone(), &key)?;
+        let decrypted = decrypt(&encrypted, &key)?;
         assert_eq!(message, decrypted);
         Ok(())
     }
