@@ -1,6 +1,7 @@
 package com.sz.smart_home.query
 
 import com.sz.smart_home.common.NetworkService
+import com.sz.smart_home.common.NetworkServiceConfig
 import com.sz.smart_home.common.ResponseError
 import com.sz.smart_home.query.SensorData.Companion.buildFromAggregatedResponse
 import com.sz.smart_home.query.SensorData.Companion.buildFromResponse
@@ -58,7 +59,12 @@ data class Sensor(
     val locationType: String
 )
 
-class SmartHomeService(key: ByteArray, hostName: String, port: Int): NetworkService(key, hostName, port) {
+class SmartHomeService(key: ByteArray, hostName: String, port: Int): NetworkService(NetworkServiceConfig(
+    prefix = byteArrayOf(),
+    key = key,
+    hostName = hostName,
+    port = port
+)) {
     fun send(query: SmartHomeQuery, callback: Callback<SensorDataResponse>) {
         val request = query.toBinary()
         send(request, object: Callback<ByteArray> {

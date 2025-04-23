@@ -1,6 +1,10 @@
 package com.sz.smart_home.query
 
 import com.sz.smart_home.common.NetworkService
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -83,7 +87,8 @@ fun printResponse(response: Map<Int, LastSensorData>) {
     }
 }
 
-fun main(args: Array<String>) {
+@OptIn(DelicateCoroutinesApi::class)
+suspend fun main(args: Array<String>) {
     if (args.size != 4) {
         usage()
         return
@@ -95,36 +100,47 @@ fun main(args: Array<String>) {
 
     val service = SmartHomeService(keyBytes, hostName, port)
 
+    val channel = Channel<Unit>()
+
     if (query == "sensors") {
         service.getSensors(object: NetworkService.Callback<List<Sensor>> {
             override fun onResponse(response: List<Sensor>) {
                 printResponse(response)
+                GlobalScope.launch { channel.send(Unit) }
             }
 
             override fun onFailure(t: Throwable) {
                 println(t.message)
+                GlobalScope.launch { channel.send(Unit) }
             }
         })
+        channel.receive()
     } else if (query.startsWith("last_data_from=")) {
         service.getLastSensorData(query.split("=")[1].toByte(), object: NetworkService.Callback<Map<Int, LastSensorData>> {
             override fun onResponse(response: Map<Int, LastSensorData>) {
                 printResponse(response)
+                GlobalScope.launch { channel.send(Unit) }
             }
 
             override fun onFailure(t: Throwable) {
                 println(t.message)
+                GlobalScope.launch { channel.send(Unit) }
             }
         })
+        channel.receive()
     } else {
         val request = buildRequest(query)
         service.send(request, object: NetworkService.Callback<SensorDataResponse> {
             override fun onResponse(response: SensorDataResponse) {
                 printResponse(response)
+                GlobalScope.launch { channel.send(Unit) }
             }
 
             override fun onFailure(t: Throwable) {
                 println(t.message)
+                GlobalScope.launch { channel.send(Unit) }
             }
         })
+        channel.receive()
     }
 }
