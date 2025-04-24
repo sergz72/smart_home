@@ -47,9 +47,14 @@ impl MessageProcessor for UserMessageProcessor {
                 return Vec::new()
             }
         };
-        let result = match self.process_message_with_result(logger, 
-                                                            &message[message_prefix_length..],
-                                                            &key, message_prefix) {
+        let command = match decrypt(&message[message_prefix_length..], &key) {
+            Ok(command) => command,
+            Err(error) => {
+                logger.error(format!("message decrypt error: {}", error));
+                return Vec::new()
+            }
+        };
+        let result = match self.command_processor.execute(command, message_prefix) {
             Ok(message) => message,
             Err(error) => {
                 logger.error(format!("process_message error: {}", error));
@@ -70,18 +75,6 @@ impl MessageProcessor for UserMessageProcessor {
 }
 
 impl UserMessageProcessor {
-    fn process_message_with_result(&self, logger: &Logger, message: &[u8], key: &[u8; 32],
-                                   message_prefix: &[u8])
-        -> Result<Vec<u8>, Error> {
-        match decrypt(message, &key) {
-            Ok(command) => self.command_processor.execute(command, message_prefix),
-            Err(error) => {
-                logger.error(format!("message decrypt error: {}", error));
-                Ok(Vec::new())
-            }
-        }
-    }
-    
     fn encrypt_response(&self, response: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
         let compressed = if self.use_bzip2 {compress(response)?} else {response};
         encrypt(compressed, key)
