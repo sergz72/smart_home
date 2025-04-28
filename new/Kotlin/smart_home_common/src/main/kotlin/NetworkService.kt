@@ -20,11 +20,14 @@ open class NetworkService(private val config: NetworkServiceConfig) {
     }
 
     private var port: Int = config.port
+    private var prefix: ByteArray = config.prefix
+
     private var address: InetAddress = InetAddress.getByName(config.hostName)
 
-    fun updateServer(hostname: String, port: Int) {
+    fun updateServer(hostname: String, port: Int, prefix: ByteArray) {
         this.port = port
         address = InetAddress.getByName(hostname)
+        this.prefix = prefix
     }
 
     private fun sendUDP(data: ByteArray): ByteArray {
@@ -95,7 +98,7 @@ open class NetworkService(private val config: NetworkServiceConfig) {
     protected fun send(request: ByteArray, callback: Callback<ByteArray>) {
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                val sendData = config.prefix + encrypt(request)
+                val sendData = prefix + encrypt(request)
                 val response = sendUDP(sendData)
                 println("Response size: ${response.size}")
                 val decrypted = decrypt(response)
