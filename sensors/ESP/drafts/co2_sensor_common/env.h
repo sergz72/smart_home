@@ -1,0 +1,6 @@
+#ifndef CO2_SENSOR_C6_ENV_H
+#define CO2_SENSOR_C6_ENV_H
+
+#define SHT40_SENSOR_ADDR 0x44
+
+#endif //CO2_SENSOR_C6_ENV_H
