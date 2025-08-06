@@ -2,6 +2,7 @@
 #include "led_strip.h"
 #include "driver/i2c.h"
 #include <sht4x.h>
+#include <scd30.h>
 #include <env.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -75,6 +76,24 @@ esp_err_t sht40_register_write(uint8_t *data, size_t len)
 {
   return i2c_master_write_to_device(I2C_MASTER_NUM, SHT40_SENSOR_ADDR, data, len,
                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+esp_err_t scd30_write(uint8_t *data, size_t len)
+{
+  return i2c_master_write_to_device(I2C_MASTER_NUM, SCD30_SENSOR_ADDR, data, len,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+esp_err_t scd30_read(uint8_t *data, size_t len)
+{
+  return i2c_master_read_from_device(I2C_MASTER_NUM, SCD30_SENSOR_ADDR, data, len,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+esp_err_t scd30_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen)
+{
+  return i2c_master_write_read_device(I2C_MASTER_NUM, SCD30_SENSOR_ADDR, wdata,
+                                      wlen, rdata, rlen, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 void configure_hal(void)

@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "sht4x.h"
 #include "env.h"
+#include <crc8.h>
 
 #ifdef SHT40_SENSOR_ADDR
 
@@ -40,30 +41,6 @@ static esp_err_t sht4x_reset(void)
   vTaskDelay (2 / portTICK_PERIOD_MS);
 
   return 0;
-}
-
-static const uint8_t g_polynom = 0x31;
-
-static uint8_t crc8 (const uint8_t data[], int len)
-{
-  // initialization value
-  uint8_t crc = 0xff;
-  int i, j;
-
-  // iterate over all bytes
-  for (i = 0; i < len; i++)
-  {
-    crc ^= data[i];
-
-    for (j = 0; j < 8; j++)
-    {
-      bool xor = crc & 0x80;
-      crc = crc << 1;
-      crc = xor ? crc ^ g_polynom : crc;
-    }
-  }
-
-  return crc;
 }
 
 static esp_err_t sht4x_get_raw_data(sht4x_raw_data_t raw_data)
