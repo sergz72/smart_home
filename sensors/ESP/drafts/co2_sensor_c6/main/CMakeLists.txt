@@ -8,14 +8,17 @@ idf_component_register(
         "../../co2_sensor_common/i2c_commands.c"
         "../../common/wifi.c"
         "../../common/sht4x.c"
+        "../../common/scd30.c"
+        "../../common/crc8.c"
         "../../../ARM_CLION/common_lib/getstring.c"
         "../../../ARM_CLION/common_lib/shell/shell.c"
         "../../../ARM_CLION/common_lib/fixed_queue.c"
+        "../../../ARM_CLION/common_lib/display/epd_ssd1680.c"
   INCLUDE_DIRS
         "."
         "../../common"
         "../../co2_sensor_common"
         "../../../ARM_CLION/common_lib/shell"
-        "../../../ARM_CLION/common_lib/sensor"
+        "../../../ARM_CLION/common_lib/display"
         "../../../ARM_CLION/common_lib"
 )

@@ -124,8 +124,45 @@ esp_err_t scd30_init_sensor(uint16_t interval)
   return scd30_start_measurements();
 }
 
+static esp_err_t scd30_get_status(uint16_t *status)
+{
+  unsigned char data[2];
+  data[0] = 0x02;
+  data[1] = 0x02;
+  int rc = scd30_write(data, 2);
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "get status write failed, code %d", rc);
+    return rc;
+  }
+  vTaskDelay (10 / portTICK_PERIOD_MS);
+  rc = scd30_read(scd30_raw_data, 3);
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "get status read failed, code %d", rc);
+    return rc;
+  }
+  rc = validate_raw_data_item(0, "status");
+  if (rc != ESP_OK)
+    return rc;
+  *status = ((uint16_t)scd30_raw_data[0] << 8) | (uint16_t)scd30_raw_data[1];
+  return ESP_OK;
+}
+
 esp_err_t scd30_measure (scd30_result *result)
 {
+  uint16_t status;
+  for (;;)
+  {
+    int rc = scd30_get_status(&status);
+    if (rc != ESP_OK)
+      return rc;
+    if (status != 0)
+      break;
+    ESP_LOGI(TAG, "data is not ready, waiting 10 seconds...");
+    vTaskDelay (10000 / portTICK_PERIOD_MS); // 10 sec
+  }
+
   unsigned char data[2];
   data[0] = 0x03;
   data[1] = 0x00;
