@@ -4,13 +4,18 @@
 #include <sht4x.h>
 #include <scd30.h>
 #include <env.h>
+#include <epd_ssd1680.h>
+#include "esp_log.h"
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 
+static const char *TAG = "hal";
+
 static unsigned int s_led_state;
 
 static led_strip_handle_t led_strip;
+static spi_device_handle_t spi_handle;
 
 static void configure_led(void)
 {
@@ -60,6 +65,43 @@ static esp_err_t i2c_master_init(void)
                             I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
+esp_err_t spi_master_init(void)
+{
+  esp_err_t err;
+
+  gpio_reset_pin(PIN_CS);
+  SSD1680_CS_SET;
+  gpio_set_direction(PIN_CS, GPIO_MODE_OUTPUT);
+  gpio_reset_pin(PIN_DC);
+  gpio_set_direction(PIN_DC, GPIO_MODE_OUTPUT);
+  gpio_reset_pin(PIN_RES);
+  SSD1680_RES_CLR;
+  gpio_set_direction(PIN_RES, GPIO_MODE_OUTPUT);
+  gpio_reset_pin(PIN_BUSY);
+  gpio_set_direction(PIN_BUSY, GPIO_MODE_INPUT);
+  gpio_set_pull_mode(PIN_BUSY, GPIO_PULLDOWN_ONLY);
+
+  spi_bus_config_t buscfg={
+    .miso_io_num = -1,
+    .mosi_io_num = PIN_MOSI,
+    .sclk_io_num = PIN_SCK,
+    .quadwp_io_num = -1,
+    .quadhd_io_num = -1
+};
+  //Initialize the SPI bus
+  err = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
+  if (err != ESP_OK)
+    return err;
+
+  spi_device_interface_config_t devcfg={
+    .clock_speed_hz = 5000000,
+    .mode = 0,          //SPI mode 0
+    .spics_io_num = -1,
+    .queue_size = 1,
+  };
+  return spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle);
+}
+
 esp_err_t sht40_register_read(uint8_t *rdata, size_t rlen, uint8_t *data, size_t len)
 {
   return i2c_master_write_read_device(I2C_MASTER_NUM, SHT40_SENSOR_ADDR, rdata,
@@ -96,8 +138,83 @@ esp_err_t scd30_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen
                                       wlen, rdata, rlen, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
+static void configure_button(void)
+{
+  gpio_config_t io_conf = {0};
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.pin_bit_mask = BIT64(PIN_BTN);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_up_en = 1;
+  io_conf.pull_down_en = 0;
+  gpio_config(&io_conf);
+}
+
 void configure_hal(void)
 {
   configure_led();
-  i2c_master_init();
+  configure_button();
+
+  esp_err_t rc = i2c_master_init();
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "i2c_master_init error %d", rc);
+    set_led(8, 0, 0);
+    while (1){}
+  }
+
+  rc = spi_master_init();
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "spi_master_init error %d", rc);
+    set_led(8, 0, 0);
+    while (1){}
+  }
+}
+
+void delayms(unsigned int ms)
+{
+  ms /= portTICK_PERIOD_MS;
+  if (!ms)
+    ms = 1;
+  vTaskDelay(ms);
+}
+
+void ssd1680_command(unsigned char command, unsigned char *data, unsigned int data_length)
+{
+  esp_err_t err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "spi_device_acquire_bus error %d", err);
+    return;
+  }
+  SSD1680_CS_CLR;
+  SSD1680_DC_CLR;
+
+  spi_transaction_t t = {
+    .length = 8,
+    .tx_buffer = &command,
+    .rx_buffer = NULL,
+    .rxlength = 0
+  };
+  err = spi_device_polling_transmit(spi_handle, &t);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "spi command transmit error %d", err);
+    spi_device_release_bus(spi_handle);
+    SSD1680_CS_SET;
+    return;
+  }
+
+  SSD1680_DC_SET;
+
+  t.length = 8 * data_length;
+  t.rxlength = 0;
+  t.tx_buffer = data;
+  err = spi_device_polling_transmit(spi_handle, &t);
+  if (err != ESP_OK)
+    ESP_LOGE(TAG, "spi data transmit error %d", err);
+
+  spi_device_release_bus(spi_handle);
+
+  SSD1680_CS_SET;
 }

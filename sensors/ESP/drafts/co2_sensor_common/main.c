@@ -9,8 +9,9 @@
 #include "sht_commands.h"
 #include "scd_commands.h"
 #include "display_commands.h"
+#include "epd_ssd1680.h"
 #include "i2c_commands.h"
-
+#include "ui_commands.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -67,6 +68,7 @@ void app_main(void)
   register_scd_commands();
   register_display_commands();
   register_i2c_commands();
+  register_ui_commands();
 
   getstring_init(command_line, sizeof(command_line), getch_, puts_);
 
@@ -74,6 +76,8 @@ void app_main(void)
 
   nvs_init();
   wifi_init();
+
+  ssd1680_init(DATA_ENTRY_INCRY_INCRX);
 
   for (;;)
   {

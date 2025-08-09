@@ -15,7 +15,23 @@
 #define I2C_MASTER_NUM        0
 #define I2C_MASTER_TIMEOUT_MS 1000
 
+#define LCD_WIDTH 250
+#define LCD_HEIGHT 122
+#define LCD_SWAPXY
+
+#include <driver/gpio.h>
+
+#define SSD1680_RES_CLR gpio_set_level(PIN_RES, 0)
+#define SSD1680_RES_SET gpio_set_level(PIN_RES, 1)
+#define SSD1680_GET_BUSY gpio_get_level(PIN_BUSY)
+#define SSD1680_DC_CLR gpio_set_level(PIN_DC, 0)
+#define SSD1680_DC_SET gpio_set_level(PIN_DC, 1)
+#define SSD1680_CS_CLR gpio_set_level(PIN_CS, 0)
+#define SSD1680_CS_SET gpio_set_level(PIN_CS, 1)
+
+#define LED_STRIP
 void configure_hal(void);
 void blink_led(void);
+void delayms(unsigned int ms);
 
 #endif
