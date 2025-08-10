@@ -6,6 +6,7 @@
 #include <env.h>
 #include <epd_ssd1680.h>
 #include "esp_log.h"
+#include <display.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -181,6 +182,9 @@ void delayms(unsigned int ms)
 
 void ssd1680_command(unsigned char command, unsigned char *data, unsigned int data_length)
 {
+  //if (data)
+  //  ESP_LOGI(TAG, "command: 0x%02x, data length %d, data: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X",
+  //            command, data_length, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
   esp_err_t err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
   if (err != ESP_OK)
   {
@@ -217,4 +221,15 @@ void ssd1680_command(unsigned char command, unsigned char *data, unsigned int da
   spi_device_release_bus(spi_handle);
 
   SSD1680_CS_SET;
+}
+
+void Log(const char *name, int value)
+{
+  ESP_LOGI(TAG, "%s: %d", name, value);
+}
+
+void LcdDrawChar(unsigned short x, unsigned short y, char ch, const FONT_INFO *font, unsigned short textColor,
+                  unsigned short bkColor)
+{
+  ssd1680_draw_char(x, y, ch, font, textColor, bkColor);
 }

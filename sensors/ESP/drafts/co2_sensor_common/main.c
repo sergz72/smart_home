@@ -77,7 +77,7 @@ void app_main(void)
   nvs_init();
   wifi_init();
 
-  ssd1680_init(DATA_ENTRY_INCRY_INCRX);
+  ssd1680_init();
 
   for (;;)
   {

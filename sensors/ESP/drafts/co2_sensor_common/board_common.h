@@ -29,9 +29,15 @@
 #define SSD1680_CS_CLR gpio_set_level(PIN_CS, 0)
 #define SSD1680_CS_SET gpio_set_level(PIN_CS, 1)
 
-#define LED_STRIP
+#define SSD1680_DATA_ENTRY_MODE DATA_ENTRY_DECRY_INCRX_YUPDATE
+
+#define DISPLAY_MAX_ROWS 3
+#define DISPLAY_MAX_COLUMNS 8
+#define DISPLAY_MAX_RECTANGLES 0
+
 void configure_hal(void);
 void blink_led(void);
 void delayms(unsigned int ms);
+void Log(const char *name, int value);
 
 #endif

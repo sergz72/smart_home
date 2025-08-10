@@ -7,6 +7,7 @@ idf_component_register(
         "../../co2_sensor_common/scd_commands.c"
         "../../co2_sensor_common/i2c_commands.c"
         "../../co2_sensor_common/ui_commands.c"
+        "../../co2_sensor_common/ui.c"
         "../../common/wifi.c"
         "../../common/sht4x.c"
         "../../common/scd30.c"
@@ -15,7 +16,9 @@ idf_component_register(
         "../../../ARM_CLION/common_lib/shell/shell.c"
         "../../../ARM_CLION/common_lib/fixed_queue.c"
         "../../../ARM_CLION/common_lib/display/epd_ssd1680.c"
-        "../../../ARM_CLION/common_lib/read_hex_string.c"
+        "../../../ARM_CLION/common_lib/display/fonts/font16.c"
+        "../../../ARM_CLION/common_lib/display/fonts/font36_2.c"
+        "../../../ARM_CLION/common_lib/display/display.c"
   INCLUDE_DIRS
         "."
         "../../common"
