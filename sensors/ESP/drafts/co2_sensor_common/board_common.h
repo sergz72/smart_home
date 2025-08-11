@@ -26,14 +26,30 @@
 #define SSD1680_GET_BUSY gpio_get_level(PIN_BUSY)
 #define SSD1680_DC_CLR gpio_set_level(PIN_DC, 0)
 #define SSD1680_DC_SET gpio_set_level(PIN_DC, 1)
-#define SSD1680_CS_CLR gpio_set_level(PIN_CS, 0)
-#define SSD1680_CS_SET gpio_set_level(PIN_CS, 1)
+#define SSD1680_CS_CLR gpio_set_level(PIN_DISPLAY_CS, 0)
+#define SSD1680_CS_SET gpio_set_level(PIN_DISPLAY_CS, 1)
 
 #define SSD1680_DATA_ENTRY_MODE DATA_ENTRY_DECRY_INCRX_YUPDATE
 
 #define DISPLAY_MAX_ROWS 3
 #define DISPLAY_MAX_COLUMNS 8
 #define DISPLAY_MAX_RECTANGLES 0
+
+#define CC1101_TIMEOUT 0xFFFFF
+
+#ifdef PIN_GDO0
+#define cc1101_GD2 gpio_get_level(PIN_GDO2)
+#define cc1101_GD0 gpio_get_level(PIN_GDO0)
+#else
+#define cc1101_GD2 0
+#define cc1101_GD0 0
+#endif
+
+#define delay(x) delayms(1)
+#define cc1101_CSN_CLR(x) gpio_set_level(PIN_CC1101_CS, 0)
+#define cc1101_CSN_SET(x) gpio_set_level(PIN_CC1101_CS, 1)
+
+#define BH1750_ADDR 0x23
 
 void configure_hal(void);
 void blink_led(void);

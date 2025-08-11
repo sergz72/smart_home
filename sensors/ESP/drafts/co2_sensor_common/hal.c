@@ -7,6 +7,7 @@
 #include <epd_ssd1680.h>
 #include "esp_log.h"
 #include <display.h>
+#include <cc1101.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -66,13 +67,11 @@ static esp_err_t i2c_master_init(void)
                             I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
-esp_err_t spi_master_init(void)
+static void display_init(void)
 {
-  esp_err_t err;
-
-  gpio_reset_pin(PIN_CS);
+  gpio_reset_pin(PIN_DISPLAY_CS);
   SSD1680_CS_SET;
-  gpio_set_direction(PIN_CS, GPIO_MODE_OUTPUT);
+  gpio_set_direction(PIN_DISPLAY_CS, GPIO_MODE_OUTPUT);
   gpio_reset_pin(PIN_DC);
   gpio_set_direction(PIN_DC, GPIO_MODE_OUTPUT);
   gpio_reset_pin(PIN_RES);
@@ -81,9 +80,14 @@ esp_err_t spi_master_init(void)
   gpio_reset_pin(PIN_BUSY);
   gpio_set_direction(PIN_BUSY, GPIO_MODE_INPUT);
   gpio_set_pull_mode(PIN_BUSY, GPIO_PULLDOWN_ONLY);
+}
+
+esp_err_t spi_master_init(void)
+{
+  esp_err_t err;
 
   spi_bus_config_t buscfg={
-    .miso_io_num = -1,
+    .miso_io_num = PIN_MISO,
     .mosi_io_num = PIN_MOSI,
     .sclk_io_num = PIN_SCK,
     .quadwp_io_num = -1,
@@ -95,8 +99,8 @@ esp_err_t spi_master_init(void)
     return err;
 
   spi_device_interface_config_t devcfg={
-    .clock_speed_hz = 5000000,
-    .mode = 0,          //SPI mode 0
+    .clock_speed_hz = 1000000,
+    .mode = 0,
     .spics_io_num = -1,
     .queue_size = 1,
   };
@@ -139,11 +143,27 @@ esp_err_t scd30_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen
                                       wlen, rdata, rlen, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
-static void configure_button(void)
+int bh1750_write(unsigned char command)
+{
+  return i2c_master_write_to_device(I2C_MASTER_NUM, BH1750_ADDR, &command, 1,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int bh1750_read(unsigned char *result)
+{
+  return i2c_master_read_from_device(I2C_MASTER_NUM, BH1750_ADDR, result, 2,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+static void configure_inputs(void)
 {
   gpio_config_t io_conf = {0};
   io_conf.intr_type = GPIO_INTR_DISABLE;
+#ifdef PIN_GDO0
+  io_conf.pin_bit_mask = BIT64(PIN_BTN) | BIT64(PIN_GDO0) | BIT64(PIN_GDO2);
+#else
   io_conf.pin_bit_mask = BIT64(PIN_BTN);
+#endif
   io_conf.mode = GPIO_MODE_INPUT;
   io_conf.pull_up_en = 1;
   io_conf.pull_down_en = 0;
@@ -153,7 +173,7 @@ static void configure_button(void)
 void configure_hal(void)
 {
   configure_led();
-  configure_button();
+  configure_inputs();
 
   esp_err_t rc = i2c_master_init();
   if (rc != ESP_OK)
@@ -163,10 +183,12 @@ void configure_hal(void)
     while (1){}
   }
 
+  display_init();
+
   rc = spi_master_init();
   if (rc != ESP_OK)
   {
-    ESP_LOGE(TAG, "spi_master_init error %d", rc);
+    ESP_LOGE(TAG, "spi_master_display_init error %d", rc);
     set_led(8, 0, 0);
     while (1){}
   }
@@ -232,4 +254,80 @@ void LcdDrawChar(unsigned short x, unsigned short y, char ch, const FONT_INFO *f
                   unsigned short bkColor)
 {
   ssd1680_draw_char(x, y, ch, font, textColor, bkColor);
+}
+
+unsigned int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned char *rxdata, unsigned int size)
+{
+#ifdef PIN_CC1101_CS
+  esp_err_t err;
+  unsigned int rc;
+
+  if (size < 2)
+    return 0;
+
+  rc = CC1101_TIMEOUT;
+  while (--rc && cc1101_GD2) // waiting for chip ready
+    ;
+  if (!rc)
+    return 0; // timeout
+
+  err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
+  if (err != ESP_OK)
+    return 0;
+
+  cc1101_CSN_CLR(0);
+
+  if (size > 2)
+    txdata[0] |= CC1101_BURST;
+
+  spi_transaction_t t = {
+    .length = 8 * size,
+    .tx_buffer = txdata,
+    .rx_buffer = rxdata
+  };
+  err = spi_device_polling_transmit(spi_handle, &t);
+
+  cc1101_CSN_SET(0);
+
+  spi_device_release_bus(spi_handle);
+
+  return err == ESP_OK ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *status)
+{
+#ifdef PIN_CC1101_CS
+  esp_err_t err;
+  unsigned int rc;
+
+  rc = CC1101_TIMEOUT;
+  while (--rc && cc1101_GD2) // waiting for chip ready
+    ;
+  if (!rc)
+    return 0; // timeout
+
+  err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
+  if (err != ESP_OK)
+    return 0;
+
+  cc1101_CSN_CLR(0);
+
+  spi_transaction_t t = {
+    .length = 8,
+    .tx_buffer = &data,
+    .rx_buffer = status
+  };
+  err = spi_device_polling_transmit(spi_handle, &t);
+
+  cc1101_CSN_SET(0);
+
+  spi_device_release_bus(spi_handle);
+
+  return err == ESP_OK ? 1 : 0;
+#else
+  return 0;
+#endif
 }

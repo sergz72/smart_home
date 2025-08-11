@@ -12,6 +12,8 @@
 #include "epd_ssd1680.h"
 #include "i2c_commands.h"
 #include "ui_commands.h"
+#include "cc1101_commands.h"
+#include "bh_commands.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -69,6 +71,8 @@ void app_main(void)
   register_display_commands();
   register_i2c_commands();
   register_ui_commands();
+  register_cc1101_commands();
+  register_bh_commands();
 
   getstring_init(command_line, sizeof(command_line), getch_, puts_);
 
