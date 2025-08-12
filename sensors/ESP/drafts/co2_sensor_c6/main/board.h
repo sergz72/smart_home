@@ -23,6 +23,8 @@
 #define PIN_GDO0      4
 #define PIN_CC1101_CS 5
 
+#define PIN_VL6180_IO0 15
+
 #include <board_common.h>
 
 #endif

@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include <display.h>
 #include <cc1101.h>
+#include <vl6180.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -155,6 +156,23 @@ int bh1750_read(unsigned char *result)
                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
+int vl6180ReadRegister(unsigned short registerId, unsigned char *pData, unsigned int size)
+{
+  return i2c_master_write_read_device(I2C_MASTER_NUM, VL6180_ADDRESS7, (unsigned char*)&registerId,
+                                      2, pData, size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int vl6180WriteRegister(unsigned short registerId, unsigned char *pData, unsigned int size)
+{
+  unsigned int size2 = size += 2;
+  unsigned char buffer[size2];
+  buffer[0] = registerId;
+  buffer[1] = registerId >> 8;
+  memcpy(&buffer[2], pData, size);
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VL6180_ADDRESS7, buffer, size2,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
 static void configure_inputs(void)
 {
   gpio_config_t io_conf = {0};
@@ -170,10 +188,22 @@ static void configure_inputs(void)
   gpio_config(&io_conf);
 }
 
+#ifdef PIN_VL6180_IO0
+static void configure_vl6180(void)
+{
+  gpio_reset_pin(PIN_VL6180_IO0);
+  VL6180_IO0_LOW;
+  gpio_set_direction(PIN_VL6180_IO0, GPIO_MODE_OUTPUT);
+}
+#endif
+
 void configure_hal(void)
 {
   configure_led();
   configure_inputs();
+#ifdef PIN_VL6180_IO0
+  configure_vl6180();
+#endif
 
   esp_err_t rc = i2c_master_init();
   if (rc != ESP_OK)

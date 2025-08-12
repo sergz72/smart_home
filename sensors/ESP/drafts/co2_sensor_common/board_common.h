@@ -5,7 +5,7 @@
 #define NULL 0
 #endif
 
-#define MAX_SHELL_COMMANDS                 30
+#define MAX_SHELL_COMMANDS                 50
 #define MAX_SHELL_COMMAND_PARAMETERS       10
 #define MAX_SHELL_COMMAND_PARAMETER_LENGTH 50
 #define SHELL_HISTORY_SIZE                 20
@@ -50,6 +50,14 @@
 #define cc1101_CSN_SET(x) gpio_set_level(PIN_CC1101_CS, 1)
 
 #define BH1750_ADDR 0x23
+
+#ifdef PIN_VL6180_IO0
+#define VL6180_IO0_HIGH gpio_set_level(PIN_VL6180_IO0, 1)
+#define VL6180_IO0_LOW gpio_set_level(PIN_VL6180_IO0, 0)
+#else
+#define VL6180_IO0_HIGH
+#define VL6180_IO0_LOW
+#endif
 
 void configure_hal(void);
 void blink_led(void);
