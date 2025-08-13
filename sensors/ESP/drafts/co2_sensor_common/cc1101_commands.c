@@ -61,6 +61,9 @@ static int cc1101_receive_handler(printf_func pfunc, gets_func gfunc, int argc, 
         return 0;
       }
       pfunc("PACKET DECODE FAILURE %s\r\n", message);
+      cc1101ReceiveStop();
+      delayms(1000);
+      cc1101ReceiveStart();
     }
     delayms(1000);
   }

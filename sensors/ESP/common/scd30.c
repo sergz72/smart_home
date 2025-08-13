@@ -45,24 +45,30 @@ static esp_err_t validate_raw_data (void)
 
 static esp_err_t scd30_compute_values (scd30_result *result)
 {
-  unsigned int co2 =
+  union
+  {
+    float f;
+    uint32_t i;
+  } co2, temperature, humidity;
+
+  co2.i =
     (((unsigned int)scd30_raw_data[0]) << 24) |
     (((unsigned int)scd30_raw_data[1]) << 16) |
     (((unsigned int)scd30_raw_data[3]) << 8) |
     (unsigned int)scd30_raw_data[4];
-  unsigned int temperature =
+  temperature.i =
     (((unsigned int)scd30_raw_data[6]) << 24) |
     (((unsigned int)scd30_raw_data[7]) << 16) |
     (((unsigned int)scd30_raw_data[9]) << 8) |
     (unsigned int)scd30_raw_data[10];
-  unsigned int humidity =
+  humidity.i =
     (((unsigned int)scd30_raw_data[12]) << 24) |
     (((unsigned int)scd30_raw_data[13]) << 16) |
     (((unsigned int)scd30_raw_data[15]) << 8) |
     (unsigned int)scd30_raw_data[16];
-  result->co2 = *(float*)&co2;
-  result->temperature = *(float*)&temperature;
-  result->humidity = *(float*)&humidity;
+  result->co2 = co2.f;
+  result->temperature = temperature.f;
+  result->humidity = humidity.f;
   return ESP_OK;
 }
 
