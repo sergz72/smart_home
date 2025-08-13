@@ -11,7 +11,7 @@ static const ShellCommandItem scd_init_command_items[] = {
 static const ShellCommand scd_init_command = {
   scd_init_command_items,
   "scd_init",
-  "scd_init",
+  "scd_init interval",
   NULL,
   NULL
 };

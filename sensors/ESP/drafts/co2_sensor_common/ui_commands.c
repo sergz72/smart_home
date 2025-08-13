@@ -208,7 +208,6 @@ void register_ui_commands(void)
   shell_register_command(&fill_rect_command);
   shell_register_command(&ui_refresh_command);
   shell_register_command(&draw_char_command);
-  shell_register_command(&ui_refresh_command);
   shell_register_command(&ui_init_command);
   shell_register_command(&ui_update_command);
 }

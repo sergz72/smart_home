@@ -197,12 +197,25 @@ static void configure_vl6180(void)
 }
 #endif
 
+#ifdef PIN_CC1101_CS
+static void configure_cc1101(void)
+{
+  gpio_reset_pin(PIN_CC1101_CS);
+  cc1101_CSN_SET(0);
+  gpio_set_direction(PIN_CC1101_CS, GPIO_MODE_OUTPUT);
+}
+#endif
+
+
 void configure_hal(void)
 {
   configure_led();
   configure_inputs();
 #ifdef PIN_VL6180_IO0
   configure_vl6180();
+#endif
+#ifdef PIN_CC1101_CS
+  configure_cc1101();
 #endif
 
   esp_err_t rc = i2c_master_init();
@@ -286,24 +299,24 @@ void LcdDrawChar(unsigned short x, unsigned short y, char ch, const FONT_INFO *f
   ssd1680_draw_char(x, y, ch, font, textColor, bkColor);
 }
 
-unsigned int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned char *rxdata, unsigned int size)
+int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned char *rxdata, unsigned int size)
 {
 #ifdef PIN_CC1101_CS
   esp_err_t err;
   unsigned int rc;
 
   if (size < 2)
-    return 0;
+    return 200;
 
   rc = CC1101_TIMEOUT;
   while (--rc && cc1101_GD2) // waiting for chip ready
     ;
   if (!rc)
-    return 0; // timeout
+    return 201; // timeout
 
   err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
   if (err != ESP_OK)
-    return 0;
+    return err;
 
   cc1101_CSN_CLR(0);
 
@@ -321,27 +334,30 @@ unsigned int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned 
 
   spi_device_release_bus(spi_handle);
 
-  return err == ESP_OK ? 1 : 0;
+  return err;
 #else
-  return 0;
+  return 1;
 #endif
 }
 
-unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *status)
+int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *status)
 {
 #ifdef PIN_CC1101_CS
   esp_err_t err;
   unsigned int rc;
 
-  rc = CC1101_TIMEOUT;
-  while (--rc && cc1101_GD2) // waiting for chip ready
-    ;
-  if (!rc)
-    return 0; // timeout
+  if (data != CC1101_STROBE_SRES)
+  {
+    rc = CC1101_TIMEOUT;
+    while (--rc && cc1101_GD2) // waiting for chip ready
+      ;
+    if (!rc)
+      return 201; // timeout
+  }
 
   err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
   if (err != ESP_OK)
-    return 0;
+    return err;
 
   cc1101_CSN_CLR(0);
 
@@ -356,7 +372,7 @@ unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned
 
   spi_device_release_bus(spi_handle);
 
-  return err == ESP_OK ? 1 : 0;
+  return err;
 #else
   return 0;
 #endif

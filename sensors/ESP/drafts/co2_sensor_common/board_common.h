@@ -59,6 +59,8 @@
 #define VL6180_IO0_LOW
 #endif
 
+#define LACROSSE_SENSOR_ID 8
+
 void configure_hal(void);
 void blink_led(void);
 void delayms(unsigned int ms);
