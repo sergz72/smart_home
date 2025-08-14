@@ -10,6 +10,7 @@
 #include "net_client.h"
 #include "ntp.h"
 #include "common.h"
+#include "custom.h"
 
 void ble_init(void);
 
@@ -25,6 +26,16 @@ static void initialise_button(void)
   io_conf.pull_down_en = 0;
   gpio_config(&io_conf);
 }
+
+/*__attribute__((weak)) void custom_init(void)
+{
+
+}
+
+__attribute__((weak)) void custom_update(void)
+{
+
+}*/
 
 static void button_wait(void)
 {
@@ -91,10 +102,16 @@ void app_main(void)
 
   nvs_init();
   wifi_init();
+  custom_init();
   if (wifi_connect())
   {
     set_led_blue();
+#ifndef NO_BLE
     ble_init();
+#else
+    while (1)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+#endif
   }
   else
   {
@@ -107,14 +124,21 @@ void app_main(void)
     post_init_env();
     for (;;)
     {
+      TickType_t time1 = xTaskGetTickCount();
       net_client_update_server_parameters();
       if (!get_env())
       {
         l = encrypt_env(&data);
         if (l > 0)
+        {
           send_env(data, l);
+          custom_update();
+        }
       }
-      vTaskDelay(SEND_INTERVAL / portTICK_PERIOD_MS);
+      TickType_t time2 = xTaskGetTickCount();
+      TickType_t ms = (time2 - time1) * portTICK_PERIOD_MS;
+      if (ms < SEND_INTERVAL)
+        vTaskDelay((SEND_INTERVAL - ms) / portTICK_PERIOD_MS);
     }
   }
 }
