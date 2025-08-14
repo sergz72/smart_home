@@ -23,6 +23,6 @@
 
 #define NO_BLE
 
-#define TEMPERATURE_OFFSET (-0.7f)
+#define TEMPERATURE_OFFSET (-1.2f)
 
 #endif

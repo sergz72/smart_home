@@ -67,7 +67,7 @@ void blink_led(void);
 void delayms(unsigned int ms);
 void Log(const char *name, int value);
 
-#define LUX_OFF 800
-#define LUX_ON 2000
+#define LUX_OFF 100
+#define LUX_ON  500
 
 #endif
