@@ -33,6 +33,7 @@ static const ShellCommand vl_measure_command = {
 
 static int vl_init_handler(printf_func pfunc, gets_func gfunc, int argc, char **argv, void *data)
 {
+#ifdef PIN_VL53L1_XSCHUT
   DistanceMode dm = Long;
   if (!strcmp("short", argv[0]))
     dm = Short;
@@ -52,6 +53,9 @@ static int vl_init_handler(printf_func pfunc, gets_func gfunc, int argc, char **
   gpio_set_level(PIN_VL53L1_XSCHUT, 1);
   delayms(20);
   return VL53L1X_init(1, dm, timing_budget * 1000, 5000);
+#else
+  return 1;
+#endif
 }
 
 static int vl_measure_handler(printf_func pfunc, gets_func gfunc, int argc, char **argv, void *data)

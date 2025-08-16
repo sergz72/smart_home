@@ -21,6 +21,7 @@
 
 #include <driver/gpio.h>
 
+#ifdef PIN_DISPLAY_CS
 #define SSD1680_RES_CLR gpio_set_level(PIN_RES, 0)
 #define SSD1680_RES_SET gpio_set_level(PIN_RES, 1)
 #define SSD1680_GET_BUSY gpio_get_level(PIN_BUSY)
@@ -28,6 +29,15 @@
 #define SSD1680_DC_SET gpio_set_level(PIN_DC, 1)
 #define SSD1680_CS_CLR gpio_set_level(PIN_DISPLAY_CS, 0)
 #define SSD1680_CS_SET gpio_set_level(PIN_DISPLAY_CS, 1)
+#else
+#define SSD1680_RES_CLR
+#define SSD1680_RES_SET
+#define SSD1680_GET_BUSY 0
+#define SSD1680_DC_CLR
+#define SSD1680_DC_SET
+#define SSD1680_CS_CLR
+#define SSD1680_CS_SET
+#endif
 
 #define SSD1680_DATA_ENTRY_MODE DATA_ENTRY_DECRY_INCRX_YUPDATE
 

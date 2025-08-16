@@ -22,6 +22,7 @@ static unsigned int s_led_state;
 static led_strip_handle_t led_strip;
 static spi_device_handle_t spi_handle;
 
+#ifdef PIN_LED
 static void configure_led(void)
 {
   /* LED strip initialization with the GPIO and pixels number*/
@@ -38,7 +39,6 @@ static void configure_led(void)
 
   s_led_state = 0;
 }
-
 static void set_led(uint32_t red, uint32_t green, uint32_t blue)
 {
   /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
@@ -52,6 +52,14 @@ void blink_led(void)
   s_led_state = s_led_state ? 0 : 8;
   set_led(0, s_led_state, 0);
 }
+#else
+static void set_led(uint32_t red, uint32_t green, uint32_t blue)
+{
+}
+void blink_led(void)
+{
+}
+#endif
 
 static esp_err_t i2c_master_init(void)
 {
@@ -70,6 +78,7 @@ static esp_err_t i2c_master_init(void)
                             I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
+#ifdef PIN_DISPLAY_CS
 static void display_init(void)
 {
   gpio_reset_pin(PIN_DISPLAY_CS);
@@ -84,7 +93,9 @@ static void display_init(void)
   gpio_set_direction(PIN_BUSY, GPIO_MODE_INPUT);
   gpio_set_pull_mode(PIN_BUSY, GPIO_PULLDOWN_ONLY);
 }
+#endif
 
+#ifdef PIN_MOSI
 esp_err_t spi_master_init(void)
 {
   esp_err_t err;
@@ -109,6 +120,7 @@ esp_err_t spi_master_init(void)
   };
   return spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle);
 }
+#endif
 
 esp_err_t sht40_register_read(uint8_t *rdata, size_t rlen, uint8_t *data, size_t len)
 {
@@ -208,7 +220,7 @@ static void configure_cc1101(void)
 }
 #endif
 
-#if defined(PIN_VL53L1_XSCHUT) || defined(PIN_VL53L0_XSCHUT)
+#ifdef PIN_VL53L1_XSCHUT
 static void configure_vl53l(void)
 {
   gpio_reset_pin(PIN_VL53L1_XSCHUT);
@@ -216,11 +228,21 @@ static void configure_vl53l(void)
   gpio_set_direction(PIN_VL53L1_XSCHUT, GPIO_MODE_OUTPUT);
 }
 #endif
+#ifdef PIN_VL53L0_XSCHUT
+static void configure_vl53l(void)
+{
+  gpio_reset_pin(PIN_VL53L0_XSCHUT);
+  gpio_set_level(PIN_VL53L0_XSCHUT, 0);
+  gpio_set_direction(PIN_VL53L0_XSCHUT, GPIO_MODE_OUTPUT);
+}
+#endif
 
 
 void configure_hal(void)
 {
+#ifdef PIN_LED
   configure_led();
+#endif
   configure_inputs();
 #ifdef PIN_VL6180_IO0
   configure_vl6180();
@@ -240,8 +262,11 @@ void configure_hal(void)
     while (1){}
   }
 
+#ifdef PIN_DISPLAY_CS
   display_init();
+#endif
 
+#ifdef PIN_MOSI
   rc = spi_master_init();
   if (rc != ESP_OK)
   {
@@ -249,6 +274,7 @@ void configure_hal(void)
     set_led(8, 0, 0);
     while (1){}
   }
+#endif
 }
 
 void delayms(unsigned int ms)
@@ -261,6 +287,7 @@ void delayms(unsigned int ms)
 
 void ssd1680_command(unsigned char command, unsigned char *data, unsigned int data_length)
 {
+#ifdef PIN_DISPLAY_CS
   //if (data)
   //  ESP_LOGI(TAG, "command: 0x%02x, data length %d, data: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X",
   //            command, data_length, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
@@ -300,6 +327,7 @@ void ssd1680_command(unsigned char command, unsigned char *data, unsigned int da
   spi_device_release_bus(spi_handle);
 
   SSD1680_CS_SET;
+#endif
 }
 
 void Log(const char *name, int value)

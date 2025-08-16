@@ -89,9 +89,13 @@ unsigned short VLMeasureDistance(void)
 
 int VLInit(void)
 {
-  gpio_set_level(VL_XSCHUT, 1);
+#ifdef PIN_VL53L1_XSCHUT
+  gpio_set_level(PIN_VL53L1_XSCHUT, 1);
   vTaskDelay(20 / portTICK_PERIOD_MS);
   return VL53L1X_init(1, Long, 500000, 5000);
+#else
+  return 1;
+#endif
 }
 
 #endif
