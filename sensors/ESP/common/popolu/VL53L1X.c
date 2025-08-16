@@ -90,7 +90,9 @@ typedef struct
 // calculations
 #define TargetRate 0x0A00
 
+#ifndef IO_TIMEOUT
 #define IO_TIMEOUT 10 // ms
+#endif
 
 static unsigned short fast_osc_frequency;
 static unsigned short osc_calibrate_val;

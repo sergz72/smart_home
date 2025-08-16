@@ -14,7 +14,9 @@
 #include "ui_commands.h"
 #include "cc1101_commands.h"
 #include "bh_commands.h"
-#include "vl_commands.h"
+#include "vl50_commands.h"
+#include "vl51_commands.h"
+#include "vl6_commands.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -74,7 +76,9 @@ void app_main(void)
   register_ui_commands();
   register_cc1101_commands();
   register_bh_commands();
-  register_vl_commands();
+  register_vl6_commands();
+  register_vl50_commands();
+  register_vl51_commands();
 
   getstring_init(command_line, sizeof(command_line), getch_, puts_);
 

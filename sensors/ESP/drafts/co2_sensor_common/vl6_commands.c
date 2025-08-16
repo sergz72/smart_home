@@ -1,4 +1,4 @@
-#include <vl_commands.h>
+#include <vl6_commands.h>
 #include "board.h"
 #include <shell.h>
 #include <vl6180.h>
@@ -21,8 +21,8 @@ static const ShellCommandItem vl_init_command_items[] = {
 };
 static const ShellCommand vl_init_command = {
   vl_init_command_items,
-  "vl_init",
-  "vl_init",
+  "vl6_init",
+  "vl6_init",
   NULL,
   NULL
 };
@@ -33,8 +33,8 @@ static const ShellCommandItem vl_als_status_command_items[] = {
 };
 static const ShellCommand vl_als_status_command = {
   vl_als_status_command_items,
-  "vl_als_status",
-  "vl_als_status",
+  "vl6_als_status",
+  "vl6_als_status",
   NULL,
   NULL
 };
@@ -45,8 +45,8 @@ static const ShellCommandItem vl_interrupt_clear_command_items[] = {
 };
 static const ShellCommand vl_interrupt_clear_command = {
   vl_interrupt_clear_command_items,
-  "vl_interrupt_clear",
-  "vl_interrupt_clear",
+  "vl6_interrupt_clear",
+  "vl6_interrupt_clear",
   NULL,
   NULL
 };
@@ -58,8 +58,8 @@ static const ShellCommandItem vl_als_start_command_items[] = {
 };
 static const ShellCommand vl_als_start_command = {
   vl_als_start_command_items,
-  "vl_als_start",
-  "vl_als_start flags",
+  "vl6_als_start",
+  "vl6_als_start flags",
   NULL,
   NULL
 };
@@ -71,8 +71,8 @@ static const ShellCommandItem vl_als_get_command_items[] = {
 };
 static const ShellCommand vl_als_get_command = {
   vl_als_get_command_items,
-  "vl_als_get",
-  "vl_als_get coefficient",
+  "vl6_als_get",
+  "vl6_als_get coefficient",
   NULL,
   NULL
 };
@@ -84,8 +84,8 @@ static const ShellCommandItem vl_als_set_gain_command_items[] = {
 };
 static const ShellCommand vl_als_set_gain_command = {
   vl_als_set_gain_command_items,
-  "vl_als_set_gain",
-  "vl_als_set_gain gain",
+  "vl6_als_set_gain",
+  "vl6_als_set_gain gain",
   NULL,
   NULL
 };
@@ -97,8 +97,8 @@ static const ShellCommandItem vl_als_set_iperiod_command_items[] = {
 };
 static const ShellCommand vl_als_set_iperiod_command = {
   vl_als_set_iperiod_command_items,
-  "vl_als_set_iperiod",
-  "vl_als_set_iperiod iperiod",
+  "vl6_als_set_iperiod",
+  "vl6_als_set_iperiod iperiod",
   NULL,
   NULL
 };
@@ -178,7 +178,7 @@ static int vl_als_status_handler(printf_func pfunc, gets_func gfunc, int argc, c
   return 0;
 }
 
-void register_vl_commands(void)
+void register_vl6_commands(void)
 {
   shell_register_command(&vl_init_command);
   shell_register_command(&vl_als_start_command);

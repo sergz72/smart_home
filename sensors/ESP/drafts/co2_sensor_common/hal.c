@@ -9,6 +9,8 @@
 #include <display.h>
 #include <cc1101.h>
 #include <vl6180.h>
+#include "esp_timer.h"
+#include <VL53L0X.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -206,6 +208,15 @@ static void configure_cc1101(void)
 }
 #endif
 
+#if defined(PIN_VL53L1_XSCHUT) || defined(PIN_VL53L0_XSCHUT)
+static void configure_vl53l(void)
+{
+  gpio_reset_pin(PIN_VL53L1_XSCHUT);
+  gpio_set_level(PIN_VL53L1_XSCHUT, 0);
+  gpio_set_direction(PIN_VL53L1_XSCHUT, GPIO_MODE_OUTPUT);
+}
+#endif
+
 
 void configure_hal(void)
 {
@@ -216,6 +227,9 @@ void configure_hal(void)
 #endif
 #ifdef PIN_CC1101_CS
   configure_cc1101();
+#endif
+#if defined(PIN_VL53L1_XSCHUT) || defined(PIN_VL53L0_XSCHUT)
+  configure_vl53l();
 #endif
 
   esp_err_t rc = i2c_master_init();
@@ -374,6 +388,97 @@ int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *st
 
   return err;
 #else
-  return 0;
+  return 1;
 #endif
+}
+
+unsigned long long int get_time_ms(void)
+{
+  return esp_timer_get_time() / 1000;
+}
+
+// Write an 8-bit register
+int VL53L0x_writeReg(unsigned char reg, unsigned char value)
+{
+  ESP_LOGI(TAG, "Writing reg 0x%02x, value 0x%02x", reg, value);
+  unsigned char data[2] = {reg, value};
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, data, 2,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+// Write a 16-bit register
+int VL53L0x_writeReg16Bit(unsigned char reg, unsigned short value)
+{
+  ESP_LOGI(TAG, "Writing reg 0x%02x, value 0x%04x", reg, value);
+  unsigned char data[3] = {reg, (unsigned char)(value >> 8), (unsigned char)value};
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, data, 3,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+// Write a 32-bit register
+int VL53L0x_writeReg32Bit(unsigned char reg, unsigned long value)
+{
+  ESP_LOGI(TAG, "Writing reg 0x%02x, value 0x%08x", reg, value);
+  unsigned char data[5] = {reg, (unsigned char)(value >> 24), (unsigned char)(value >> 16),
+                            (unsigned char)(value >> 8), (unsigned char)value};
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, data, 5,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+// Read an 8-bit register
+int VL53L0x_readReg(unsigned char reg, unsigned char *value)
+{
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, (unsigned char*)&reg,
+                                      1, value, 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  if (rc)
+    return rc;
+  ESP_LOGI(TAG, "Read reg 0x%02x, value 0x%02x", reg, value[0]);
+  return 0;
+}
+
+// Read a 16-bit register
+int VL53L0x_readReg16Bit(unsigned char reg, unsigned short *value)
+{
+  unsigned char data[2];
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, (unsigned char*)&reg,
+                                      1, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  if (rc)
+    return rc;
+  *value = ((unsigned short)data[0] << 8) | (unsigned short)data[1];
+  ESP_LOGI(TAG, "Read reg 0x%02x, value 0x%02x%02x", reg, data[0], data[1]);
+  return 0;
+}
+
+// Read a 32-bit register
+int VL53L0x_readReg32Bit(unsigned char reg, unsigned long *value)
+{
+  unsigned char data[4];
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, (unsigned char*)&reg,
+                                      1, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  if (rc)
+    return rc;
+  *value = ((unsigned long)data[0] << 24)
+          | ((unsigned long)data[1] << 16)
+          | ((unsigned long)data[2] << 8)
+          | (unsigned long)data[3];
+  ESP_LOGI(TAG, "Read reg 0x%02x, value 0x%02x%02x%02x%02x", reg, data[0], data[1], data[2], data[3]);
+  return 0;
+}
+
+// Write an arbitrary number of bytes from the given array to the sensor,
+// starting at the given register
+int VL53L0x_writeMulti(unsigned char reg, unsigned char const *src, unsigned char count)
+{
+  ESP_LOGI(TAG, "Write multi reg 0x%02x, count %d", reg, count);
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, src, count,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+// Read an arbitrary number of bytes from the sensor, starting at the given
+// register, into the given array
+int VL53L0x_readMulti(unsigned char reg, unsigned char * dst, unsigned char count)
+{
+  ESP_LOGI(TAG, "Read multi reg 0x%02x, count %d", reg, count);
+  return i2c_master_write_read_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, (unsigned char*)&reg,
+                                      1, dst, count, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
