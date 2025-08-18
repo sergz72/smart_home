@@ -46,8 +46,13 @@
 #endif
 
 #define delay(x) delayms(1)
+#ifdef PIN_CC1101_CS
 #define cc1101_CSN_CLR(x) gpio_set_level(PIN_CC1101_CS, 0)
 #define cc1101_CSN_SET(x) gpio_set_level(PIN_CC1101_CS, 1)
+#else
+#define cc1101_CSN_CLR(x)
+#define cc1101_CSN_SET(x)
+#endif
 
 #define BH1750_ADDR 0x23
 

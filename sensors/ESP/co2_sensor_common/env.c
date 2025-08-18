@@ -109,7 +109,7 @@ int get_env(void)
     ESP_LOGE(TAG, "bh1750_measure error %d", rc);
     return rc;
   }
-  luminocity = result * 11;
+  luminocity = (uint32_t)result * 11;
   ESP_LOGI(TAG, "Luminocity: %d", luminocity);
   rc = scd30_measure(&result_scd30);
   if (rc)
@@ -120,7 +120,7 @@ int get_env(void)
   result_scd30.temperature += TEMPERATURE_OFFSET;
   temp_val = (int16_t)(result_scd30.temperature * 100);
   humi_val = (int16_t)(result_scd30.humidity * 100);
-  co2_level = (uint16_t)(result_scd30.co2 * 100);
+  co2_level = (uint32_t)(result_scd30.co2 * 100);
 
   get_ext_env();
   return 0;
