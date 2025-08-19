@@ -47,7 +47,7 @@ int encrypt_env(void **data)
   sdata.sensor_data9_2 = (unsigned char)(co2_level >> 16);
   sdata.sensor_data10_1 = (unsigned short)luminocity;
   sdata.sensor_data10_2 = (unsigned char)(luminocity >> 16);
-  calculateCRC(&sdata);
+  calculateCRC(&sdata, ENCRYPTED_LENGTH);
   encrypt((unsigned char*)&sdata);
   *data = encrypted;
   return ENCRYPTED_LENGTH;

@@ -11,6 +11,7 @@
 #include <vl6180.h>
 #include "esp_timer.h"
 #include <VL53L0X.h>
+#include <veml7700.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -509,4 +510,17 @@ int VL53L0x_readMulti(unsigned char reg, unsigned char * dst, unsigned char coun
   ESP_LOGI(TAG, "Read multi reg 0x%02x, count %d", reg, count);
   return i2c_master_write_read_device(I2C_MASTER_NUM, VL53L0_SENSOR_ADDR, (unsigned char*)&reg,
                                       1, dst, count, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int veml7700_read(unsigned char reg, unsigned short *data)
+{
+  return i2c_master_write_read_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int veml7700_write(unsigned char reg, unsigned short value)
+{
+  unsigned char data[3] = {reg, (unsigned char)value, (unsigned char)(value >> 8)};
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, data, 3,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }

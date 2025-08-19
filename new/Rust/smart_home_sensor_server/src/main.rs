@@ -23,11 +23,11 @@ fn load_device_sensors(db: &DB) -> Result<HashMap<usize, HashMap<usize, DeviceSe
 with s as (
 select id, device_id, unnest(device_sensors) dsensors
 from sensors
-where device_id is not null
+where device_id is not null and enabled = true
 ), so as (
 select id, device_id, unnest(offsets) doffsets
 from sensors
-where device_id is not null
+where device_id is not null and enabled = true
 )
 select s.id, s.device_id, (s.dsensors).id idx, (s.dsensors).value_type, coalesce((so.doffsets).offset_value, 0) offset_value
 from s left join so

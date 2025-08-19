@@ -31,9 +31,13 @@ static const ShellCommand vl_measure_command = {
 
 static int vl_init_handler(printf_func pfunc, gets_func gfunc, int argc, char **argv, void *data)
 {
+#ifdef PIN_VL53L0_XSCHUT
   gpio_set_level(PIN_VL53L0_XSCHUT, 1);
   delayms(20);
   return VL53L0x_init(1);
+#else
+  return 1;
+#endif
 }
 
 static int vl_measure_handler(printf_func pfunc, gets_func gfunc, int argc, char **argv, void *data)

@@ -17,6 +17,7 @@
 #include "bme280.h"
 #include "mh_z19b.h"
 #include "temt6000.h"
+#include <veml7700.h>
 #include "driver/uart.h"
 
 static const char *TAG = "env";
@@ -62,7 +63,17 @@ void init_env(void)
 
   gpio_init();
   uart1_init();
+#ifdef USE_TEMT6000
   adc_init();
+#else
+  rc = i2c_master2_init();
+  if (rc != ESP_OK)
+  {
+    ESP_LOGE(TAG, "i2c_master2_init error %d", rc);
+    set_led_red();
+    while (1){}
+  }
+#endif
 
   rc = i2c_master_init();
   if (rc != ESP_OK)
@@ -72,6 +83,7 @@ void init_env(void)
     while (1){}
   }
 
+#ifdef PIN_NUM_MISO
   rc = spi_master_init();
   if (rc != ESP_OK)
   {
@@ -79,6 +91,7 @@ void init_env(void)
     set_led_red();
     while (1){}
   }
+#endif
   if (bme280_readCalibrationData())
   {
     ESP_LOGE(TAG, "bme280_readCalibrationData error %d", rc);
@@ -86,12 +99,23 @@ void init_env(void)
     while (1){}
   }
 
-  if (!cc1101Init())
+#ifdef PIN_NUM_MISO
+  if (cc1101Init())
   {
     ESP_LOGE(TAG, "cc1101Init failed");
     set_led_red();
     while (1){}
   }
+#endif
+
+#ifndef USE_TEMT6000
+  if (veml7700_init())
+  {
+    ESP_LOGE(TAG, "veml7700 init failed");
+    set_led_red();
+    while (1){}
+  }
+#endif
 
   env_semaphore = xSemaphoreCreateBinary();
   if (!env_semaphore) {
@@ -137,13 +161,20 @@ static int get_ext_env(void)
   BresserPacket *bp = NULL;
   unsigned char *laCrossePacket;
 
-  currentTime = prevLevel = flags = 0;
+  currentTime = prevLevel = 0;
+
+#ifdef PIN_NUM_MISO
+  flags = 0;
+#else
+  flags = LA_CROSSE_FLAG;
+#endif
 
   // 200 us timer
   gptimer_start(gptimer);
 
   for (i = 0; i < 240; i++)
   {
+#ifdef PIN_NUM_MISO
     if (!(flags & LA_CROSSE_FLAG))
     {
       if ((i % 10) == 0)
@@ -161,8 +192,8 @@ static int get_ext_env(void)
         {
           ESP_LOGI(TAG, "PACKET RECEIVED!!! %d %d %d %d %d", laCrossePacket[0], laCrossePacket[1], laCrossePacket[2],
                    laCrossePacket[3], laCrossePacket[4]);
-          laCrossePacket = laCrosseDecode(8, laCrossePacket, &ext_temp_val2, NULL);
-          if (!laCrossePacket)
+          const char *message = laCrosseDecode(8, laCrossePacket, &ext_temp_val2, NULL);
+          if (!message)
           {
             ext_temp_val2 *= 10;
             ESP_LOGI(TAG, "PACKET DECODE SUCCESS, t = %d", ext_temp_val2);
@@ -170,10 +201,11 @@ static int get_ext_env(void)
             flags |= LA_CROSSE_FLAG;
           }
           else
-            ESP_LOGE(TAG, "PACKET DECODE FAILURE %s", laCrossePacket);
+            ESP_LOGE(TAG, "PACKET DECODE FAILURE %s", message);
         }
       }
     }
+#endif
     if ((flags & (PROLOGUE_FLAG | BRESSER_FLAG)) != (PROLOGUE_FLAG | BRESSER_FLAG))
     {
       xSemaphoreTake(env_semaphore, portMAX_DELAY);
@@ -249,9 +281,21 @@ int get_env(void)
     co2_level = (unsigned int)level * 100;
   ESP_LOGI(TAG, "CO2 level: %d, rc = %d", (int)co2_level, rc);
 
+#ifdef USE_TEMT6000
   unsigned int mv = temt6000_get_mv();
   luminocity = temt6000_get_lux(mv, 5000) * 100;
   ESP_LOGI(TAG, "Luminocity: %d", (int)luminocity);
+#else
+  veml7700_result result;
+  int irc = veml7700_measure(&result);
+  if (irc)
+    ESP_LOGE(TAG, "veml7700 measure error %d", irc);
+  else
+  {
+    ESP_LOGI(TAG, "Luminocity: %f gainx8: %d tries: %d", result.lux, result.gainx8, result.tries);
+    luminocity = (uint32_t)(result.lux * 100);
+  }
+#endif
 
   return get_ext_env();
 }

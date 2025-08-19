@@ -13,10 +13,10 @@
 #else
 #define CONFIG_SERVER_ADDRESS_SUFFIX 254
 #define SEND_INTERVAL 270000 // 4.5 minutes
-#define HOST_IP_ADDR ""
+#define HOST_IP_ADDR "152.67.67.107"
 #endif
 
-#define PORT 0
+#define PORT 60002
 
 #define BLE_ENV
 
@@ -34,17 +34,20 @@
 #define BUTTON_GPIO 0
 #define I2C_MASTER_SCL_IO           14                         /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           21                         /*!< GPIO number used for I2C master data  */
-#define PIN_NUM_MISO 13
-#define PIN_NUM_MOSI 11
-#define PIN_NUM_CLK  12
-#define PIN_NUM_CS   10
-#define PIN_NUM_GDO0 15
-#define PIN_NUM_GDO2 16
+#define I2C_MASTER2_SCL_IO          5                          /*!< GPIO number used for I2C master clock */
+#define I2C_MASTER2_SDA_IO          4                          /*!< GPIO number used for I2C master data  */
+//#define PIN_NUM_MISO 13
+//#define PIN_NUM_MOSI 11
+//#define PIN_NUM_CLK  12
+//#define PIN_NUM_CS   10
+//#define PIN_NUM_GDO0 15
+//#define PIN_NUM_GDO2 16
 #define LED_GPIO 38
 #define LED_STRIP
 #define GPIO_RECEIVER_DATA_IO 2
-#define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_RECEIVER_DATA_IO) | (1ULL<<PIN_NUM_GDO0) | (1ULL<<PIN_NUM_GDO2))
-#define GPIO_OUTPUT_PIN_SEL (1ULL<<PIN_NUM_CS)
+//#define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_RECEIVER_DATA_IO) | (1ULL<<PIN_NUM_GDO0) | (1ULL<<PIN_NUM_GDO2))
+#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_RECEIVER_DATA_IO)
+//#define GPIO_OUTPUT_PIN_SEL (1ULL<<PIN_NUM_CS)
 //#define WIFI_POWER 3 // db
 #endif
 

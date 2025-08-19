@@ -9,8 +9,10 @@
 #include "mh_z19b.h"
 #include "driver/uart.h"
 #include "esp_adc/adc_oneshot.h"
+#include <veml7700.h>
 
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
+#define I2C_MASTER2_NUM             1                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          100000                     /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -43,6 +45,24 @@ esp_err_t i2c_master_init(void)
                             I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
+esp_err_t i2c_master2_init(void)
+{
+  i2c_config_t conf = {
+    .mode = I2C_MODE_MASTER,
+    .sda_io_num = I2C_MASTER2_SDA_IO,
+    .scl_io_num = I2C_MASTER2_SCL_IO,
+    .sda_pullup_en = GPIO_PULLUP_ENABLE,
+    .scl_pullup_en = GPIO_PULLUP_ENABLE,
+    .master.clk_speed = I2C_MASTER_FREQ_HZ,
+};
+
+  i2c_param_config(I2C_MASTER2_NUM, &conf);
+
+  return i2c_driver_install(I2C_MASTER2_NUM, conf.mode, I2C_MASTER_RX_BUF_DISABLE,
+                            I2C_MASTER_TX_BUF_DISABLE, 0);
+}
+
+#ifdef PIN_NUM_MISO
 esp_err_t spi_master_init(void)
 {
   esp_err_t err;
@@ -67,6 +87,7 @@ esp_err_t spi_master_init(void)
   };
   return spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle);
 }
+#endif
 
 unsigned int bme280Read(unsigned char register_no, unsigned char *pData, int size)
 {
@@ -140,23 +161,24 @@ void gpio_init(void)
   //gpio_config(&io_conf);
 }
 
-unsigned int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned char *rxdata, unsigned int size)
+int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned char *rxdata, unsigned int size)
 {
+#ifdef PIN_NUM_CS
   esp_err_t err;
   unsigned int rc;
 
   if (size < 2)
-    return 0;
+    return 200;
 
   rc = CC1101_TIMEOUT;
   while (--rc && cc1101_GD2) // waiting for chip ready
     ;
   if (!rc)
-    return 0; // timeout
+    return 201; // timeout
 
   err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
   if (err != ESP_OK)
-    return 0;
+    return err;
 
   if (size > 2)
     txdata[0] |= CC1101_BURST;
@@ -170,23 +192,30 @@ unsigned int cc1101_RW(unsigned int device_num, unsigned char *txdata, unsigned 
 
   spi_device_release_bus(spi_handle);
 
-  return err == ESP_OK ? 1 : 0;
+  return err;
+#else
+  return 1;
+#endif
 }
 
-unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *status)
+int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *status)
 {
+#ifdef PIN_NUM_CS
   esp_err_t err;
   unsigned int rc;
 
-  rc = CC1101_TIMEOUT;
-  while (--rc && cc1101_GD2) // waiting for chip ready
-    ;
-  if (!rc)
-    return 0; // timeout
+  if (data != CC1101_STROBE_SRES)
+  {
+    rc = CC1101_TIMEOUT;
+    while (--rc && cc1101_GD2) // waiting for chip ready
+      ;
+    if (!rc)
+      return 201; // timeout
+  }
 
   err = spi_device_acquire_bus(spi_handle, portMAX_DELAY);
   if (err != ESP_OK)
-    return 0;
+    return err;
 
   spi_transaction_t t = {
       .length = 8,
@@ -197,7 +226,10 @@ unsigned int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned
 
   spi_device_release_bus(spi_handle);
 
-  return err == ESP_OK ? 1 : 0;
+  return err;
+#else
+  return 1;
+#endif
 }
 
 void mh_z19b_send(unsigned char *data, int len)
@@ -215,4 +247,17 @@ unsigned int temt6000_get_mv(void)
   int value;
   adc_oneshot_read(adc_handle, ADC_CHANNEL_3, &value);
   return (value * ADC_VREF) >> 12;
+}
+
+int veml7700_read(unsigned char reg, unsigned short *data)
+{
+  return i2c_master_write_read_device(I2C_MASTER2_NUM, VEML7700_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int veml7700_write(unsigned char reg, unsigned short value)
+{
+  unsigned char data[3] = {reg, (unsigned char)value, (unsigned char)(value >> 8)};
+  return i2c_master_write_to_device(I2C_MASTER2_NUM, VEML7700_I2C_ADDRESS, data, 3,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }

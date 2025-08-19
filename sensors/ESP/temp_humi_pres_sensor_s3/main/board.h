@@ -14,8 +14,13 @@
 
 #define CC1101_TIMEOUT 0xFFFFF
 
+#ifdef PIN_NUM_GDO0
 #define cc1101_GD2 gpio_get_level(PIN_NUM_GDO2)
 #define cc1101_GD0 gpio_get_level(PIN_NUM_GDO0)
+#else
+#define cc1101_GD2 0
+#define cc1101_GD0 0
+#endif
 
 #define delay(x)
 #define cc1101_CSN_CLR(x)

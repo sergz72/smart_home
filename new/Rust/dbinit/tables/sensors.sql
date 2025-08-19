@@ -8,3 +8,5 @@ create table sensors (
   device_sensors device_sensor[],
   offsets sensor_offset[]
 );
+
+alter table sensors add column enabled bool not null default true;

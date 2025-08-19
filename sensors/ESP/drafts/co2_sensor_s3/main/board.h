@@ -18,8 +18,8 @@
 #define PIN_DISPLAY_CS 7
 #define PIN_BUSY       5
 
-#define PIN_VL53L1_XSCHUT 11
-#define PIN_VL53L0_XSCHUT 11
+//#define PIN_VL53L1_XSCHUT 11
+//#define PIN_VL53L0_XSCHUT 11
 
 #include <board_common.h>
 
