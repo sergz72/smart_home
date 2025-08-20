@@ -9,6 +9,8 @@
 #include <display.h>
 #include <cc1101.h>
 #include <vl6180.h>
+#include "bh1750.h"
+#include "veml7700.h"
 #include "common.h"
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -317,4 +319,17 @@ int cc1101_strobe(unsigned int device_num, unsigned char data, unsigned char *st
 #else
   return 0;
 #endif
+}
+
+int veml7700_read(unsigned char reg, unsigned short *data)
+{
+  return i2c_master_write_read_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int veml7700_write(unsigned char reg, unsigned short value)
+{
+  unsigned char data[3] = {reg, (unsigned char)value, (unsigned char)(value >> 8)};
+  return i2c_master_write_to_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, data, 3,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }

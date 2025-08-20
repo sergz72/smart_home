@@ -1,13 +1,18 @@
 #include "common.h"
 #include "env.h"
 #ifndef NO_ENV
+#include "board.h"
+#ifdef USE_BH1750
 #include "bh1750.h"
+#endif
+#ifdef USE_VEML7700
+#include "veml7700.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "stdint.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
-#include "driver/gptimer.h"
 #include "cc1101_func.h"
 #include "led.h"
 #include "hal.h"
@@ -15,7 +20,6 @@
 
 static const char *TAG = "env";
 volatile static int currentTime, prevLevel;
-static gptimer_handle_t gptimer;
 scd30_result result_scd30;
 
 int16_t temp_val = 2510;
@@ -58,18 +62,31 @@ void init_env(void)
 #endif
 
   scd30_init_sensor(60);
-  bh1750_set_measurement_time(254);
+#ifdef USE_BH1750
+  if (bh1750_set_measurement_time(254))
+  {
+    ESP_LOGE(TAG, "bh1750_set_measurement_time failed");
+    set_led_red();
+    while (1){}
+  }
+#endif
+#ifdef USE_VEML7700
+  if (veml7700_init())
+  {
+    ESP_LOGE(TAG, "veml7700_ini failed");
+    set_led_red();
+    while (1){}
+  }
+#endif
 }
 
+#ifdef USE_CC1101
 static void get_ext_env(void)
 {
   int i, flags;
   unsigned char *laCrossePacket;
 
   currentTime = prevLevel = flags = 0;
-
-  // 200 us timer
-  gptimer_start(gptimer);
 
   cc1101ReceiveStart();
   for (i = 0; i < 240; i++)
@@ -98,8 +115,10 @@ static void get_ext_env(void)
   if (i == 240)
     ESP_LOGE(TAG, "External temperature receiver failure");
 }
+#endif
 
-int get_env(void)
+#ifdef USE_BH1750
+static int measure_luminocity(void)
 {
   unsigned short result;
 
@@ -111,6 +130,31 @@ int get_env(void)
   }
   luminocity = (uint32_t)result * 11;
   ESP_LOGI(TAG, "Luminocity: %d", luminocity);
+  return 0;
+}
+#endif
+#ifdef USE_VEML7700
+static int measure_luminocity(void)
+{
+  veml7700_result result;
+
+  int rc = veml7700_measure(&result);
+  if (rc)
+  {
+    ESP_LOGE(TAG, "veml7700_measure error %d", rc);
+    return rc;
+  }
+  ESP_LOGI(TAG, "luminocity: %f gainx8 %d tries %d", result.lux, result.gainx8, result.tries);
+  luminocity = (uint32_t)(result.lux * 100);
+  return 0;
+}
+#endif
+
+int get_env(void)
+{
+  int rc = measure_luminocity();
+  if (rc)
+    return rc;
   rc = scd30_measure(&result_scd30);
   if (rc)
   {
@@ -122,7 +166,9 @@ int get_env(void)
   humi_val = (int16_t)(result_scd30.humidity * 100);
   co2_level = (uint32_t)(result_scd30.co2 * 100);
 
+#ifdef USE_CC1101
   get_ext_env();
+#endif
   return 0;
 }
 #else
