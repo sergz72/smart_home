@@ -4,8 +4,8 @@
 #define PIN_BTN 9
 #define PIN_LED 48
 
-#define PIN_SCL 13
-#define PIN_SDA 12
+#define PIN_SCL 12
+#define PIN_SDA 13
 
 //common
 #define PIN_SCK  10

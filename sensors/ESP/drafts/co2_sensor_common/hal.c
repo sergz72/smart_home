@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include <VL53L0X.h>
 #include <veml7700.h>
+#include <tsl2591.h>
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -523,4 +524,37 @@ int veml7700_write(unsigned char reg, unsigned short value)
   unsigned char data[3] = {reg, (unsigned char)value, (unsigned char)(value >> 8)};
   return i2c_master_write_to_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, data, 3,
                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int tsl2591_read8(unsigned char reg, unsigned char *data)
+{
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  ESP_LOGI(TAG, "Read reg 0x%02x, value %d rc %d", reg, data[0], rc);
+  return rc;
+}
+
+int tsl2591_read16(unsigned char reg, unsigned short *data)
+{
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  ESP_LOGI(TAG, "Read reg 0x%02x, value %d rc %d", reg, data[0], rc);
+  return rc;
+}
+
+int tsl2591_write(unsigned char reg, unsigned char value)
+{
+  unsigned char data[2] = {reg, value};
+  int rc = i2c_master_write_to_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, data, 2,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  ESP_LOGI(TAG, "Write reg 0x%02x, value %d rc %d", reg, value, rc);
+  return rc;
+}
+
+int tsl2591_command(unsigned char command)
+{
+  int rc = i2c_master_write_to_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, &command, 1,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  ESP_LOGI(TAG, "Command 0x%02x, rc %d", command, rc);
+  return rc;
 }

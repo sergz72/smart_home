@@ -18,6 +18,7 @@
 #include "vl51_commands.h"
 #include "vl6_commands.h"
 #include "veml_commands.h"
+#include "tsl_commands.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -81,6 +82,7 @@ void app_main(void)
   register_vl50_commands();
   register_vl51_commands();
   register_veml_commands();
+  register_tsl_commands();
 
   getstring_init(command_line, sizeof(command_line), getch_, puts_);
 
