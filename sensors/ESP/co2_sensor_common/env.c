@@ -8,6 +8,9 @@
 #ifdef USE_VEML7700
 #include "veml7700.h"
 #endif
+#ifdef PIN_TSL2591_INT
+#include "tsl2591.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "stdint.h"
@@ -19,6 +22,17 @@
 #include "laCrosseDecoder.h"
 
 static const char *TAG = "env";
+
+static const tsl2591_config tsl_config = {
+  .integration_time_ms = 600,
+  .als_interrupt_enable = 0,
+  .als_thresholds = {0,65535},
+  .no_persist_interrupt_enable = 0,
+  .no_persist_als_thresholds = {0, 65535},
+  .persistence_filter = AnyOutOfRange,
+  .sleep_after_interrupt = 0,
+};
+
 volatile static int currentTime, prevLevel;
 scd30_result result_scd30;
 
@@ -73,7 +87,15 @@ void init_env(void)
 #ifdef USE_VEML7700
   if (veml7700_init())
   {
-    ESP_LOGE(TAG, "veml7700_ini failed");
+    ESP_LOGE(TAG, "veml7700_init failed");
+    set_led_red();
+    while (1){}
+  }
+#endif
+#ifdef PIN_TSL2591_INT
+  if (tsl2591_init(&tsl_config))
+  {
+    ESP_LOGE(TAG, "tsl2591_init failed");
     set_led_red();
     while (1){}
   }
@@ -145,6 +167,22 @@ static int measure_luminocity(void)
     return rc;
   }
   ESP_LOGI(TAG, "luminocity: %f gainx8 %d tries %d", result.lux, result.gainx8, result.tries);
+  luminocity = (uint32_t)(result.lux * 100);
+  return 0;
+}
+#endif
+#ifdef PIN_TSL2591_INT
+static int measure_luminocity(void)
+{
+  tsl2591_result result;
+
+  int rc = tsl2591_measure(&result);
+  if (rc)
+  {
+    ESP_LOGE(TAG, "tsl2591_measure error %d", rc);
+    return rc;
+  }
+  ESP_LOGI(TAG, "luminocity: %f gain %d tries %d", result.lux, result.gain, result.tries);
   luminocity = (uint32_t)(result.lux * 100);
   return 0;
 }

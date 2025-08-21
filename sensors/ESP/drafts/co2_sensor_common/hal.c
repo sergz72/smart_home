@@ -193,9 +193,14 @@ static void configure_inputs(void)
 {
   gpio_config_t io_conf = {0};
   io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.pin_bit_mask = BIT64(PIN_BTN)
+#ifdef PIN_TSL2591_INT
+  | BIT64(PIN_TSL2591_INT)
+#endif
 #ifdef PIN_GDO0
-  io_conf.pin_bit_mask = BIT64(PIN_BTN) | BIT64(PIN_GDO0) | BIT64(PIN_GDO2);
+  | BIT64(PIN_GDO0) | BIT64(PIN_GDO2)
 #else
+  ;
   io_conf.pin_bit_mask = BIT64(PIN_BTN);
 #endif
   io_conf.mode = GPIO_MODE_INPUT;

@@ -11,6 +11,7 @@
 #include <vl6180.h>
 #include "bh1750.h"
 #include "veml7700.h"
+#include "tsl2591.h"
 #include "common.h"
 
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
@@ -168,6 +169,19 @@ static void configure_vl6180(void)
 }
 #endif
 
+#ifdef PIN_TSL2591_INT
+static void configure_tsl2591(void)
+{
+  gpio_config_t io_conf = {0};
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.pin_bit_mask = BIT64(PIN_TSL2591_INT);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_up_en = 1;
+  io_conf.pull_down_en = 0;
+  gpio_config(&io_conf);
+}
+#endif
+
 void gpio_init(void)
 {
 #ifdef PIN_VL6180_IO0
@@ -175,6 +189,9 @@ void gpio_init(void)
 #endif
 #ifdef PIN_CC1101_CS
   configure_cc1101();
+#endif
+#ifdef PIN_TSL2591_INT
+  configure_tsl2591();
 #endif
 
   display_init();
@@ -332,4 +349,33 @@ int veml7700_write(unsigned char reg, unsigned short value)
   unsigned char data[3] = {reg, (unsigned char)value, (unsigned char)(value >> 8)};
   return i2c_master_write_to_device(I2C_MASTER_NUM, VEML7700_I2C_ADDRESS, data, 3,
                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+int tsl2591_read8(unsigned char reg, unsigned char *data)
+{
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  return rc;
+}
+
+int tsl2591_read16(unsigned char reg, unsigned short *data)
+{
+  int rc = i2c_master_write_read_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, (unsigned char*)&reg,
+                                      1, (unsigned char*)data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  return rc;
+}
+
+int tsl2591_write(unsigned char reg, unsigned char value)
+{
+  unsigned char data[2] = {reg, value};
+  int rc = i2c_master_write_to_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, data, 2,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  return rc;
+}
+
+int tsl2591_command(unsigned char command)
+{
+  int rc = i2c_master_write_to_device(I2C_MASTER_NUM, TSL2591_I2C_ADDRESS, &command, 1,
+                                    I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+  return rc;
 }

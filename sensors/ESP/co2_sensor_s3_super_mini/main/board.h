@@ -1,9 +1,6 @@
 #ifndef _BOARD_H
 #define _BOARD_H
 
-#define PIN_BTN 9
-#define PIN_LED 48
-
 #define PIN_SCL 6
 #define PIN_SDA 7
 
@@ -19,9 +16,6 @@
 #define PIN_BUSY       1
 
 #define PIN_TSL2591_INT 5
-
-//#define PIN_VL53L1_XSCHUT 11
-//#define PIN_VL53L0_XSCHUT 11
 
 #include <board_common.h>
 
