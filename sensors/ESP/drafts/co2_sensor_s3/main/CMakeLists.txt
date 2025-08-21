@@ -30,6 +30,7 @@ idf_component_register(
         "../../../../ARM_CLION/common_lib/getstring.c"
         "../../../../ARM_CLION/common_lib/shell/shell.c"
         "../../../../ARM_CLION/common_lib/fixed_queue.c"
+        "../../../../ARM_CLION/common_lib/read_hex_string.c"
         "../../../../ARM_CLION/common_lib/display/epd_ssd1680.c"
         "../../../../ARM_CLION/common_lib/display/fonts/font16.c"
         "../../../../ARM_CLION/common_lib/display/fonts/font36_2.c"
