@@ -268,17 +268,11 @@ fn split_datetime(datetime: DateTime<Local>) -> (i32, i32) {
 fn run_aggregated_query(mut client: Client, start_datetime: DateTime<Local>, end_datetime: Option<DateTime<Local>>,
                           data_type: String) -> Result<Vec<Row>, Error> {
     let (start_date, _start_time) = split_datetime(start_datetime);
-    let sql = "with aggregated as (
-    select sensor_id, event_date, value_type,  min(value)::int min_value, avg(value)::int avg_value,
-           max(value)::int max_value
-      from sensor_events
-     where event_date >= $1 and event_date <= $3
-       and sensor_id in (select id from sensors where data_type = $2)
-    group by sensor_id, event_date, value_type
-)
-select sensor_id, event_date,
+    let sql = "select sensor_id, event_date,
        json_agg(json_build_object('value_type', value_type, 'min', min_value, 'avg', avg_value, 'max', max_value))
-  from aggregated
+  from sensor_events_aggregated
+ where event_date >= $1 and event_date <= $3
+   and sensor_id in (select id from sensors where data_type = $2)
 group by sensor_id, event_date
 order by event_date";
     let (end_date, _end_time) = split_datetime(end_datetime.unwrap_or(Local::now().add(TimeDelta::days(1))));
