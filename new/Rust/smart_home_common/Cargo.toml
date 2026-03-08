@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 chrono = "0.X"
 postgres = "0.X"
-chacha20 = "0.9.X"
-rand = "0.9.X"
+chacha20 = "0.X"
+rand = { version = "0.X", features = ["sys_rng"] }
 bzip2 = "0.X"

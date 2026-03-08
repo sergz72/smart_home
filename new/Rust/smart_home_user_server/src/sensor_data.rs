@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use rand::rngs::OsRng;
-use rand::TryRngCore;
+use rand::rngs::SysRng;
+use rand::TryRng;
 
 #[derive(Clone)]
 pub struct Aggregated {
@@ -15,7 +15,7 @@ impl Aggregated {
     }
 
     fn random() -> Aggregated {
-        let v = (OsRng.try_next_u32().unwrap() / 10) as i32;
+        let v = (SysRng.try_next_u32().unwrap() / 10) as i32;
         Aggregated{min: v, avg: v * 2, max: v * 4}
     }
 
@@ -192,13 +192,13 @@ fn aggregate_values(values: Vec<SensorData>) -> Vec<SensorDataValues> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use rand::rngs::OsRng;
-    use rand::TryRngCore;
+    use rand::rngs::SysRng;
+    use rand::TryRng;
     use crate::sensor_data::{aggregate_by_max_points, Aggregated, SensorData, SensorDataValues};
 
     fn generate_values(time: i32, value_types: &[&str]) -> SensorDataValues {
         SensorDataValues{time,
-            values: value_types.into_iter().map(|v|(v.to_string(), OsRng.try_next_u32().unwrap() as i32)).collect()}
+            values: value_types.into_iter().map(|v|(v.to_string(), SysRng.try_next_u32().unwrap() as i32)).collect()}
     }
 
     #[test]

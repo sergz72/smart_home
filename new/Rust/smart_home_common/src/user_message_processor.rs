@@ -5,8 +5,8 @@ use bzip2::Compression;
 use bzip2::read::BzEncoder;
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
-use rand::TryRngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use crate::base_server::MessageProcessor;
 use crate::logger::Logger;
 
@@ -83,41 +83,38 @@ impl UserMessageProcessor {
 
 fn encrypt(data: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
     let iv_raw = build_iv()?;
-    let mut iv = encrypt_iv(&iv_raw, key)?;
-    let bytes = data.as_slice();
-    let mut out_vec = transform(key, &iv_raw, bytes)?;
-    iv.append(&mut out_vec);
-    Ok(iv)
+    let iv = encrypt_iv(&iv_raw, key)?;
+    let mut result = vec![0u8; 12 + data.len()];
+    result[..12].copy_from_slice(&iv);
+    transform(key, &iv_raw, &data, &mut result[12..]);
+    Ok(result)
 }
 
 fn decrypt(message: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, Error> {
     let iv = &message[0..12];
-    let decrypted_iv_vec = encrypt_iv(iv, key)?;
-    let decrypted_iv = decrypted_iv_vec.as_slice();
-    check_iv(decrypted_iv)?;
+    let decrypted_iv = encrypt_iv(iv, key)?;
+    check_iv(&decrypted_iv)?;
     let encrypted = &message[12..];
-    transform(key, decrypted_iv, encrypted)
+    let mut result = vec![0u8; message.len() - 12];
+    transform(key, &decrypted_iv, encrypted, &mut result);
+    Ok(result)
 }
 
-fn encrypt_iv(iv: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, Error> {
+fn encrypt_iv(iv: &[u8], key: &[u8; 32]) -> Result<[u8; 12], Error> {
     let random_part = &iv[0..4];
     let mut iv3 = [0u8; 12];
     iv3[0..4].copy_from_slice(random_part);
     iv3[4..8].copy_from_slice(random_part);
     iv3[8..12].copy_from_slice(random_part);
-    let transformed = transform(key, &iv3, &iv[4..12])?;
-    let mut result = Vec::from(random_part);
-    result.extend_from_slice(&transformed);
+    let mut result = [0u8; 12];
+    result[..4].copy_from_slice(&random_part);
+    transform(key, &iv3, &iv[4..12], &mut result[4..]);
     Ok(result)
 }
 
-fn transform(key: &[u8; 32], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
+fn transform(key: &[u8; 32], iv: &[u8; 12], data: &[u8], out: &mut [u8]) {
     let mut cipher = ChaCha20::new(key.into(), iv.into());
-    let mut out_vec = vec![0u8; data.len()];
-    let out_bytes = out_vec.as_mut_slice();
-    cipher.apply_keystream_b2b(data, out_bytes)
-        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-    Ok(out_vec)
+    cipher.apply_keystream_b2b(data, out);
 }
 
 fn compress(data: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -142,7 +139,7 @@ fn check_iv(iv: &[u8]) -> Result<(), Error> {
 
 fn build_iv() -> Result<[u8; 12], Error> {
     let mut random_part = [0u8; 4];
-    OsRng.try_fill_bytes(&mut random_part)
+    SysRng.try_fill_bytes(&mut random_part)
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     let mut iv = [0u8; 12];
     let now = SystemTime::now().duration_since(UNIX_EPOCH)
@@ -162,14 +159,14 @@ pub fn build_message_processor(command_processor: Box<dyn CommandProcessor + Sen
 #[cfg(test)]
 mod tests {
     use std::io::{Error, ErrorKind};
-    use rand::rngs::OsRng;
-    use rand::TryRngCore;
+    use rand::rngs::SysRng;
+    use rand::TryRng;
     use crate::user_message_processor::{build_iv, check_iv, decrypt, encrypt, encrypt_iv};
 
     #[test]
     fn test_iv() -> Result<(), Error> {
         let mut key = [0u8; 32];
-        OsRng.try_fill_bytes(&mut key)
+        SysRng.try_fill_bytes(&mut key)
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
         let iv_raw = build_iv()?;
         check_iv(&iv_raw)?;
