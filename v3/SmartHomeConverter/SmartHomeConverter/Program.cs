@@ -37,28 +37,53 @@ return;
 
 void ProcessRawData()
 {
-    var data = new SortedDictionary<int, SortedDictionary<SensorEventsKey, SensorEvents<int>>>();
-    using (var reader =
-           new NpgsqlCommand("select sensor_id, event_date, event_time, value_type, value from sensor_events",
-               connection).ExecuteReader())
+    ProcessData<SensorEventsKey, RawSensorEvents>(
+        "select sensor_id, event_date, value_type, event_time, value from sensor_events",
+        (eventTime, sensorId) => new SensorEventsKey(eventTime, sensorId),
+        (writer, key) =>
+        {
+            writer.Write(key.EventTime);
+            writer.Write(key.SensorId);
+        }, "");
+}
+
+void ProcessAggregatedData()
+{
+    ProcessData<int, AggregatedSensorEvents>(
+        "select sensor_id, event_date, value_type, min_value, max_value, avg_value from sensor_events_aggregated",
+        (_, sensorId) => sensorId,
+        (writer, key) => writer.Write(key), ".aggregated");
+}
+
+void ProcessData<TK, TV>(string sql, Func<int, int, TK> keyBuilder, Action<BinaryWriter, TK> keyWriter, string fileSuffix)
+    where TK : IComparable<TK> where TV: IEventHandler, new()
+{
+    var data = new SortedDictionary<int, SortedDictionary<TK, TV>>();
+    using (var reader = new NpgsqlCommand(sql, connection).ExecuteReader())
     {
         while (reader.Read())
         {
             var sensorId = reader.GetInt32(0);
             var eventDate = reader.GetInt32(1);
-            var eventTime = reader.GetInt32(2);
-            var valueType = reader.GetString(3);
-            var value = reader.GetInt32(4);
-            var key = new SensorEventsKey(eventTime, sensorId);
+            var valueType = reader.GetString(2);
+            var v4 = reader.GetInt32(3);
+            var v5 = reader.GetInt32(4);
+            var key = keyBuilder(v4, sensorId);
             if (data.TryGetValue(eventDate, out var dateEvents))
             {
-                if (dateEvents.TryGetValue(key, out var events))
-                    events.AddEvent(valueType, value);
-                else
-                    dateEvents[key] = new SensorEvents<int>(valueType, value, new int[8]);
+                if (!dateEvents.TryGetValue(key, out var events))
+                {
+                    events = new TV();
+                    dateEvents[key] = events;
+                }
+                events.AddEvent(valueType, v4, v5, reader);
             }
             else
-                data[eventDate] = new SortedDictionary<SensorEventsKey, SensorEvents<int>> { {key, new SensorEvents<int>(valueType, value, new int[8])} };
+            {
+                var events = new TV();
+                events.AddEvent(valueType, v4, v5, reader);
+                data[eventDate] = new SortedDictionary<TK, TV> { { key, events } };
+            }
         }
     }
 
@@ -66,83 +91,19 @@ void ProcessRawData()
     {
         var year = entry.Key / 10000;
         var folderName = Path.Combine(outputFolderName, year.ToString());
-        var fileName = Path.Combine(folderName, entry.Key.ToString());
+        var fileName = Path.Combine(folderName, entry.Key.ToString()) + fileSuffix;
         if (!Directory.Exists(folderName))
             Directory.CreateDirectory(folderName);
-        File.WriteAllBytes(fileName, BuildEventsFile(entry.Value));
-    }
-}
 
-void ProcessAggregatedData()
-{
-    var data = new SortedDictionary<int, SortedDictionary<int, SensorEvents<AggregatedValues>>>();
-    using (var reader =
-           new NpgsqlCommand("select sensor_id, event_date, value_type, min_value, max_value, avg_value from sensor_events_aggregated",
-               connection).ExecuteReader())
-    {
-        while (reader.Read())
+        var stream = new MemoryStream();
+        var writer = new BinaryWriter(stream);
+        foreach (var kv in entry.Value)
         {
-            var sensorId = reader.GetInt32(0);
-            var eventDate = reader.GetInt32(1);
-            var valueType = reader.GetString(2);
-            var minValue = reader.GetInt32(3);
-            var maxValue = reader.GetInt32(4);
-            var avgValue = reader.GetInt32(5);
-            var values = new AggregatedValues(minValue, avgValue, maxValue);
-            var initialValues = new AggregatedValues[8];
-            for (var i = 0; i < 8; i++)
-                initialValues[i] = new AggregatedValues(0, 0, 0);
-            if (data.TryGetValue(eventDate, out var dateEvents))
-            {
-                if (dateEvents.TryGetValue(sensorId, out var events))
-                    events.AddEvent(valueType, values);
-                else
-                    dateEvents[sensorId] = new SensorEvents<AggregatedValues>(valueType, values, initialValues);
-            }
-            else
-                data[eventDate] = new SortedDictionary<int, SensorEvents<AggregatedValues>>
-                    { { sensorId, new SensorEvents<AggregatedValues>(valueType, values, initialValues) } };
+            keyWriter(writer, kv.Key);
+            kv.Value.Write(writer);
         }
+        File.WriteAllBytes(fileName, stream.ToArray());
     }
-    var fileName = Path.Combine(outputFolderName, "aggregated");
-    File.WriteAllBytes(fileName, BuildAggregatedEventsFile(data));
-}
-
-byte[] BuildEventsFile(SortedDictionary<SensorEventsKey, SensorEvents<int>> dateEvents)
-{
-    var stream = new MemoryStream();
-    var writer = new BinaryWriter(stream);
-    foreach (var entry in dateEvents)
-    {
-        writer.Write(entry.Key.EventTime);
-        writer.Write(entry.Key.SensorId);
-        writer.Write(entry.Value.Event.ValueTypes);
-        for (var i = 0; i < 8; i++)
-            writer.Write(entry.Value.Event.Values[i]);
-    }
-    return stream.ToArray();
-}
-
-byte[] BuildAggregatedEventsFile(SortedDictionary<int, SortedDictionary<int, SensorEvents<AggregatedValues>>> events)
-{
-    var stream = new MemoryStream();
-    var writer = new BinaryWriter(stream);
-    foreach (var entry in events)
-    {
-        foreach (var sensorEvents in entry.Value)
-        {
-            writer.Write(entry.Key); // date
-            writer.Write(sensorEvents.Key); // sensor id
-            writer.Write(sensorEvents.Value.Event.ValueTypes);
-            for (var i = 0; i < 8; i++)
-            {
-                writer.Write(sensorEvents.Value.Event.Values[i].Min);
-                writer.Write(sensorEvents.Value.Event.Values[i].Avg);
-                writer.Write(sensorEvents.Value.Event.Values[i].Max);
-            }
-        }
-    }
-    return stream.ToArray();
 }
 
 internal record SensorEventsKey(int EventTime, int SensorId) : IComparable<SensorEventsKey>
@@ -160,32 +121,81 @@ internal static class ValueTypes
     internal static Dictionary<string, int> Map = null!;
 }
 
-internal class SensorEvents<T>
+internal interface IEventHandler
 {
-    private int EventNo;
-    internal readonly SensorEvent<T> Event;
+    void AddEvent(string valueType, int v4, int v5, NpgsqlDataReader reader);
+    void Write(BinaryWriter writer);
+}
 
-    internal SensorEvents(string valueType, T value, T[] initialValues)
+internal abstract class SensorEvents<T>: IEventHandler where T: new()
+{
+    private int _eventNo;
+    internal readonly SensorEvent<T> Event = new();
+
+    public void AddEvent(string valueType, int v4, int v5, NpgsqlDataReader reader)
     {
-        EventNo = 0;
-        Event = new SensorEvent<T>(new byte[8], initialValues);
-        AddEvent(valueType, value);
-    }
-    
-    internal void AddEvent(string valueType, T value)
-    {
-        if (EventNo >= Event.Values.Length)
-            throw new ArgumentOutOfRangeException(nameof(EventNo), "Event number exceeds allowed maximum");
+        if (_eventNo >= Event.Values.Length)
+            throw new ArgumentOutOfRangeException(nameof(_eventNo), "Event number exceeds allowed maximum");
         var valueTypeId = (byte)ValueTypes.Map[valueType];
-        Event.ValueTypes[EventNo] = valueTypeId;
-        Event.Values[EventNo] = value;
-        EventNo++;
+        Event.ValueTypes[_eventNo] = valueTypeId;
+        Event.Values[_eventNo] = BuildValue(v4, v5, reader);
+        _eventNo++;
+    }
+
+    public abstract void Write(BinaryWriter writer);
+
+    protected abstract T BuildValue(int v4, int v5, NpgsqlDataReader reader);
+}
+
+internal sealed class RawSensorEvents: SensorEvents<int>
+{
+    public override void Write(BinaryWriter writer)
+    {
+        writer.Write(Event.ValueTypes);
+        for (var i = 0; i < 8; i++)
+            writer.Write(Event.Values[i]);
+    }
+
+    protected override int BuildValue(int v4, int v5, NpgsqlDataReader reader)
+    {
+        return v5;
     }
 }
 
-internal record SensorEvent<T>(
-    byte[] ValueTypes,
-    T[] Values
-);
+internal sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
+{
+    public override void Write(BinaryWriter writer)
+    {
+        writer.Write(Event.ValueTypes);
+        for (var i = 0; i < 8; i++)
+        {
+            writer.Write(Event.Values[i].Min);
+            writer.Write(Event.Values[i].Avg);
+            writer.Write(Event.Values[i].Max);
+        }
+    }
 
-internal record AggregatedValues(int Min, int Avg, int Max);
+    protected override AggregatedValues BuildValue(int v4, int v5, NpgsqlDataReader reader)
+    {
+        return new AggregatedValues(v4, reader.GetInt32(5), v5);
+    }
+}
+
+internal class SensorEvent<T> where T: new()
+{
+    internal readonly byte[] ValueTypes;
+    internal readonly T[] Values;
+    
+    public SensorEvent()
+    {
+        ValueTypes = new byte[8];
+        Values = new T[8];
+        for (var i = 0; i < 8; i++)
+            Values[i] = new T();
+    }
+}
+
+internal record AggregatedValues(int Min, int Avg, int Max)
+{
+    public AggregatedValues(): this(0, 0, 0) { }
+}
