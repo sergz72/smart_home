@@ -1,21 +1,23 @@
 ﻿using Npgsql;
 
-if (args.Length != 4)
+if (args.Length != 6)
 {
-    Console.WriteLine("Usage: SmartHomeConverter [raw|aggregated] value_types_file_name database_name output_folder_name");
+    Console.WriteLine("Usage: SmartHomeConverter host_name start_date [raw|aggregated] value_types_file_name database_name output_folder_name");
     return;
 }
 
-var aggregated = args[0] == "aggregated";
-ValueTypes.Map = File.ReadAllLines(args[1])
+var hostName = args[0];
+var startDate = int.Parse(args[1]);
+var aggregated = args[2] == "aggregated";
+ValueTypes.Map = File.ReadAllLines(args[3])
     .Select((line, idx) => (line, idx))
     .ToDictionary(lineAndIdx => lineAndIdx.line.Trim().PadRight(4), lineAndIdx => lineAndIdx.idx + 1);
-var databaseName = args[2];
-var outputFolderName = args[3];
+var databaseName = args[4];
+var outputFolderName = args[5];
 
 Console.WriteLine($"Converting database '{databaseName}' to '{outputFolderName}'");
 
-var connection = new NpgsqlConnection($"Host=127.0.0.1;Username=postgres;Database={databaseName}");
+var connection = new NpgsqlConnection($"Host={hostName};Username=postgres;Database={databaseName}");
 try
 {
     connection.Open();
@@ -58,6 +60,7 @@ void ProcessAggregatedData()
 void ProcessData<TK, TV>(string sql, Func<int, int, TK> keyBuilder, Action<BinaryWriter, TK> keyWriter, string fileSuffix)
     where TK : IComparable<TK> where TV: IEventHandler, new()
 {
+    sql += $" where event_date >= {startDate}";
     var data = new SortedDictionary<int, SortedDictionary<TK, TV>>();
     using (var reader = new NpgsqlCommand(sql, connection).ExecuteReader())
     {

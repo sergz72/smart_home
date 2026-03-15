@@ -10,6 +10,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
+import kotlin.time.TimeSource
 
 data class NetworkServiceConfig(val prefix: ByteArray, val key: ByteArray, val hostName: String, val port: Int,
                                 val timeoutMs: Int = 1000, val useBzip2: Boolean = true)
@@ -99,7 +100,10 @@ open class NetworkService(private val config: NetworkServiceConfig) {
         GlobalScope.launch(Dispatchers.IO) {
             try {
                 val sendData = prefix + encrypt(request)
+                val mark = TimeSource.Monotonic.markNow()
                 val response = sendUDP(sendData)
+                val elapsed = mark.elapsedNow()
+                println("Elapsed time: $elapsed")
                 println("Response size: ${response.size}")
                 val decrypted = decrypt(response)
                 if (config.useBzip2) {

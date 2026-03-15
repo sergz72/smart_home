@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.1.20"
+    kotlin("jvm") version "2.3.10"
 }
 
 group = "org.example"
@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    api("org.apache.commons:commons-compress:1.27.1")
+    api("org.apache.commons:commons-compress:1.28.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     testImplementation(kotlin("test"))
 }
@@ -20,7 +20,7 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(23)
+    jvmToolchain(25)
 }
 
 tasks.jar {
