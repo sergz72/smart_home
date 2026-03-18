@@ -1,0 +1,9 @@
+[package]
+name = "redis_migration"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+postgres = "0.X"
+redis = "1.X"
+chrono = "0.X"
