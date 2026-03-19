@@ -76,9 +76,9 @@ namespace SmartHomeUI
             
             _statusLabel = new Label();
 
-            _envGraphsView = new EnvGraphsView();
-            _watGraphsView = new WatGraphsView();
-            _eleGraphsView = new EleGraphsView();
+            _envGraphsView = new EnvGraphsView(service);
+            _watGraphsView = new WatGraphsView(service);
+            _eleGraphsView = new EleGraphsView(service);
 
             _tabControl = new TabControl
             {
@@ -217,7 +217,7 @@ namespace SmartHomeUI
             try
             {
                 var result = _service.GetSensorData(BuildSensorDataQuery(dataType));
-                view.Refresh(_service, result);
+                view.Refresh(result);
                 UpdateStatus();
             }
             catch (Exception e)

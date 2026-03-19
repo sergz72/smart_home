@@ -120,7 +120,7 @@ public sealed class SmartHomeService
         }
     }
 
-    private string GetLocationName(int sensorId)
+    internal string GetLocationName(int sensorId)
     {
         var locationId = _sensors[sensorId].LocationId;
         return _locations[locationId].Name;
@@ -166,7 +166,7 @@ public sealed class SmartHomeService
         if (sensors.Count == 0)
             return [];
         var dateRange = BuildDateRange(sensorDataQuery);
-        return dateRange.Aggregated ? GetRawSensorData(sensors, dateRange) : GetAggregatedSensorData(sensors, dateRange); 
+        return dateRange.Aggregated ? GetAggregatedSensorData(sensors, dateRange) : GetRawSensorData(sensors, dateRange); 
     }
 
     private Dictionary<string, List<SensorData>> GetAggregatedSensorData(HashSet<int> sensors, DateRange dateRange)
@@ -179,6 +179,8 @@ public sealed class SmartHomeService
         TsAggregation? avgAggregation = skipAggregation ? null : TsAggregation.Avg;
         TsAggregation? maxAggregation = skipAggregation ? null : TsAggregation.Max;
         long ?bucketDuration = skipAggregation ? null : dateRange.BucketDuration;
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
         foreach (var kv in _sensorValueTypeMap)
         {
             var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
@@ -194,6 +196,8 @@ public sealed class SmartHomeService
                 sensorDataList.Add(new SensorData(sensorId, null, new AggregatedSensorData(minList, avgList, maxList)));
             }
         }
+        stopwatch.Stop();
+        ResponseTimeMs = stopwatch.Elapsed.TotalMilliseconds;
         return result;
     }
 
@@ -215,6 +219,8 @@ public sealed class SmartHomeService
         var skipAggregation = dateRange.BucketDuration <= MinimumRawBucketDuration;
         TsAggregation? aggregation = skipAggregation ? null : TsAggregation.Avg;
         long ?bucketDuration = skipAggregation ? null : dateRange.BucketDuration;
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
         foreach (var kv in _sensorValueTypeMap)
         {
             var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
@@ -233,6 +239,8 @@ public sealed class SmartHomeService
                 sensorDataList.Add(new SensorData(sensorId, sensorData, null));
             }
         }
+        stopwatch.Stop();
+        ResponseTimeMs = stopwatch.Elapsed.TotalMilliseconds;
         return result;
     }
 
