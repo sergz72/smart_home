@@ -1,0 +1,261 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using NRedisStack;
+using NRedisStack.DataTypes;
+using NRedisStack.Literals.Enums;
+using NRedisStack.RedisStackCommands;
+using StackExchange.Redis;
+
+namespace SmartHomeUI;
+
+internal record AggregatedSensorDataValues(double Min, double Avg, double Max);
+internal record SensorData(DateTime DateTime, double? Value, AggregatedSensorDataValues? AggregatedValue);
+
+internal record LastData(DateTime Dt, double Value)
+{
+    public override string ToString()
+    {
+        return $"{Value:0.00} ({Dt:HH:mm:ss})";
+    }
+}
+
+public enum TimeUnit {
+    Day,
+    Month,
+    Year
+}
+
+public record DateOffset(int Offset, TimeUnit Unit)
+{
+    internal DateTime CalculateDateSubtract(DateTime dateTime)
+    {
+        return Unit switch
+        {
+            TimeUnit.Day => dateTime.AddDays(-Offset),
+            TimeUnit.Month => dateTime.AddMonths(-Offset),
+            TimeUnit.Year => dateTime.AddYears(-Offset),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+    }
+    
+    internal DateTime CalculateDateAdd(DateTime dateTime)
+    {
+        return Unit switch
+        {
+            TimeUnit.Day => dateTime.AddDays(Offset),
+            TimeUnit.Month => dateTime.AddMonths(Offset),
+            TimeUnit.Year => dateTime.AddYears(Offset),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+    }
+}
+
+public record SmartHomeQuery(
+    short MaxPoints,
+    string DataType,
+    DateTime? StartDate,
+    DateOffset? StartDateOffset,
+    DateOffset? Period);
+
+internal record Location(int Id, string Name, string LocationType);
+internal record Sensor(int Id, string Name, string DataType, int LocationId, int? DeviceId,
+    Dictionary<int, string> DeviceSensors, Dictionary<string, double> Offsets, bool Enabled);
+internal record Configuration(string RedisConnectionString, string SensorsFile, string LocationsFile);
+public sealed class SmartHomeService
+{
+    private record DateRange(bool Aggregated, long From, long To, long BucketDuration);
+    
+    private const int MaxUnaggregatedDataDays = 7;
+    private const long MaxUnaggregatedMilliseconds = 24 * 60 * 60 * 1000 * MaxUnaggregatedDataDays;
+    private const long MinimumRawBucketDuration = 5 * 60 * 1000; // 5 minutes
+    private const long MinimumAggregatedBucketDuration = 24 * 60 * 60 * 1000; // 1 Day
+    
+    private static Dictionary<string, string> _valueTypeMap = new Dictionary<string, string>
+    {
+        {"humi", "Humidity"},
+        {"temp", "Temperature"},
+        {"pres", "Pressure"},
+        {"co2 ", "CO2"},
+        {"lux ", "Luminosity"},
+        {"pwr ", "Power"},
+        {"icc ", "Current"},
+        {"vcc ", "Voltage"}
+    };
+    
+    private readonly ConnectionMultiplexer _redisConnection;
+    private readonly Dictionary<int, Sensor> _sensors;
+    private readonly Dictionary<int, Location> _locations;
+    private readonly Dictionary<string, HashSet<int>> _sensorValueTypeMap;
+    
+    public double ResponseTimeMs { get; private set; }
+    
+    public SmartHomeService(string configFileName)
+    {
+        using var configurationStream = File.OpenRead(configFileName);
+        var configuration = JsonSerializer.Deserialize<Configuration>(configurationStream) ?? throw new Exception("Invalid configuration file");
+        using var sensorsStream = File.OpenRead(configuration.SensorsFile);
+        _sensors = JsonSerializer.Deserialize<Dictionary<int, Sensor>>(sensorsStream) ?? throw new Exception("Invalid sensors file");
+        using var locationsStream = File.OpenRead(configuration.LocationsFile);
+        _locations = JsonSerializer.Deserialize<Dictionary<int, Location>>(locationsStream) ?? throw new Exception("Invalid locations file");
+        _redisConnection = ConnectionMultiplexer.Connect(configuration.RedisConnectionString);
+        
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        _sensorValueTypeMap = new Dictionary<string, HashSet<int>>();
+        foreach (var seriesName in ts.QueryIndex(["type=sensor"]))
+        {
+            var parts = seriesName.Split(':');
+            var sensorId = int.Parse(parts[0]);
+            var valueType = parts[1];
+            if (_sensorValueTypeMap.TryGetValue(valueType, out var sensorIds))
+                sensorIds.Add(sensorId);
+            else
+                _sensorValueTypeMap[valueType] = [sensorId];
+        }
+    }
+
+    private string GetLocationName(int sensorId)
+    {
+        var locationId = _sensors[sensorId].LocationId;
+        return _locations[locationId].Name;
+    }
+
+    private static DateTime GetDateTime(TimeStamp timestamp)
+    {
+        return DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp.Value).DateTime;
+    }
+    
+    internal Dictionary<string, Dictionary<string, LastData>> GetLastSensorData()
+    {
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        var result = new Dictionary<string, Dictionary<string, LastData>>();
+        var minimumDateTime = DateTime.Now.AddDays(-1);
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+        foreach (var v in ts.MGet(["type=sensor"], true))
+        {
+            var dateTime = GetDateTime(v.value.Time);
+            if (dateTime < minimumDateTime)
+                continue;
+            var parts = v.key.Split(':');
+            var sensorId = int.Parse(parts[0]);
+            var locationName = GetLocationName(sensorId);
+            var valueType = _valueTypeMap[parts[1]];
+            var value = v.value.Val;
+            if (result.TryGetValue(locationName, out var lastData))
+                lastData[valueType] = new LastData(dateTime, value);
+            else
+                result[locationName] = new Dictionary<string, LastData> {{valueType, new LastData(dateTime, value)}};
+        }
+        stopwatch.Stop();
+        ResponseTimeMs = stopwatch.Elapsed.TotalMilliseconds;
+        return result;
+    }
+
+    // map valueType -> map sensorId to sensor data
+    internal Dictionary<string, Dictionary<int, List<SensorData>>> GetSensorData(SmartHomeQuery sensorDataQuery)
+    {
+        var sensors = GetSensors(sensorDataQuery.DataType);
+        if (sensors.Count == 0)
+            return [];
+        var dateRange = BuildDateRange(sensorDataQuery);
+        return dateRange.Aggregated ? GetRawSensorData(sensors, dateRange) : GetAggregatedSensorData(sensors, dateRange); 
+    }
+
+    private Dictionary<string, Dictionary<int, List<SensorData>>> GetAggregatedSensorData(HashSet<int> sensors, DateRange dateRange)
+    {
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        var result = new Dictionary<string, Dictionary<int, List<SensorData>>>();
+        var skipAggregation = dateRange.BucketDuration <= MinimumAggregatedBucketDuration;
+        TsAggregation? minAggregation = skipAggregation ? null : TsAggregation.Min;
+        TsAggregation? avgAggregation = skipAggregation ? null : TsAggregation.Avg;
+        TsAggregation? maxAggregation = skipAggregation ? null : TsAggregation.Max;
+        long ?bucketDuration = skipAggregation ? null : dateRange.BucketDuration;
+        foreach (var kv in _sensorValueTypeMap)
+        {
+            var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
+            if (sensorsToProcess.Count == 0)
+                continue;
+            var sensorDataMap = new Dictionary<int, List<SensorData>>();
+            result[kv.Key] = sensorDataMap;
+            foreach (var sensorId in sensorsToProcess)
+            {
+                var minMap = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:min", dateRange, minAggregation, bucketDuration);
+                var avgMap = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:avg", dateRange, avgAggregation, bucketDuration);
+                var maxMap = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:max", dateRange, maxAggregation, bucketDuration);
+                var sensorData = new List<SensorData>();
+                foreach (var (time, minValue) in minMap)
+                {
+                    var avgValue = avgMap[time];
+                    var maxValue = maxMap[time];
+                    sensorData.Add(new SensorData(GetDateTime(time), null, new AggregatedSensorDataValues(minValue, avgValue, maxValue)));
+                }
+                sensorDataMap[sensorId] = sensorData;
+            }
+        }
+        return result;
+    }
+
+    private Dictionary<long, double> BuildSensorDataMap(TimeSeriesCommands ts, string seriesName, DateRange dateRange,
+        TsAggregation? aggregation, long? bucketDuration)
+    {
+        var range = ts.Range(seriesName, dateRange.From, dateRange.To, false,
+            null, null, null, null, aggregation, bucketDuration);
+        return range
+            .ToDictionary(item => (long)item.Time, item => item.Val);
+    }
+
+    private Dictionary<string, Dictionary<int, List<SensorData>>> GetRawSensorData(HashSet<int> sensors, DateRange dateRange)
+    {
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        var result = new Dictionary<string, Dictionary<int, List<SensorData>>>();
+        var skipAggregation = dateRange.BucketDuration <= MinimumRawBucketDuration;
+        TsAggregation? aggregation = skipAggregation ? null : TsAggregation.Avg;
+        long ?bucketDuration = skipAggregation ? null : dateRange.BucketDuration;
+        foreach (var kv in _sensorValueTypeMap)
+        {
+            var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
+            if (sensorsToProcess.Count == 0)
+                continue;
+            var sensorDataMap = new Dictionary<int, List<SensorData>>();
+            result[kv.Key] = sensorDataMap;
+            foreach (var sensorId in sensorsToProcess)
+            {
+                var seriesName = $"{sensorId}:{kv.Key}";
+                var range = ts.Range(seriesName, dateRange.From, dateRange.To, false,
+                    null, null, null, null, aggregation, bucketDuration);
+                var sensorData = range
+                    .Select(item => new SensorData(GetDateTime(item.Time), item.Val, null))
+                    .ToList();
+                sensorDataMap[sensorId] = sensorData;
+            }
+        }
+        return result;
+    }
+
+    private static DateRange BuildDateRange(SmartHomeQuery query)
+    {
+        var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints; 
+        var startDateTime = query.StartDate ?? query.StartDateOffset!.CalculateDateSubtract(DateTime.Now);
+        var endDateTime = query.Period?.CalculateDateAdd(startDateTime) ?? DateTime.Now;
+        var startMillis = new DateTimeOffset(startDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
+        var endMillis = new DateTimeOffset(endDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
+        var aggregated = endMillis - startMillis > MaxUnaggregatedMilliseconds;
+        return new DateRange(aggregated, startMillis, endMillis, (endMillis - startMillis) / maxPoints);
+    }
+
+    private HashSet<int> GetSensors(string dataType)
+    {
+        return _sensors
+            .Where(s => s.Value.DataType == dataType)
+            .Select(s => s.Key)
+            .ToHashSet();
+    }
+}
