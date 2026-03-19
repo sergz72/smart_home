@@ -217,7 +217,7 @@ namespace SmartHomeUI
             try
             {
                 var result = _service.GetSensorData(BuildSensorDataQuery(dataType));
-                view.Refresh(result);
+                view.Refresh(_service, result);
                 UpdateStatus();
             }
             catch (Exception e)

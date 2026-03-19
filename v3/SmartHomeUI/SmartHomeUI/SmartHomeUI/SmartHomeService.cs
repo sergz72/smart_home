@@ -14,7 +14,7 @@ namespace SmartHomeUI;
 
 internal record SensorDataItem(DateTime DateTime, double Value);
 internal record AggregatedSensorData(List<SensorDataItem> Min, List<SensorDataItem> Avg, List<SensorDataItem> Max);
-internal record SensorData(List<SensorDataItem>? Raw, AggregatedSensorData? Aggregated);
+internal record SensorData(int SensorId, List<SensorDataItem>? Raw, AggregatedSensorData? Aggregated);
 
 internal record LastData(DateTime Dt, double Value)
 {
@@ -160,7 +160,7 @@ public sealed class SmartHomeService
     }
 
     // map valueType -> map sensorId to sensor data
-    internal Dictionary<string, Dictionary<int, SensorData>> GetSensorData(SmartHomeQuery sensorDataQuery)
+    internal Dictionary<string, List<SensorData>> GetSensorData(SmartHomeQuery sensorDataQuery)
     {
         var sensors = GetSensors(sensorDataQuery.DataType);
         if (sensors.Count == 0)
@@ -169,11 +169,11 @@ public sealed class SmartHomeService
         return dateRange.Aggregated ? GetRawSensorData(sensors, dateRange) : GetAggregatedSensorData(sensors, dateRange); 
     }
 
-    private Dictionary<string, Dictionary<int, SensorData>> GetAggregatedSensorData(HashSet<int> sensors, DateRange dateRange)
+    private Dictionary<string, List<SensorData>> GetAggregatedSensorData(HashSet<int> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
-        var result = new Dictionary<string, Dictionary<int, SensorData>>();
+        var result = new Dictionary<string, List<SensorData>>();
         var skipAggregation = dateRange.BucketDuration <= MinimumAggregatedBucketDuration;
         TsAggregation? minAggregation = skipAggregation ? null : TsAggregation.Min;
         TsAggregation? avgAggregation = skipAggregation ? null : TsAggregation.Avg;
@@ -184,14 +184,14 @@ public sealed class SmartHomeService
             var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
             if (sensorsToProcess.Count == 0)
                 continue;
-            var sensorDataMap = new Dictionary<int, SensorData>();
-            result[kv.Key] = sensorDataMap;
+            var sensorDataList = new List<SensorData>();
+            result[kv.Key] = sensorDataList;
             foreach (var sensorId in sensorsToProcess)
             {
                 var minList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:min", dateRange, minAggregation, bucketDuration);
                 var avgList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:avg", dateRange, avgAggregation, bucketDuration);
                 var maxList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:max", dateRange, maxAggregation, bucketDuration);
-                sensorDataMap[sensorId] = new SensorData(null, new AggregatedSensorData(minList, avgList, maxList));
+                sensorDataList.Add(new SensorData(sensorId, null, new AggregatedSensorData(minList, avgList, maxList)));
             }
         }
         return result;
@@ -207,11 +207,11 @@ public sealed class SmartHomeService
             .ToList();
     }
 
-    private Dictionary<string, Dictionary<int, SensorData>> GetRawSensorData(HashSet<int> sensors, DateRange dateRange)
+    private Dictionary<string, List<SensorData>> GetRawSensorData(HashSet<int> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
-        var result = new Dictionary<string, Dictionary<int, SensorData>>();
+        var result = new Dictionary<string, List<SensorData>>();
         var skipAggregation = dateRange.BucketDuration <= MinimumRawBucketDuration;
         TsAggregation? aggregation = skipAggregation ? null : TsAggregation.Avg;
         long ?bucketDuration = skipAggregation ? null : dateRange.BucketDuration;
@@ -220,8 +220,8 @@ public sealed class SmartHomeService
             var sensorsToProcess = sensors.Intersect(kv.Value).ToList();
             if (sensorsToProcess.Count == 0)
                 continue;
-            var sensorDataMap = new Dictionary<int, SensorData>();
-            result[kv.Key] = sensorDataMap;
+            var sensorDataList = new List<SensorData>();
+            result[kv.Key] = sensorDataList;
             foreach (var sensorId in sensorsToProcess)
             {
                 var seriesName = $"{sensorId}:{kv.Key}";
@@ -230,7 +230,7 @@ public sealed class SmartHomeService
                 var sensorData = range
                     .Select(item => new SensorDataItem(GetDateTime(item.Time), item.Val))
                     .ToList();
-                sensorDataMap[sensorId] = new SensorData(sensorData, null);
+                sensorDataList.Add(new SensorData(sensorId, sensorData, null));
             }
         }
         return result;
@@ -253,5 +253,10 @@ public sealed class SmartHomeService
             .Where(s => s.Value.DataType == dataType)
             .Select(s => s.Key)
             .ToHashSet();
+    }
+
+    public bool IsExtSensor(int sensorId)
+    {
+        return _sensors[sensorId].DataType == "ext";
     }
 }
