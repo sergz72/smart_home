@@ -8,13 +8,14 @@ namespace SmartHomeUI
     {
         private readonly TreeGridView _summaryView;
         private readonly ComboBox _offsetBox, _offsetTypeBox;
-        private readonly ComboBox _periodBox, _periodTypeBox;
+        private readonly ComboBox _periodBox, _periodTypeBox, _filterTypeBox;
         private readonly CheckBox _enablePeriodBox;
         private readonly ComboBox _startDay, _startMonth, _startYear;
         private readonly TabControl _tabControl;
         private readonly Label _statusLabel;
         private readonly StatusDataStore _summaryViewDataStore;
         private readonly SmartHomeService _service;
+        private readonly GraphsView _envGraphsView, _watGraphsView, _eleGraphsView;
 
         public MainForm(SmartHomeService service)
         {
@@ -34,11 +35,9 @@ namespace SmartHomeUI
                 }
             });
             _summaryView.DataStore = _summaryViewDataStore;
-
-
             
-            var filterTypeBox = new ComboBox { Items = { "Offset", "Date" }, ReadOnly = true, SelectedIndex = 0 };
-            filterTypeBox.TextChanged += FilterTypeChanged;
+            _filterTypeBox = new ComboBox { Items = { "Offset", "Date" }, ReadOnly = true, SelectedIndex = 0 };
+            _filterTypeBox.TextChanged += FilterTypeChanged;
 
             _offsetBox = new ComboBox { ReadOnly = true };
             for (var i = 1; i <= 30; i++)
@@ -76,7 +75,11 @@ namespace SmartHomeUI
             };
             
             _statusLabel = new Label();
-            
+
+            _envGraphsView = new EnvGraphsView();
+            _watGraphsView = new WatGraphsView();
+            _eleGraphsView = new EleGraphsView();
+
             _tabControl = new TabControl
             {
                 Pages =
@@ -89,17 +92,17 @@ namespace SmartHomeUI
                     new TabPage
                     {
                         Text = "Environmental sensors",
-                        Content = new Label { Text = "Environmental sensors" }
+                        Content = _envGraphsView
                     },
                     new TabPage
                     {
                         Text = "Water sensors",
-                        Content = new Label { Text = "Water sensors" }
+                        Content = _watGraphsView
                     },
                     new TabPage
                     {
                         Text = "Electrical sensors",
-                        Content = new Label { Text = "Electrical sensors" }
+                        Content = _eleGraphsView
                     }
                 }
             };
@@ -123,7 +126,7 @@ namespace SmartHomeUI
                             {
                                 new Button { Text = "Refresh", Command = refreshCommand },
                                 new Label { Text = "Filter type" },
-                                filterTypeBox,
+                                _filterTypeBox,
                                 new Label { Text = "Offset" },
                                 _offsetBox,
                                 _offsetTypeBox,
@@ -198,22 +201,23 @@ namespace SmartHomeUI
                     UpdateSummaryPage();
                     break;
                 case 1: // Environmental sensors page
-                    UpdateSensorsPage("env");
+                    UpdateSensorsPage("env", _envGraphsView);
                     break;
                 case 2: // Water sensors page
-                    UpdateSensorsPage("wat");
+                    UpdateSensorsPage("wat", _watGraphsView);
                     break;
                 default: // Electrical sensors page
-                    UpdateSensorsPage("ele");
+                    UpdateSensorsPage("ele", _eleGraphsView);
                     break;
             }
         }
 
-        private void UpdateSensorsPage(string dataType)
+        private void UpdateSensorsPage(string dataType, GraphsView view)
         {
             try
             {
                 var result = _service.GetSensorData(BuildSensorDataQuery(dataType));
+                view.Refresh(result);
                 UpdateStatus();
             }
             catch (Exception e)
@@ -224,7 +228,32 @@ namespace SmartHomeUI
 
         private SmartHomeQuery BuildSensorDataQuery(string dataType)
         {
-            throw new NotImplementedException();
+            var period = _enablePeriodBox.Checked ?? false ? BuildDateOffset(_periodBox, _periodTypeBox) : null;
+            if (_filterTypeBox.SelectedIndex == 0) // offset
+                return new SmartHomeQuery((short)Width, dataType, null, BuildDateOffset(_offsetBox, _offsetTypeBox), 
+                     period);
+            return new SmartHomeQuery((short)Width, dataType, BuildStartDate(), null, period); 
+        }
+
+        private DateTime BuildStartDate()
+        {
+            var day = _startDay.SelectedIndex + 1;
+            var month = _startMonth.SelectedIndex + 1;
+            var year = int.Parse(_startYear.SelectedKey);
+            return new DateTime(year, month, day);
+        }
+
+        private static DateOffset BuildDateOffset(ComboBox offsetBox, ComboBox offsetTypeBox)
+        {
+            var n = offsetBox.SelectedIndex + 1;
+            return offsetTypeBox.SelectedIndex switch
+            {
+                0 => // Days
+                    new DateOffset(n, TimeUnit.Day),
+                1 => // Months
+                    new DateOffset(n, TimeUnit.Month),
+                _ => new DateOffset(n, TimeUnit.Year)
+            };
         }
 
         private void UpdateSummaryPage()
