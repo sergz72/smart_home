@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Eto.Drawing;
 using Eto.Forms;
 using ScottPlot.Eto;
 using Orientation = Eto.Forms.Orientation;
@@ -20,12 +21,28 @@ internal sealed class Graph : StackLayout
     {
         _service = service;
         Orientation = Orientation.Vertical;
+        HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        VerticalContentAlignment = VerticalAlignment.Stretch;
         _plot = new EtoPlot();
+        _plot.MinimumSize = new Size(1000, 300);
         _plot.Plot.Title(title);
         _nextButton = new Button { Text = ">" };
         _nextButton.Click += (_, _) => NextGraph();
         _locationLabel = new Label();
-        Items.Add(new StackLayout { Orientation = Orientation.Horizontal, Items = { _plot, _nextButton } });
+        _locationLabel.TextAlignment = TextAlignment.Center;
+        Items.Add(new StackLayoutItem
+        {
+            Control = new StackLayout
+            {
+                Orientation = Orientation.Horizontal,
+                Items =
+                {
+                    new StackLayoutItem { Control = _plot, Expand = true }, 
+                    new StackLayoutItem{Control = _nextButton, VerticalAlignment = VerticalAlignment.Stretch}
+                }
+            },
+            Expand = true
+        });
         Items.Add(_locationLabel);
     }
 
@@ -33,7 +50,7 @@ internal sealed class Graph : StackLayout
     {
         if (_data == null || _data.Count < 2)
             return;
-        _currentGraphIndex = _currentGraphIndex >= _data.Count ? 0 : _currentGraphIndex + 1;
+        _currentGraphIndex = _currentGraphIndex >= _data.Count - 1 ? 0 : _currentGraphIndex + 1;
         BuildGraph();
     }
 
@@ -52,14 +69,15 @@ internal sealed class Graph : StackLayout
                 currentData.Raw.Select(item => item.Value).ToList());
         else
         {
-            _plot.Plot.Add.Scatter(currentData.Aggregated!.Min.Select(item => item.DateTime).ToList(),
-                currentData.Aggregated.Min.Select(item => item.Value).ToList());
-            _plot.Plot.Add.Scatter(currentData.Aggregated!.Avg.Select(item => item.DateTime).ToList(),
-                currentData.Aggregated.Avg.Select(item => item.Value).ToList());
             _plot.Plot.Add.Scatter(currentData.Aggregated!.Max.Select(item => item.DateTime).ToList(),
-                currentData.Aggregated.Max.Select(item => item.Value).ToList());
+                currentData.Aggregated.Max.Select(item => item.Value).ToList()).LegendText = "max";
+            _plot.Plot.Add.Scatter(currentData.Aggregated!.Avg.Select(item => item.DateTime).ToList(),
+                currentData.Aggregated.Avg.Select(item => item.Value).ToList()).LegendText = "avg";
+            _plot.Plot.Add.Scatter(currentData.Aggregated!.Min.Select(item => item.DateTime).ToList(),
+                currentData.Aggregated.Min.Select(item => item.Value).ToList()).LegendText = "min";
         }
         _plot.Plot.Axes.DateTimeTicksBottom();
+        _plot.Invalidate();
     }
 
     internal void SetData(List<SensorData>? data)
@@ -79,11 +97,19 @@ internal abstract class GraphsView : StackLayout
     {
         Service = service;
         Orientation = Orientation.Vertical;
+        HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        VerticalContentAlignment = VerticalAlignment.Stretch;
         Graphs = new Graph[titles.Length];
         for (var i = 0; i < titles.Length; i++)
         {
             Graphs[i] = new Graph(service, titles[i]);
-            Items.Add(Graphs[i]);
+            Items.Add(new StackLayoutItem
+            {
+                Control = Graphs[i],
+                Expand = true,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            });
         }
     }
 
@@ -99,7 +125,8 @@ internal sealed class EnvGraphsView : GraphsView
     private readonly Graph _co2Graph;
     private readonly Graph _luxGraph;
 
-    internal EnvGraphsView(SmartHomeService service) : base(service, ["Temperatute", "Temperature", "Humidity", "Pressure", "CO2", "Luminosity"])
+    internal EnvGraphsView(SmartHomeService service) : 
+        base(service, ["Temperatute", "Temperature", "Humidity", "Pressure", "CO2", "Luminosity"])
     {
         _intTempGraph = Graphs[0];
         _extTempGraph = Graphs[1];

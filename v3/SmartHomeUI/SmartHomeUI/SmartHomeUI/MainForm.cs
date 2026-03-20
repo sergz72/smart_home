@@ -52,11 +52,13 @@ namespace SmartHomeUI
             _startDay.SelectedIndex = 0;
             
             _startMonth = new ComboBox { ReadOnly = true, Enabled = false,
-                Items = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }};
+                Items = { "January", "February", "March", "April", "May", "June", "July", "August", "September", 
+                            "October", "November", "December" }};
             _startMonth.SelectedIndex = 0;
             
             _startYear = new ComboBox { ReadOnly = true, Enabled = false,
-                Items = { "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "2029", "2030" }};
+                Items = { "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "2029",
+                            "2030" }};
             _startYear.SelectedIndex = 0;
             
             _periodBox = new ComboBox { ReadOnly = true, Enabled = false };
@@ -64,7 +66,8 @@ namespace SmartHomeUI
                 _periodBox.Items.Add(i.ToString());
             _periodBox.SelectedIndex = 0;
             
-            _periodTypeBox = new ComboBox { Items = { "Days", "Months", "Years" }, ReadOnly = true, SelectedIndex = 0, Enabled = false };
+            _periodTypeBox = new ComboBox { Items = { "Days", "Months", "Years" }, ReadOnly = true, SelectedIndex = 0,
+                                            Enabled = false };
             
             _enablePeriodBox = new CheckBox { Checked = false, Text = "Period"};
             _enablePeriodBox.CheckedChanged += (_, _) =>
@@ -92,7 +95,7 @@ namespace SmartHomeUI
                     new TabPage
                     {
                         Text = "Environmental sensors",
-                        Content = _envGraphsView
+                        Content = new Scrollable{Content = _envGraphsView}
                     },
                     new TabPage
                     {
@@ -228,10 +231,11 @@ namespace SmartHomeUI
 
         private SmartHomeQuery BuildSensorDataQuery(string dataType)
         {
-            var period = _enablePeriodBox.Checked ?? false ? BuildDateOffset(_periodBox, _periodTypeBox) : null;
+            var period = _enablePeriodBox.Checked ?? 
+                         false ? BuildDateOffset(_periodBox, _periodTypeBox) : null;
             if (_filterTypeBox.SelectedIndex == 0) // offset
-                return new SmartHomeQuery((short)Width, dataType, null, BuildDateOffset(_offsetBox, _offsetTypeBox), 
-                     period);
+                return new SmartHomeQuery((short)Width, dataType, null, 
+                        BuildDateOffset(_offsetBox, _offsetTypeBox), period);
             return new SmartHomeQuery((short)Width, dataType, BuildStartDate(), null, period); 
         }
 
