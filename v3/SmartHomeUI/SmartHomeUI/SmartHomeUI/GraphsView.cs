@@ -3,6 +3,7 @@ using System.Linq;
 using Eto.Drawing;
 using Eto.Forms;
 using ScottPlot.Eto;
+using SmartHomeService;
 using Orientation = Eto.Forms.Orientation;
 
 namespace SmartHomeUI;
@@ -12,12 +13,12 @@ internal sealed class Graph : StackLayout
     private readonly EtoPlot _plot;
     private readonly Button _nextButton;
     private readonly Label _locationLabel;
-    private readonly SmartHomeService _service;
+    private readonly ISmartHomeService _service;
 
     private int _currentGraphIndex;
     private List<SensorData>? _data;
 
-    internal Graph(SmartHomeService service, string title)
+    internal Graph(ISmartHomeService service, string title)
     {
         _service = service;
         Orientation = Orientation.Vertical;
@@ -65,15 +66,15 @@ internal sealed class Graph : StackLayout
         var currentData = _data[_currentGraphIndex];
         _locationLabel.Text = _service.GetLocationName(currentData.SensorId);
         if (currentData.Raw != null)
-            _plot.Plot.Add.Scatter(currentData.Raw.Select(item => item.DateTime).ToList(),
+            _plot.Plot.Add.Scatter(currentData.Raw.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Raw.Select(item => item.Value).ToList());
         else
         {
-            _plot.Plot.Add.Scatter(currentData.Aggregated!.Max.Select(item => item.DateTime).ToList(),
+            _plot.Plot.Add.Scatter(currentData.Aggregated!.Max.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Aggregated.Max.Select(item => item.Value).ToList()).LegendText = "max";
-            _plot.Plot.Add.Scatter(currentData.Aggregated!.Avg.Select(item => item.DateTime).ToList(),
+            _plot.Plot.Add.Scatter(currentData.Aggregated!.Avg.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Aggregated.Avg.Select(item => item.Value).ToList()).LegendText = "avg";
-            _plot.Plot.Add.Scatter(currentData.Aggregated!.Min.Select(item => item.DateTime).ToList(),
+            _plot.Plot.Add.Scatter(currentData.Aggregated!.Min.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Aggregated.Min.Select(item => item.Value).ToList()).LegendText = "min";
         }
         _plot.Plot.Axes.DateTimeTicksBottom();
@@ -91,9 +92,9 @@ internal sealed class Graph : StackLayout
 internal abstract class GraphsView : StackLayout
 {
     protected readonly Graph[] Graphs;
-    protected readonly SmartHomeService Service;
+    protected readonly ISmartHomeService Service;
 
-    protected GraphsView(SmartHomeService service, string[] titles)
+    protected GraphsView(ISmartHomeService service, string[] titles)
     {
         Service = service;
         Orientation = Orientation.Vertical;
@@ -113,7 +114,7 @@ internal abstract class GraphsView : StackLayout
         }
     }
 
-    internal abstract void Refresh(Dictionary<string, List<SensorData>> data);
+    internal abstract void Refresh(SensorDataResult data);
 }
 
 internal sealed class EnvGraphsView : GraphsView
@@ -125,7 +126,7 @@ internal sealed class EnvGraphsView : GraphsView
     private readonly Graph _co2Graph;
     private readonly Graph _luxGraph;
 
-    internal EnvGraphsView(SmartHomeService service) : 
+    internal EnvGraphsView(ISmartHomeService service) : 
         base(service, ["Temperatute", "Temperature", "Humidity", "Pressure", "CO2", "Luminosity"])
     {
         _intTempGraph = Graphs[0];
@@ -136,15 +137,15 @@ internal sealed class EnvGraphsView : GraphsView
         _luxGraph = Graphs[5];
     }
 
-    internal override void Refresh(Dictionary<string, List<SensorData>> data)
+    internal override void Refresh(SensorDataResult data)
     {
-        var tempData = data.GetValueOrDefault("temp");
+        var tempData = data.Data.GetValueOrDefault("temp");
         _intTempGraph.SetData(tempData?.Where(sd => !Service.IsExtSensor(sd.SensorId)).ToList());
         _extTempGraph.SetData(tempData?.Where(sd => Service.IsExtSensor(sd.SensorId)).ToList());
-        _humiGraph.SetData(data.GetValueOrDefault("humi"));
-        _presGraph.SetData(data.GetValueOrDefault("pres"));
-        _co2Graph.SetData(data.GetValueOrDefault("co2 "));
-        _luxGraph.SetData(data.GetValueOrDefault("lux "));
+        _humiGraph.SetData(data.Data.GetValueOrDefault("humi"));
+        _presGraph.SetData(data.Data.GetValueOrDefault("pres"));
+        _co2Graph.SetData(data.Data.GetValueOrDefault("co2 "));
+        _luxGraph.SetData(data.Data.GetValueOrDefault("lux "));
     }
 }
 
@@ -153,16 +154,16 @@ internal sealed class WatGraphsView : GraphsView
     private readonly Graph _pressureGraph;
     private readonly Graph _currentGraph;
 
-    internal WatGraphsView(SmartHomeService service) : base(service, ["Pressure", "Current"])
+    internal WatGraphsView(ISmartHomeService service) : base(service, ["Pressure", "Current"])
     {
         _pressureGraph = Graphs[0];
         _currentGraph = Graphs[1];
     }
 
-    internal override void Refresh(Dictionary<string, List<SensorData>> data)
+    internal override void Refresh(SensorDataResult data)
     {
-        _pressureGraph.SetData(data.GetValueOrDefault("pres"));
-        _currentGraph.SetData(data.GetValueOrDefault("icc "));
+        _pressureGraph.SetData(data.Data.GetValueOrDefault("pres"));
+        _currentGraph.SetData(data.Data.GetValueOrDefault("icc "));
     }
 }
 
@@ -171,15 +172,15 @@ internal sealed class EleGraphsView : GraphsView
     private readonly Graph _powerGraph;
     private readonly Graph _voltageGraph;
 
-    internal EleGraphsView(SmartHomeService service) : base(service, ["Power", "Voltage"])
+    internal EleGraphsView(ISmartHomeService service) : base(service, ["Power", "Voltage"])
     {
         _powerGraph = Graphs[0];
         _voltageGraph = Graphs[1];
     }
 
-    internal override void Refresh(Dictionary<string, List<SensorData>> data)
+    internal override void Refresh(SensorDataResult data)
     {
-        _powerGraph.SetData(data.GetValueOrDefault("pwr "));
-        _voltageGraph.SetData(data.GetValueOrDefault("vcc "));
+        _powerGraph.SetData(data.Data.GetValueOrDefault("pwr "));
+        _voltageGraph.SetData(data.Data.GetValueOrDefault("vcc "));
     }
 }

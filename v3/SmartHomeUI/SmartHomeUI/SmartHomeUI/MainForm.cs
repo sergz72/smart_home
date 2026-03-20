@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using Eto.Forms;
 using Eto.Drawing;
+using SmartHomeService;
 
 namespace SmartHomeUI
 {
@@ -14,10 +16,10 @@ namespace SmartHomeUI
         private readonly TabControl _tabControl;
         private readonly Label _statusLabel;
         private readonly StatusDataStore _summaryViewDataStore;
-        private readonly SmartHomeService _service;
+        private readonly ISmartHomeService _service;
         private readonly GraphsView _envGraphsView, _watGraphsView, _eleGraphsView;
 
-        public MainForm(SmartHomeService service)
+        public MainForm(ISmartHomeService service)
         {
             _service = service;
             
@@ -221,7 +223,7 @@ namespace SmartHomeUI
             {
                 var result = _service.GetSensorData(BuildSensorDataQuery(dataType));
                 view.Refresh(result);
-                UpdateStatus();
+                UpdateStatus(result.ToBinary());
             }
             catch (Exception e)
             {
@@ -265,9 +267,9 @@ namespace SmartHomeUI
             try
             {
                 var result = _service.GetLastSensorData();
-                _summaryViewDataStore.Update(result);
+                _summaryViewDataStore.Update(_service, result);
                 _summaryView.ReloadData();
-                UpdateStatus();
+                UpdateStatus(result.ToBinary());
             }
             catch (Exception e)
             {
@@ -275,9 +277,10 @@ namespace SmartHomeUI
             }
         }
         
-        private void UpdateStatus()
+        private void UpdateStatus(byte[] binaryData)
         {
-            _statusLabel.Text = $"Response time {_service.ResponseTimeMs} ms";
+            var compressed = Compressor.Compress(binaryData);
+            _statusLabel.Text = $"Response time {_service.ResponseTimeMs} ms, binary data length {binaryData.Length}, compressed length {compressed.Length}";
         }
     }
 }

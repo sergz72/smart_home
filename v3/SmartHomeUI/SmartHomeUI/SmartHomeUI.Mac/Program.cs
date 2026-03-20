@@ -1,5 +1,6 @@
 ﻿using System;
 using Eto.Forms;
+using SmartHomeService;
 
 namespace SmartHomeUI.Mac
 {
@@ -8,7 +9,7 @@ namespace SmartHomeUI.Mac
         [STAThread]
         public static void Main(string[] args)
         {
-            var service = new SmartHomeService(args[0]);
+            var service = new RedisSmartHomeService(args[0]);
             new Application(Eto.Platforms.Mac64).Run(new MainForm(service));
         }
     }

@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartHomeService", "SmartHomeService\SmartHomeService.csproj", "{D396A400-2729-4E4C-8B96-432099C56215}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D396A400-2729-4E4C-8B96-432099C56215}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D396A400-2729-4E4C-8B96-432099C56215}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D396A400-2729-4E4C-8B96-432099C56215}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D396A400-2729-4E4C-8B96-432099C56215}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

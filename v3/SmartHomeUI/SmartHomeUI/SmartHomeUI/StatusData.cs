@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Eto.Forms;
+using SmartHomeService;
 
 namespace SmartHomeUI;
 
@@ -11,12 +12,13 @@ class StatusDataStore : ITreeGridStore<StatusItem>
 
     public StatusItem this[int index] => _items[index];
 
-    public void Update(Dictionary<string, Dictionary<string, LastData>> result)
+    public void Update(ISmartHomeService service, LastSensorData result)
     {
         _items.Clear();
-        foreach (var (location, data) in result)
+        foreach (var (location, data) in result.Data)
         {
-            var locationItem = new StatusItem(location, data.Select(kv => $"{kv.Key}: {kv.Value}").ToArray(), null);
+            var locationItem = new StatusItem(service.GetLocationName(location), 
+                data.Select(kv => $"{service.GetValueType(kv.Key)}: {service.BuildSensorDataItemWithDate(kv.Value)}").ToArray(), null);
             _items.Add(locationItem);
         }
     }
