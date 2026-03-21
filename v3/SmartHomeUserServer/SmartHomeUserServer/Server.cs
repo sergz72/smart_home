@@ -17,7 +17,7 @@ internal class Server
     private readonly Logger _logger;
     private readonly ServerConfiguration _configuration;
     
-    private volatile bool _stop, _stopped;
+    private volatile bool _stop;
     
     internal Server(ServerConfiguration configuration, ISmartHomeService service, ILoggerCreator loggerCreator)
     {
@@ -44,16 +44,13 @@ internal class Server
             Handle(data, ep);
         }
         _client.Close();
-        _logger.Info($"{_configuration.Name} stopped");
-        _stopped = true;
+        _logger.Info("Server stopped");
     }
 
     internal void Stop()
     {
         _stop = true;
         new UdpClient().Send([0], 1, new IPEndPoint(IPAddress.Loopback, _configuration.Port));
-        while (!_stopped)
-            Thread.Sleep(100);
     }
 
     private void Handle(byte[] data, IPEndPoint ep)

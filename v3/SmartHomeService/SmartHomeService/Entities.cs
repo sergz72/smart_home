@@ -10,10 +10,17 @@ public record SensorDataItem(long Timestamp, double Value)
         writer.Write((int)(Timestamp / 1000));
         writer.Write((int)(Value * 100));
     }
+
+    public static SensorDataItem ParseResponse(BinaryReader reader)
+    {
+        var timestamp = (long)reader.ReadInt32() * 1000;
+        var value = (double)reader.ReadInt32() / 100;
+        return new SensorDataItem(timestamp, value);
+    }
 }
 
 public record AggregatedSensorData(List<SensorDataItem> Min, List<SensorDataItem> Avg, List<SensorDataItem> Max);
-public record SensorData(int SensorId, List<SensorDataItem>? Raw, AggregatedSensorData? Aggregated)
+public record SensorData(int LocationId, List<SensorDataItem>? Raw, AggregatedSensorData? Aggregated)
 {
     private static void WriteSensorDataItemList(BinaryWriter writer, List<SensorDataItem> list)
     {
@@ -24,7 +31,7 @@ public record SensorData(int SensorId, List<SensorDataItem>? Raw, AggregatedSens
     
     internal void Save(BinaryWriter writer)
     {
-        writer.Write((byte)SensorId);
+        writer.Write((byte)LocationId);
         writer.Write(Raw != null ? (byte)0 : (byte)1);
         if (Raw != null)
             WriteSensorDataItemList(writer, Raw);
@@ -100,6 +107,32 @@ public record SmartHomeQuery(
         }
         return new SmartHomeQuery(maxPoints, dataType, service.BuildDate(dateOrOffset), null, period);
     }
+    
+    public byte[] ToBinary()
+    {
+        var dataTypeBytes = Encoding.UTF8.GetBytes(DataType);
+        if (dataTypeBytes.Length != 3)
+            throw new ArgumentException("wrong DataType length");
+        var result = new byte[11];
+        BitConverter.GetBytes(MaxPoints).CopyTo(result, 0);
+        dataTypeBytes.CopyTo(result, 2);
+        if (StartDate != null)
+        {
+            var date = StartDate.Value.Year * 10000 + StartDate.Value.Month * 100 + StartDate.Value.Day;
+            BitConverter.GetBytes(date).CopyTo(result, 5);
+        }
+        else
+        {
+            result[5] = (byte)StartDateOffset!.Unit;
+            result[6] = (byte)StartDateOffset.Offset;
+        }
+        if (Period != null)
+        {
+            result[9] = (byte)Period.Offset;
+            result[10] = (byte)Period.Unit;
+        }
+        return result;
+    }
 }
 
 public record Location(string Name, string LocationType)
@@ -109,6 +142,13 @@ public record Location(string Name, string LocationType)
         LastSensorData.SaveString(writer, Name);
         LastSensorData.SaveFixedSizeString(writer, LocationType, 3, "Location type");
     }
+
+    public static Location ParseResponse(MemoryStream response)
+    {
+        var name = LastSensorData.LoadString(response);
+        var locationType = LastSensorData.LoadFixedSizeString(response, 3);
+        return new Location(name, locationType);
+    }
 }
 
 internal record Sensor(string Name, string DataType, int LocationId, int? DeviceId,
@@ -116,9 +156,8 @@ internal record Sensor(string Name, string DataType, int LocationId, int? Device
 
 public interface ISmartHomeService
 {
-    string GetLocationNameBySensorId(int sensorId);
     string GetLocationName(int locationId);
-    bool IsExtSensor(int sensorId);
+    bool IsExtLocation(int locationId);
     DateTime GetDateTime(long timestamp);
     LastSensorData GetLastSensorData();
     SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery);
@@ -164,6 +203,24 @@ public sealed class LastSensorData
         writer.Write((byte)bytes.Length);
         writer.Write(bytes);
     }
+
+    internal static string LoadString(MemoryStream stream)
+    {
+        var length = stream.ReadByte();
+        return LoadFixedSizeString(stream, length);
+    }
+
+    internal static string LoadFixedSizeString(MemoryStream stream, int length)
+    {
+        var bytes = new byte[length];
+        stream.ReadExactly(bytes);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    internal static string LoadFixedSizeString(BinaryReader reader, int length)
+    {
+        return Encoding.UTF8.GetString(reader.ReadBytes(length));
+    }
     
     public byte[] ToBinary()
     {
@@ -180,6 +237,26 @@ public sealed class LastSensorData
             }           
         }
         return stream.ToArray();
+    }
+
+    public static LastSensorData ParseResponse(MemoryStream response)
+    {
+        using var reader = new BinaryReader(response);
+        var result = new Dictionary<int, Dictionary<string, SensorDataItem>>();
+        while (response.Position < response.Length)
+        {
+            var locationId = (int)reader.ReadByte();
+            var length = (int)reader.ReadByte();
+            var map = new Dictionary<string, SensorDataItem>();
+            while (length-- > 0)
+            {
+                var valueType = LoadFixedSizeString(reader, 4);
+                var lastData = SensorDataItem.ParseResponse(reader);
+                map[valueType] = lastData;
+            }
+            result[locationId] = map;
+        }
+        return new LastSensorData(result);
     }
 }
 
@@ -206,25 +283,19 @@ public sealed class SensorDataResult
         }
         return stream.ToArray();
     }
-}
 
-public record LocationAndSensors(Location Location, int[] Sensors)
-{
-    public void Save(BinaryWriter writer)
+    public static SensorDataResult ParseResponse(MemoryStream response)
     {
-        Location.Save(writer);
-        writer.Write((byte)Sensors.Length);
-        foreach (var sensorId in Sensors)
-            writer.Write((byte)sensorId);
+        throw new NotImplementedException();
     }
 }
 
 public sealed class Locations
 {
-    public readonly Dictionary<int, LocationAndSensors> LocationMap;
+    public readonly Dictionary<int, Location> LocationMap;
     public readonly string TimeZone;
     
-    internal Locations(Dictionary<int, LocationAndSensors> locations, string timeZone)
+    internal Locations(Dictionary<int, Location> locations, string timeZone)
     {
         TimeZone = timeZone;
         LocationMap = locations;
@@ -241,5 +312,19 @@ public sealed class Locations
             location.Save(writer);
         }
         return stream.ToArray();
+    }
+
+    public static Locations ParseResponse(MemoryStream response)
+    {
+        var timeZone = LastSensorData.LoadString(response);
+        var locations = new Dictionary<int, Location>();
+        while (response.Position < response.Length)
+        {
+            var locationId = response.ReadByte();
+            var location = Location.ParseResponse(response);
+            locations[locationId] = location;
+        }
+
+        return new Locations(locations, timeZone);
     }
 }

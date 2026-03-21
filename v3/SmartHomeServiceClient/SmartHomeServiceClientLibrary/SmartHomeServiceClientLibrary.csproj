@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\NetworkServiceClient\NetworkServiceClientLibrary\NetworkServiceClientLibrary.csproj" />
+      <ProjectReference Include="..\..\SmartHomeService\SmartHomeService\SmartHomeService.csproj" />
     </ItemGroup>
 
     <ItemGroup>

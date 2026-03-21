@@ -1,5 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System.Text;
 using NetworkServiceClientLibrary;
+using SmartHomeService;
 using SmartHomeServiceClientLibrary;
 
 if (args.Length != 4)
@@ -16,40 +17,55 @@ var client = new SmartHomeClient(new NetworkServiceConfig(
     hostName,
     port));
 
-var stopWatch = new Stopwatch();
+double responseTimeMs;
 
 switch (query)
 {
-    case "sensors":
-        stopWatch.Start();
-        var sensorsResponse = client.GetSensors();
-        stopWatch.Stop();
-        PrintSensorsResponse(sensorsResponse);
+    case "locations":
+        var locationsResponse = client.GetLocations(out responseTimeMs);
+        PrintLocationsResponse(locationsResponse);
         break;
-    case string s when s.StartsWith("last_data_from="):
-        var days = byte.Parse(s[15..]);
-        stopWatch.Start();
-        var lastResponse = client.GetLastSensorData(days);
-        stopWatch.Stop();
+    case "last_data":
+        var lastResponse = client.GetLastSensorData(out responseTimeMs);
         PrintLastResponse(lastResponse);
         break;
     default:
         Usage();
-        break;
+        return;
 }
-Console.WriteLine("Response time {0} us.", stopWatch.Elapsed.Microseconds);
+
+Console.WriteLine("Response time {0} ms.", responseTimeMs);
+
 return;
 
-void PrintSensorsResponse(List<Sensor> sensors)
+void PrintLocationsResponse(Locations locations)
 {
-    foreach (var sensor in sensors)
-        Console.WriteLine("Sensor {0}: {1} {2} {3}", sensor.Id, sensor.DataType, sensor.Location, sensor.LocationType);   
+    Console.WriteLine("Time zone: {0}", locations.TimeZone);
+    foreach (var (locationId, location) in locations.LocationMap)
+        Console.WriteLine("Location {0}: {1} {2}", locationId, location.Name, location.LocationType);   
 }
 
-void PrintLastResponse(Dictionary<int, LastSensorData> lastData)
+void PrintLastResponse(LastSensorData lastData)
 {
-    foreach (var (sensorId, data) in lastData)
-        Console.WriteLine("Sensor {0}: {1} {2}", sensorId, data.Date, data.Values);  
+    foreach (var (locationId, data) in lastData.Data)
+    {
+        Console.WriteLine("Location {0}: {1}", locationId, LastDataToString(data));
+    }
+}
+
+string LastDataToString(Dictionary<string, SensorDataItem> data)
+{
+    var sb = new StringBuilder();
+    foreach (var (valueType, sensorData) in data)
+    {
+        sb.Append(valueType);
+        sb.Append('=');
+        sb.Append(sensorData.Value);
+        sb.Append("(");
+        sb.Append(sensorData.Timestamp);
+        sb.Append(") ");
+    }
+    return sb.ToString();
 }
 
 void Usage()

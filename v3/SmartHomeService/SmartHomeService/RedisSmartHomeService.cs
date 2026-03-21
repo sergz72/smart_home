@@ -81,12 +81,6 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return ValueTypeMap[valueType];
     }
 
-    public string GetLocationNameBySensorId(int sensorId)
-    {
-        var locationId = _sensors[sensorId].LocationId;
-        return _locations[locationId].Name;
-    }
-
     public string GetLocationName(int locationId)
     {
         return _locations[locationId].Name;
@@ -174,7 +168,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
                     bucketDuration);
                 if (minList.Count != 0 || avgList.Count != 0 || maxList.Count != 0)
                     sensorDataList.Add(
-                        new SensorData(sensorId, null, new AggregatedSensorData(minList, avgList, maxList)));
+                        new SensorData(_sensors[sensorId].LocationId, null, new AggregatedSensorData(minList, avgList, maxList)));
             }
             if (sensorDataList.Count != 0)
                 result[kv.Key] = sensorDataList;
@@ -220,7 +214,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
                 var sensorData = range
                     .Select(item => new SensorDataItem((long)item.Time.Value, item.Val))
                     .ToList();
-                sensorDataList.Add(new SensorData(sensorId, sensorData, null));
+                sensorDataList.Add(new SensorData(_sensors[sensorId].LocationId, sensorData, null));
             }
             if (sensorDataList.Count != 0)
                 result[kv.Key] = sensorDataList;
@@ -252,21 +246,13 @@ public sealed class RedisSmartHomeService: ISmartHomeService
             .ToHashSet();
     }
 
-    public bool IsExtSensor(int sensorId)
+    public bool IsExtLocation(int locationId)
     {
-        var locationId = _sensors[sensorId].LocationId;
         return _locations[locationId].LocationType == "ext";
     }
 
     public Locations GetLocations()
     {
-        var map = _sensors
-            .GroupBy(s => s.Value.LocationId)
-            .Select(s => (s.Key,
-                new LocationAndSensors(
-                    new Location(_locations[s.Key].Name, _locations[s.Key].LocationType), 
-                    s.Select(ss => ss.Key).ToArray())))
-            .ToDictionary(s => s.Key, s => s.Item2);
-        return new Locations(map, _timeZoneName);
+        return new Locations(_locations, _timeZoneName);
     }
 }

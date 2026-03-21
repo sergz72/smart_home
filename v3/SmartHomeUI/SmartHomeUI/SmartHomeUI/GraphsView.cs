@@ -64,7 +64,7 @@ internal sealed class Graph : StackLayout
             return;
         }
         var currentData = _data[_currentGraphIndex];
-        _locationLabel.Text = _service.GetLocationNameBySensorId(currentData.SensorId);
+        _locationLabel.Text = _service.GetLocationName(currentData.LocationId);
         if (currentData.Raw != null)
             _plot.Plot.Add.Scatter(currentData.Raw.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Raw.Select(item => item.Value).ToList());
@@ -140,8 +140,8 @@ internal sealed class EnvGraphsView : GraphsView
     internal override void Refresh(SensorDataResult data)
     {
         var tempData = data.Data.GetValueOrDefault("temp");
-        _intTempGraph.SetData(tempData?.Where(sd => !Service.IsExtSensor(sd.SensorId)).ToList());
-        _extTempGraph.SetData(tempData?.Where(sd => Service.IsExtSensor(sd.SensorId)).ToList());
+        _intTempGraph.SetData(tempData?.Where(sd => !Service.IsExtLocation(sd.LocationId)).ToList());
+        _extTempGraph.SetData(tempData?.Where(sd => Service.IsExtLocation(sd.LocationId)).ToList());
         _humiGraph.SetData(data.Data.GetValueOrDefault("humi"));
         _presGraph.SetData(data.Data.GetValueOrDefault("pres"));
         _co2Graph.SetData(data.Data.GetValueOrDefault("co2 "));
