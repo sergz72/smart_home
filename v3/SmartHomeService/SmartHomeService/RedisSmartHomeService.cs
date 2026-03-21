@@ -34,6 +34,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     private readonly Dictionary<int, Location> _locations;
     private readonly Dictionary<string, HashSet<int>> _sensorValueTypeMap;
     private readonly TimeZoneInfo _timeZone;
+    private readonly string _timeZoneName;
     
     public double ResponseTimeMs { get; private set; }
     
@@ -43,6 +44,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         var configuration = JsonSerializer.Deserialize<Configuration>(configurationStream)
                             ?? throw new Exception("Invalid configuration file");
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(configuration.TimeZone);
+        _timeZoneName = configuration.TimeZone;
         using var sensorsStream = File.OpenRead(configuration.SensorsFile);
         _sensors = JsonSerializer.Deserialize<Dictionary<int, Sensor>>(sensorsStream)
                    ?? throw new Exception("Invalid sensors file");
@@ -122,7 +124,6 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return new LastSensorData(result);
     }
 
-    // map valueType -> map sensorId to sensor data
     public SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery)
     {
         var sensors = GetSensors(sensorDataQuery.DataType);
@@ -216,11 +217,12 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return new SensorDataResult(result);
     }
 
-    private static DateRange BuildDateRange(SmartHomeQuery query)
+    private DateRange BuildDateRange(SmartHomeQuery query)
     {
-        var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints; 
-        var startDateTime = query.StartDate ?? query.StartDateOffset!.CalculateDateSubtract(DateTime.Now);
-        var endDateTime = query.Period?.CalculateDateAdd(startDateTime) ?? DateTime.Now;
+        var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
+        var now = TimeZoneInfo.ConvertTime(DateTime.Now, _timeZone);
+        var startDateTime = query.StartDate ?? query.StartDateOffset!.CalculateDateSubtract(now);
+        var endDateTime = query.Period?.CalculateDateAdd(startDateTime) ?? now;
         var startMillis = new DateTimeOffset(startDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
         var endMillis = new DateTimeOffset(endDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
         var maxUnaggregatedMilliseconds = MillisecondsInHour * maxPoints;
@@ -241,5 +243,17 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     {
         var locationId = _sensors[sensorId].LocationId;
         return _locations[locationId].LocationType == "ext";
+    }
+
+    public Locations GetLocations()
+    {
+        var map = _sensors
+            .GroupBy(s => s.Value.LocationId)
+            .Select(s => (s.Key,
+                new LocationAndSensors(
+                    new Location(_locations[s.Key].Name, _locations[s.Key].LocationType), 
+                    s.Select(ss => ss.Key).ToArray())))
+            .ToDictionary(s => s.Key, s => s.Item2);
+        return new Locations(map, _timeZoneName);
     }
 }

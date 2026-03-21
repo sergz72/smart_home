@@ -64,7 +64,7 @@ internal sealed class Graph : StackLayout
             return;
         }
         var currentData = _data[_currentGraphIndex];
-        _locationLabel.Text = _service.GetLocationName(currentData.SensorId);
+        _locationLabel.Text = _service.GetLocationNameBySensorId(currentData.SensorId);
         if (currentData.Raw != null)
             _plot.Plot.Add.Scatter(currentData.Raw.Select(item => _service.GetDateTime(item.Timestamp)).ToList(),
                 currentData.Raw.Select(item => item.Value).ToList());

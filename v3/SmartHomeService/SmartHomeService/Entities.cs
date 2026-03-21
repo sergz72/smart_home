@@ -83,8 +83,16 @@ public record SmartHomeQuery(
     DateOffset? StartDateOffset,
     DateOffset? Period);
 
-internal record Location(int Id, string Name, string LocationType);
-internal record Sensor(int Id, string Name, string DataType, int LocationId, int? DeviceId,
+public record Location(string Name, string LocationType)
+{
+    public void Save(BinaryWriter writer)
+    {
+        LastSensorData.SaveString(writer, Name);
+        LastSensorData.SaveFixedSizeString(writer, LocationType, 3, "Location type");
+    }
+}
+
+internal record Sensor(string Name, string DataType, int LocationId, int? DeviceId,
     Dictionary<int, string> DeviceSensors, Dictionary<string, double> Offsets, bool Enabled);
 
 public interface ISmartHomeService
@@ -98,6 +106,7 @@ public interface ISmartHomeService
     double ResponseTimeMs { get; }
     SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data);
     string GetValueType(string valueType);
+    Locations GetLocations();
 }
 
 public static class Compressor
@@ -116,19 +125,26 @@ public sealed class LastSensorData
     // map location id to map valueType to sensor data
     public readonly Dictionary<int, Dictionary<string, SensorDataItem>> Data;
     
-    public LastSensorData(Dictionary<int, Dictionary<string, SensorDataItem>> data)
+    internal LastSensorData(Dictionary<int, Dictionary<string, SensorDataItem>> data)
     {
         Data = data;
     }
 
-    internal static void SaveValueType(BinaryWriter writer, string valueType)
+    internal static void SaveFixedSizeString(BinaryWriter writer, string s, int expectedSize, string name)
     {
-        var valueTypeBytes = Encoding.UTF8.GetBytes(valueType);
-        if (valueTypeBytes.Length != 4)
-            throw new InvalidDataException("Value type must be 4 bytes");
-        writer.Write(valueTypeBytes);
+        var bytes = Encoding.UTF8.GetBytes(s);
+        if (bytes.Length != expectedSize)
+            throw new InvalidDataException($"{name} must be {expectedSize} bytes");
+        writer.Write(bytes);
     }
 
+    internal static void SaveString(BinaryWriter writer, string s)
+    {
+        var bytes = Encoding.UTF8.GetBytes(s);
+        writer.Write((byte)bytes.Length);
+        writer.Write(bytes);
+    }
+    
     public byte[] ToBinary()
     {
         using var stream = new MemoryStream();
@@ -139,7 +155,7 @@ public sealed class LastSensorData
             writer.Write((byte)lastDataByLocation.Count);
             foreach (var (valueType, lastData) in lastDataByLocation)
             {
-                SaveValueType(writer, valueType);
+                SaveFixedSizeString(writer, valueType, 4, "Value type");
                 lastData.Save(writer);
             }           
         }
@@ -149,9 +165,10 @@ public sealed class LastSensorData
 
 public sealed class SensorDataResult
 {
+    // map valueType -> sensor data list
     public readonly Dictionary<string, List<SensorData>> Data;
     
-    public SensorDataResult(Dictionary<string, List<SensorData>> data)
+    internal SensorDataResult(Dictionary<string, List<SensorData>> data)
     {
         Data = data;
     }
@@ -162,10 +179,46 @@ public sealed class SensorDataResult
         using var writer = new BinaryWriter(stream);
         foreach (var (valueType, data) in Data)
         {
-            LastSensorData.SaveValueType(writer, valueType);
+            LastSensorData.SaveFixedSizeString(writer, valueType, 4, "Value type");
             writer.Write((byte)data.Count);
             foreach (var sdata in data)
                 sdata.Save(writer);
+        }
+        return stream.ToArray();
+    }
+}
+
+public record LocationAndSensors(Location Location, int[] Sensors)
+{
+    public void Save(BinaryWriter writer)
+    {
+        Location.Save(writer);
+        writer.Write((byte)Sensors.Length);
+        foreach (var sensorId in Sensors)
+            writer.Write((byte)sensorId);
+    }
+}
+
+public sealed class Locations
+{
+    public readonly Dictionary<int, LocationAndSensors> LocationMap;
+    public readonly string TimeZone;
+    
+    internal Locations(Dictionary<int, LocationAndSensors> locations, string timeZone)
+    {
+        TimeZone = timeZone;
+        LocationMap = locations;
+    }
+    
+    public byte[] ToBinary()
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        LastSensorData.SaveString(writer, TimeZone);
+        foreach (var (locationId, location) in LocationMap)
+        {
+            writer.Write((byte)locationId);
+            location.Save(writer);
         }
         return stream.ToArray();
     }
