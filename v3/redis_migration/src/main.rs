@@ -1,14 +1,15 @@
 use std::env;
 use std::io::{Error, ErrorKind};
 use std::time::SystemTime;
-use chrono::{Datelike, TimeZone, Timelike, Utc};
+use chrono::{Datelike, MappedLocalTime, TimeZone, Timelike};
+use chrono_tz::Tz;
 use postgres::NoTls;
-use redis::Connection;
 
 fn main() -> Result<(), Error> {
     let mut postgres_host_name = "127.0.0.1".to_string();
     let mut postgres_db_name = "".to_string();
     let mut redis_host_name = "127.0.0.1".to_string();
+    let mut timezone = "".to_string();
     let mut create_time_series = false;
     let mut create_aggregations = false;
     let mut load_new_data = false;
@@ -19,6 +20,7 @@ fn main() -> Result<(), Error> {
             "--postgres_host_name" => postgres_host_name = get_next_argument(&args, &mut i)?,
             "--postgres_db_name" => postgres_db_name = get_next_argument(&args, &mut i)?,
             "--redis_host_name" => redis_host_name = get_next_argument(&args, &mut i)?,
+            "--timezone" => timezone = get_next_argument(&args, &mut i)?,
             "--create_time_series" => create_time_series = true,
             "--create_aggregations" => create_aggregations = true,
             "--load_new_data" => load_new_data = true,
@@ -30,6 +32,12 @@ fn main() -> Result<(), Error> {
         usage();
         return Err(Error::new(ErrorKind::InvalidInput, "Missing postgres_db_name"));
     }
+    if timezone.is_empty() {
+        usage();
+        return Err(Error::new(ErrorKind::InvalidInput, "Missing timezone"));
+    }
+    let tz: Tz = timezone.parse()
+        .map_err(|e| Error::new(ErrorKind::InvalidInput, e))?;
     if !create_time_series && !load_new_data && !create_aggregations {
         usage();
         return Err(Error::new(ErrorKind::InvalidInput, "At least one of --create_time_series or --create_aggregations or --load_new_data should be provided"));
@@ -50,16 +58,16 @@ fn main() -> Result<(), Error> {
         do_create_aggregations(&mut redis_connection)?;
     }
     if load_new_data {
-        do_load_new_data(postgres_client, redis_connection)?;
+        do_load_new_data(tz, postgres_client, redis_connection)?;
     }
     Ok(())
 }
 
 fn usage() {
-    println!("Usage: redis_migration [--postgres_host_name value] --postgres_db_name value [--redis_host_name value] [--create_time_series|--load_new_data]");
+    println!("Usage: redis_migration --timezone value [--postgres_host_name value] --postgres_db_name value [--redis_host_name value] [--create_time_series|--load_new_data]");
 }
 
-fn do_load_new_data(mut postgres_client: postgres::Client, mut redis_connection: redis::Connection)
+fn do_load_new_data(tz: Tz, mut postgres_client: postgres::Client, mut redis_connection: redis::Connection)
                     -> Result<(), Error> {
     let now = SystemTime::now();
     let results: Vec<(String, Vec<(String, String)>, Vec<(u64, f64)>)> = redis::cmd("TS.MGET")
@@ -78,7 +86,7 @@ fn do_load_new_data(mut postgres_client: postgres::Client, mut redis_connection:
     let elapsed = now.elapsed().unwrap().as_millis();
     println!("Redis MGET query: elapsed time {} milliseconds", elapsed);
 
-    let (event_date, event_time) = from_millis(max_timestamp as i64);
+    let (event_date, event_time) = from_millis(&tz, max_timestamp as i64);
     println!("Loading new data from {}{:06}", event_date, event_time);
     let now = SystemTime::now();
     let rows = postgres_client.query(
@@ -97,38 +105,44 @@ fn do_load_new_data(mut postgres_client: postgres::Client, mut redis_connection:
         let event_time: i32 = row.get(2);
         let value_type: String = row.get(3);
         let value: i32 = row.get(4);
-        let timestamp = to_millis(event_date, event_time);
-        let _: () = redis::cmd("TS.ADD")
-            .arg(format!("{}:{}", sensor_id, value_type))
-            .arg(timestamp)
-            .arg(value as f64 / 100.0)
-            .query(&mut redis_connection)
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-        counter += 1;
+        let timestamp_opt = to_millis(&tz, event_date, event_time);
+        if let Some(timestamp) = timestamp_opt {
+            let _: () = redis::cmd("TS.ADD")
+                .arg(format!("{}:{}", sensor_id, value_type))
+                .arg(timestamp)
+                .arg(value as f64 / 100.0)
+                .query(&mut redis_connection)
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            counter += 1;
+        }
     }
     let elapsed = now.elapsed().unwrap().as_millis();
     println!("Redis queries: elapsed time {} milliseconds, {} rows added", elapsed, counter);
     Ok(())
 }
 
-fn from_millis(timestamp: i64) -> (i32, i32) {
-    let datetime = Utc.timestamp_millis_opt(timestamp).unwrap();
+fn from_millis(tz: &Tz, timestamp: i64) -> (i32, i32) {
+    let datetime = tz.timestamp_millis_opt(timestamp).unwrap();
     let date = datetime.year() * 10000 + (datetime.month() * 100) as i32 + datetime.day() as i32;
     let time = (datetime.hour() * 10000 + datetime.minute() * 100 + datetime.second()) as i32;
     (date, time)
 }
 
-fn to_millis(event_date: i32, event_time: i32) -> i64 {
-    Utc.with_ymd_and_hms(
+fn to_millis(tz: &Tz, event_date: i32, event_time: i32) -> Option<i64> {
+    match tz.with_ymd_and_hms(
         event_date / 10000,
         ((event_date / 100) % 100) as u32,
         (event_date % 100) as u32,
         (event_time / 10000) as u32,
         ((event_time / 100) % 100) as u32,
-        (event_time % 100) as u32).unwrap().timestamp_millis()
+        (event_time % 100) as u32) {
+        MappedLocalTime::Single(dt) => Some(dt.timestamp_millis()),
+        MappedLocalTime::Ambiguous(_, latest) => Some(latest.timestamp_millis()),
+        MappedLocalTime::None => None
+    }
 }
 
-fn do_create_aggregations(redis_connection: &mut Connection) -> Result<(), Error> {
+fn do_create_aggregations(redis_connection: &mut redis::Connection) -> Result<(), Error> {
     let now = SystemTime::now();
     let results: Vec<String> = redis::cmd("TS.QUERYINDEX")
         .arg("type=sensor")
@@ -246,5 +260,34 @@ fn get_next_argument(args: &Vec<String>, idx: &mut usize) -> Result<String, Erro
     } else {
         *idx = next_idx;
         Ok(args[next_idx].clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono_tz::Tz;
+    use crate::{from_millis, to_millis};
+
+    #[test]
+    fn test_timestamp_convert() {
+        let tz: Tz = "Europe/Berlin".parse().unwrap();
+        let millis = to_millis(&tz, 20260321, 90000);
+        assert_eq!(millis, Some(1774080000000));
+        let (date, time) = from_millis(&tz, millis.unwrap());
+        assert_eq!(date, 20260321);
+        assert_eq!(time, 90000);
+    }
+
+    #[test]
+    fn test_timestamp_convert_2() {
+        let tz: Tz = "Europe/Berlin".parse().unwrap();
+        let millis = to_millis(&tz, 20221030, 20039);
+        assert_eq!(millis, Some(1667091639000));
+        let (date, time) = from_millis(&tz, millis.unwrap());
+        assert_eq!(date, 20221030);
+        assert_eq!(time, 20039);
+
+        let millis = to_millis(&tz, 20230326, 20112);
+        assert_eq!(millis, None);
     }
 }
