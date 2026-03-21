@@ -7,7 +7,7 @@ using StackExchange.Redis;
 
 namespace SmartHomeService;
 
-internal record Configuration(string RedisConnectionString, string SensorsFile, string LocationsFile, string TimeZone);
+public record RedisSmartHomeServiceConfiguration(string RedisConnectionString, string SensorsFile, string LocationsFile, string TimeZone);
 
 public sealed class RedisSmartHomeService: ISmartHomeService
 {
@@ -37,21 +37,29 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     private readonly string _timeZoneName;
     
     public double ResponseTimeMs { get; private set; }
-    
-    public RedisSmartHomeService(string configFileName)
+
+    private static RedisSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
     {
         using var configurationStream = File.OpenRead(configFileName);
-        var configuration = JsonSerializer.Deserialize<Configuration>(configurationStream)
+        return JsonSerializer.Deserialize<RedisSmartHomeServiceConfiguration>(configurationStream)
                             ?? throw new Exception("Invalid configuration file");
-        _timeZone = TimeZoneInfo.FindSystemTimeZoneById(configuration.TimeZone);
-        _timeZoneName = configuration.TimeZone;
-        using var sensorsStream = File.OpenRead(configuration.SensorsFile);
+    }
+    
+    public RedisSmartHomeService(string configFileName): this(ReadConfiguration(configFileName))
+    {
+    }
+
+    public RedisSmartHomeService(RedisSmartHomeServiceConfiguration redisSmartHomeServiceConfiguration)
+    {
+        _timeZone = TimeZoneInfo.FindSystemTimeZoneById(redisSmartHomeServiceConfiguration.TimeZone);
+        _timeZoneName = redisSmartHomeServiceConfiguration.TimeZone;
+        using var sensorsStream = File.OpenRead(redisSmartHomeServiceConfiguration.SensorsFile);
         _sensors = JsonSerializer.Deserialize<Dictionary<int, Sensor>>(sensorsStream)
                    ?? throw new Exception("Invalid sensors file");
-        using var locationsStream = File.OpenRead(configuration.LocationsFile);
+        using var locationsStream = File.OpenRead(redisSmartHomeServiceConfiguration.LocationsFile);
         _locations = JsonSerializer.Deserialize<Dictionary<int, Location>>(locationsStream)
                      ?? throw new Exception("Invalid locations file");
-        _redisConnection = ConnectionMultiplexer.Connect(configuration.RedisConnectionString);
+        _redisConnection = ConnectionMultiplexer.Connect(redisSmartHomeServiceConfiguration.RedisConnectionString);
         
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
@@ -93,6 +101,11 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     {
         return TimeZoneInfo
             .ConvertTimeFromUtc(DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime, _timeZone);
+    }
+    
+    public DateTime BuildDate(int date)
+    {
+        return TimeZoneInfo.ConvertTime(new DateTime(date / 10000, (date / 100) % 100, date % 100), _timeZone);
     }
     
     public LastSensorData GetLastSensorData()

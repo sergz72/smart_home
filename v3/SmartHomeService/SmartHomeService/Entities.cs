@@ -81,7 +81,26 @@ public record SmartHomeQuery(
     string DataType,
     DateTime? StartDate,
     DateOffset? StartDateOffset,
-    DateOffset? Period);
+    DateOffset? Period)
+{
+    public static SmartHomeQuery FromBinary(ISmartHomeService service, byte[] data)
+    {
+        if (data.Length != 11)
+            throw new Exception("SmartHomeQuery: Invalid data length");
+        var maxPoints = BitConverter.ToInt16(data, 0);
+        var dataType = Encoding.UTF8.GetString(data[2..5]);
+        var dateOrOffset = BitConverter.ToInt32(data, 5);
+        var periodValue = (int)data[9];
+        var period = periodValue > 0 ? new DateOffset(periodValue, (TimeUnit)data[10]) : null;
+        if (dateOrOffset < 0)
+        {
+            var offsetValue = dateOrOffset >> 8;
+            var offsetUnit = (TimeUnit)(dateOrOffset & 0xFF);
+            return new SmartHomeQuery(maxPoints, dataType, null, new DateOffset(offsetValue, offsetUnit), period);
+        }
+        return new SmartHomeQuery(maxPoints, dataType, service.BuildDate(dateOrOffset), null, period);
+    }
+}
 
 public record Location(string Name, string LocationType)
 {
@@ -107,6 +126,7 @@ public interface ISmartHomeService
     SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data);
     string GetValueType(string valueType);
     Locations GetLocations();
+    DateTime BuildDate(int date);
 }
 
 public static class Compressor
