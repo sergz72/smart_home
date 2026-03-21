@@ -94,7 +94,7 @@ internal class Server
     {
         var bytes = Encoding.UTF8.GetBytes(message);
         var result = new byte[bytes.Length + 1];
-        result[0] = 1;
+        result[0] = 2;
         Array.Copy(bytes, 0, result, 1, bytes.Length);
         return result;
     }

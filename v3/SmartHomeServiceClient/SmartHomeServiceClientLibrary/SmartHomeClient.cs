@@ -18,11 +18,20 @@ public sealed class SmartHomeClient(NetworkServiceConfig config)
     
     public SensorDataResult GetSensorData(SmartHomeQuery query, out double responseTimeMs)
     {
-        var response = SendAndDecompress(query.ToBinary(), out responseTimeMs);
+        var response = SendAndDecompress(BuildSensorDataRequest(query), out responseTimeMs);
         ValidateResponse(response);
         return SensorDataResult.ParseResponse(response);
     }
-    
+
+    private static byte[] BuildSensorDataRequest(SmartHomeQuery query)
+    {
+        var data = query.ToBinary();
+        var response = new byte[data.Length + 1];
+        response[0] = 2;
+        data.CopyTo(response, 1);
+        return response;
+    }
+
     public Locations GetLocations(out double responseTimeMs)
     {
         var response = SendAndDecompress([0], out responseTimeMs);
@@ -48,7 +57,7 @@ public sealed class SmartHomeClient(NetworkServiceConfig config)
         if (response.Length == 0)
             throw new IOException("Empty response");
         var code = response.ReadByte();
-        if (code == 1)
+        if (code == 2)
             throw new ResponseError(response.ToArray());
         if (code != 0)
             throw new Exception($"Invalid response code {code}");

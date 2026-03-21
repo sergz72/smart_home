@@ -19,14 +19,40 @@ public record SensorDataItem(long Timestamp, double Value)
     }
 }
 
-public record AggregatedSensorData(List<SensorDataItem> Min, List<SensorDataItem> Avg, List<SensorDataItem> Max);
+public record AggregatedSensorData(List<SensorDataItem> Min, List<SensorDataItem> Avg, List<SensorDataItem> Max)
+{
+    public static AggregatedSensorData ParseResponse(BinaryReader reader)
+    {
+        var min = SensorData.ParseSensorDataItemList(reader);
+        var avg = SensorData.ParseSensorDataItemList(reader);
+        var max = SensorData.ParseSensorDataItemList(reader);
+        return new AggregatedSensorData(min, avg, max);
+    }
+
+    public void Save(BinaryWriter writer)
+    {
+        SensorData.WriteSensorDataItemList(writer, Min);
+        SensorData.WriteSensorDataItemList(writer, Avg);
+        SensorData.WriteSensorDataItemList(writer, Max);
+    }
+}
+
 public record SensorData(int LocationId, List<SensorDataItem>? Raw, AggregatedSensorData? Aggregated)
 {
-    private static void WriteSensorDataItemList(BinaryWriter writer, List<SensorDataItem> list)
+    internal static void WriteSensorDataItemList(BinaryWriter writer, List<SensorDataItem> list)
     {
         writer.Write((short)list.Count);
         foreach (var item in list)
             item.Save(writer);
+    }
+    
+    internal static List<SensorDataItem> ParseSensorDataItemList(BinaryReader reader)
+    {
+        var length = reader.ReadInt16();
+        var list = new List<SensorDataItem>();
+        while (length-- > 0)
+            list.Add(SensorDataItem.ParseResponse(reader));
+        return list;
     }
     
     internal void Save(BinaryWriter writer)
@@ -36,11 +62,16 @@ public record SensorData(int LocationId, List<SensorDataItem>? Raw, AggregatedSe
         if (Raw != null)
             WriteSensorDataItemList(writer, Raw);
         else
-        {
-            WriteSensorDataItemList(writer, Aggregated!.Min);
-            WriteSensorDataItemList(writer, Aggregated!.Avg);
-            WriteSensorDataItemList(writer, Aggregated!.Max);
-        }
+            Aggregated!.Save(writer);
+    }
+
+    public static SensorData ParseResponse(BinaryReader reader)
+    {
+        var locationId = (int)reader.ReadByte();
+        var aggregated = reader.ReadByte() != 0;
+        if (aggregated)
+            return new SensorData(locationId, null, AggregatedSensorData.ParseResponse(reader));
+        return new SensorData(locationId, ParseSensorDataItemList(reader), null);
     }
 }
 
@@ -286,7 +317,18 @@ public sealed class SensorDataResult
 
     public static SensorDataResult ParseResponse(MemoryStream response)
     {
-        throw new NotImplementedException();
+        using var reader = new BinaryReader(response);
+        var result = new Dictionary<string, List<SensorData>>();
+        while (response.Position < response.Length)
+        {
+            var valueType = LastSensorData.LoadFixedSizeString(reader, 4);
+            var length = reader.ReadByte();
+            var list = new List<SensorData>();
+            while (length-- > 0)
+                list.Add(SensorData.ParseResponse(reader));
+            result[valueType] = list;
+        }
+        return new SensorDataResult(result);
     }
 }
 

@@ -17,26 +17,104 @@ var client = new SmartHomeClient(new NetworkServiceConfig(
     hostName,
     port));
 
-double responseTimeMs;
-
-switch (query)
+try
 {
-    case "locations":
-        var locationsResponse = client.GetLocations(out responseTimeMs);
-        PrintLocationsResponse(locationsResponse);
-        break;
-    case "last_data":
-        var lastResponse = client.GetLastSensorData(out responseTimeMs);
-        PrintLastResponse(lastResponse);
-        break;
-    default:
-        Usage();
-        return;
+    double responseTimeMs;
+
+    switch (query)
+    {
+        case "locations":
+            var locationsResponse = client.GetLocations(out responseTimeMs);
+            PrintLocationsResponse(locationsResponse);
+            break;
+        case "last_data":
+            var lastResponse = client.GetLastSensorData(out responseTimeMs);
+            PrintLastResponse(lastResponse);
+            break;
+        default:
+            var q = BuildSmartHomeQuery();
+            var response = client.GetSensorData(q, out responseTimeMs);
+            PrintSensorDataResponse(response);
+            break;
+    }
+    
+    Console.WriteLine("Response time {0} ms.", responseTimeMs);
+}
+catch (Exception e)
+{
+    Console.WriteLine(e.Message);
+    Environment.Exit(1);
 }
 
-Console.WriteLine("Response time {0} ms.", responseTimeMs);
-
 return;
+
+(string, string) BuildKeyValue(string parameter)
+{
+    var parts = parameter.Split("=");
+    if (parts.Length != 2)
+        throw new ArgumentException($"Invalid parameter {parameter}");
+    return (parts[0], parts[1]);
+}
+
+(DateTime?, DateOffset?) ParseDate(string dateStr)
+{
+    if (dateStr.StartsWith('-'))
+    {
+        var period = ParsePeriod(dateStr[1..]);
+        return (null, period);
+    }
+    var date = int.Parse(dateStr);
+    return (BuildDate(date), null);
+}
+
+DateTime BuildDate(int date)
+{
+    return new DateTime(date / 10000, (date / 100) % 100, date % 100);
+}
+
+DateOffset? ParsePeriod(string? periodStr)
+{
+    if (periodStr == null)
+        return null;
+    var unit = periodStr.Last() switch
+    {
+        'd' => TimeUnit.Day,
+        'm' => TimeUnit.Month,
+        'y' => TimeUnit.Year,
+        _ => throw new ArgumentException($"Invalid period {periodStr}")
+    };
+    var value = int.Parse(periodStr[..^1]);
+    return new DateOffset(value, unit);
+}
+
+SmartHomeQuery BuildSmartHomeQuery()
+{
+    var parameters = query
+        .Split('&')
+        .Select(BuildKeyValue)
+        .ToDictionary(kv => kv.Item1, kv => kv.Item2);
+    var dataType = parameters["dataType"] ?? throw new ArgumentException("Missing dataType");
+    var maxPoints = short.Parse(parameters.GetValueOrDefault("maxPoints", "0"));
+    Console.WriteLine("maxPoints: {0}", maxPoints);
+    Console.WriteLine("dataType: {0}", dataType);
+    var (startDate, startDateOffset) =
+        ParseDate(parameters["startDate"] ?? throw new ArgumentException("Missing startDate"));
+    if (startDate != null)
+        Console.WriteLine("startDate: {0}", startDate);
+    else
+    {
+        Console.WriteLine("startDateOffset.offset: {0}", startDateOffset!.Offset);
+        Console.WriteLine("startDateOffset.unit: {0}", startDateOffset.Unit);
+    }
+
+    var period = ParsePeriod(parameters["period"]);
+    if (period != null) {
+        Console.WriteLine("period.offset: {0}", period.Offset);
+        Console.WriteLine("period.unit: {0}", period.Unit);
+    }
+
+    return new SmartHomeQuery(maxPoints, dataType, startDate, startDateOffset, period);
+}
 
 void PrintLocationsResponse(Locations locations)
 {
@@ -50,6 +128,21 @@ void PrintLastResponse(LastSensorData lastData)
     foreach (var (locationId, data) in lastData.Data)
     {
         Console.WriteLine("Location {0}: {1}", locationId, LastDataToString(data));
+    }
+}
+
+void PrintSensorDataResponse(SensorDataResult response)
+{
+    foreach (var (valueType, data) in response.Data)
+    {
+        Console.WriteLine("Value type {0}:", valueType);
+        foreach (var sdata in data)
+        {
+            if (sdata.Raw != null)
+                Console.WriteLine("Location {0}: raw data count {1}", sdata.LocationId, sdata.Raw.Count);
+            else
+                Console.WriteLine("Location {0}: aggregated data count {1}", sdata.LocationId, sdata.Aggregated!.Avg.Count);
+        }
     }
 }
 
