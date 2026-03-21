@@ -41,11 +41,12 @@ public class NetworkService
     {
         var stopwatch = new Stopwatch();
         _udpClient.Send(data, data.Length);
-        stopwatch.Start();
         var ep = new IPEndPoint(IPAddress.Any, 0);
+        stopwatch.Start();
+        var response = _udpClient.Receive(ref ep);
         stopwatch.Stop();
         responseTimeMs = stopwatch.Elapsed.TotalMilliseconds;
-        return _udpClient.Receive(ref ep);
+        return response;
     }
 
     private byte[] Encrypt(byte[] data)
