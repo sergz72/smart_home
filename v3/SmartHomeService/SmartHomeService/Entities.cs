@@ -91,18 +91,7 @@ public enum TimeUnit {
 
 public record DateOffset(int Offset, TimeUnit Unit)
 {
-    internal DateTime CalculateDateSubtract(DateTime dateTime)
-    {
-        return Unit switch
-        {
-            TimeUnit.Day => dateTime.AddDays(-Offset),
-            TimeUnit.Month => dateTime.AddMonths(-Offset),
-            TimeUnit.Year => dateTime.AddYears(-Offset),
-            _ => throw new ArgumentOutOfRangeException()
-        };
-    }
-    
-    internal DateTime CalculateDateAdd(DateTime dateTime)
+    internal DateTime CalculateDate(DateTime dateTime)
     {
         return Unit switch
         {
@@ -147,16 +136,12 @@ public record SmartHomeQuery(
         var result = new byte[11];
         BitConverter.GetBytes(MaxPoints).CopyTo(result, 0);
         dataTypeBytes.CopyTo(result, 2);
+        int date;
         if (StartDate != null)
-        {
-            var date = StartDate.Value.Year * 10000 + StartDate.Value.Month * 100 + StartDate.Value.Day;
-            BitConverter.GetBytes(date).CopyTo(result, 5);
-        }
+            date = StartDate.Value.Year * 10000 + StartDate.Value.Month * 100 + StartDate.Value.Day;
         else
-        {
-            result[5] = (byte)StartDateOffset!.Unit;
-            result[6] = (byte)StartDateOffset.Offset;
-        }
+            date = (-StartDateOffset!.Offset << 8) | (int)StartDateOffset!.Unit;
+        BitConverter.GetBytes(date).CopyTo(result, 5);
         if (Period != null)
         {
             result[9] = (byte)Period.Offset;

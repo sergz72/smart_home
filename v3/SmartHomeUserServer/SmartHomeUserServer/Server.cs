@@ -1,62 +1,23 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using SmartHomeService;
 
 namespace SmartHomeUserServer;
 
-internal class Server
+internal sealed class Server: GenericServer
 {
     private const long MaxTimeDifference = 60;
     
-    private readonly byte[] _key;
     private readonly ISmartHomeService _service;
-    private readonly UdpClient _client;
-    private readonly ILoggerCreator _loggerCreator;
-    private readonly Logger _logger;
-    private readonly ServerConfiguration _configuration;
     
-    private volatile bool _stop;
-    
-    internal Server(ServerConfiguration configuration, ISmartHomeService service, ILoggerCreator loggerCreator)
+    internal Server(ServerConfiguration configuration, ISmartHomeService service, ILoggerCreator loggerCreator): base(configuration, loggerCreator)
     {
-        _key = File.ReadAllBytes(configuration.KeyFileName);
-        if (configuration.Port == 0)
-            throw new Exception("Port must be specified");
-        if (configuration.Name.Length == 0)
-            throw new Exception("Name must be specified");
-        _configuration = configuration;
-        _loggerCreator = loggerCreator;
-        _logger = loggerCreator.CreateLogger(configuration.Name);
         _service = service;
-        _client = new UdpClient(configuration.Port);
     }
     
-    internal void Start()
+    protected override void Handle(byte[] data, IPEndPoint ep, Logger logger)
     {
-        _logger.Info($"Starting server on port {_configuration.Port}");
-        while (true)
-        {
-            IPEndPoint? ep = null;
-            var data = _client.Receive(ref ep);
-            if (_stop) break;
-            Handle(data, ep);
-        }
-        _client.Close();
-        _logger.Info("Server stopped");
-    }
-
-    internal void Stop()
-    {
-        _stop = true;
-        new UdpClient().Send([0], 1, new IPEndPoint(IPAddress.Loopback, _configuration.Port));
-    }
-
-    private void Handle(byte[] data, IPEndPoint ep)
-    {
-        var logger = _loggerCreator.CreateLogger($"{_configuration.Name} {ep}");
-        logger.Debug("New connection");
         byte[] decrypted;
         try
         {
@@ -82,7 +43,7 @@ internal class Server
         {
             var compressed = Compressor.Compress(response);
             var encrypted = Encrypt(compressed);
-            _client.Send(encrypted, encrypted.Length, ep);
+            Client.Send(encrypted, encrypted.Length, ep);
         }
         catch (Exception e)
         {
@@ -90,7 +51,7 @@ internal class Server
         }
     }
 
-    private byte[] BuildErrorResponse(string message)
+    private static byte[] BuildErrorResponse(string message)
     {
         var bytes = Encoding.UTF8.GetBytes(message);
         var result = new byte[bytes.Length + 1];
@@ -110,7 +71,7 @@ internal class Server
     private byte[] Encrypt(byte[] data)
     {
         var iv = RandomNumberGenerator.GetBytes(12);
-        var cipher = new ChaCha20(_key, iv);
+        var cipher = new ChaCha20(Key, iv);
         var encrypted = cipher.Encrypt(data);
         var result = new byte[encrypted.Length + 12];
         iv.CopyTo(result, 0);
@@ -133,7 +94,7 @@ internal class Server
             throw new Exception("Invalid request length");
         var iv = TransformIv(data[..12]);
         ValidateIv(iv);
-        var cipher = new ChaCha20(_key, iv);
+        var cipher = new ChaCha20(Key, iv);
         return cipher.Encrypt(data[12..]);
     }
 
@@ -144,7 +105,7 @@ internal class Server
         randomPart.CopyTo(iv3, 0);
         randomPart.CopyTo(iv3, 4);
         randomPart.CopyTo(iv3, 8);
-        var cipher = new ChaCha20(_key, iv3);
+        var cipher = new ChaCha20(Key, iv3);
         var transformed = cipher.Encrypt(iv[4..]);
         Array.Copy(transformed, 0, iv3, 4, 8);
         return iv3;

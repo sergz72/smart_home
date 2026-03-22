@@ -1,4 +1,4 @@
-﻿namespace SmartHomeUserServer;
+﻿namespace SmartHomeService;
 
 public sealed class ConsoleLogger: Logger
 {

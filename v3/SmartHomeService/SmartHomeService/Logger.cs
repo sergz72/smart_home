@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace SmartHomeUserServer;
+namespace SmartHomeService;
 
 public enum LogLevel
 {
@@ -12,7 +12,8 @@ public enum LogLevel
 
 public abstract class Logger
 {
-    private static readonly DateTimeFormatInfo DateTimeFormat = new DateTimeFormatInfo { ShortDatePattern = "yyyy-MM-dd" };
+    private static readonly DateTimeFormatInfo DateTimeFormat = 
+        new DateTimeFormatInfo { ShortDatePattern = "yyyy-MM-dd", LongTimePattern = "HH:mm:ss.fff" };
     
     protected readonly string Prefix;
     protected readonly LogLevel Level;
@@ -43,7 +44,8 @@ public abstract class Logger
         Log(LogLevel.Error, message);
     }
     
-    protected virtual string FormatMessage(DateTime date, LogLevel level, string message) => $"{date.ToString(DateTimeFormat)} {Prefix}: {LevelToString(level)} {message}";
+    protected virtual string FormatMessage(DateTime date, LogLevel level, string message) => 
+        $"{date.ToString(DateTimeFormat)} {Prefix}: {LevelToString(level)} {message}";
     
     protected static string LevelToString(LogLevel level) => level.ToString().ToUpper();
     

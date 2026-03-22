@@ -15,7 +15,8 @@ var client = new SmartHomeClient(new NetworkServiceConfig(
     [],
     keyBytes,
     hostName,
-    port));
+    port,
+    2000));
 
 try
 {
@@ -60,7 +61,7 @@ return;
 {
     if (dateStr.StartsWith('-'))
     {
-        var period = ParsePeriod(dateStr[1..]);
+        var period = ParsePeriod("offset", dateStr[1..]);
         return (null, period);
     }
     var date = int.Parse(dateStr);
@@ -72,7 +73,7 @@ DateTime BuildDate(int date)
     return new DateTime(date / 10000, (date / 100) % 100, date % 100);
 }
 
-DateOffset? ParsePeriod(string? periodStr)
+DateOffset? ParsePeriod(string title, string? periodStr)
 {
     if (periodStr == null)
         return null;
@@ -84,6 +85,8 @@ DateOffset? ParsePeriod(string? periodStr)
         _ => throw new ArgumentException($"Invalid period {periodStr}")
     };
     var value = int.Parse(periodStr[..^1]);
+    if (value <= 0)
+        throw new ArgumentException($"Invalid {title} value {value}");
     return new DateOffset(value, unit);
 }
 
@@ -93,12 +96,12 @@ SmartHomeQuery BuildSmartHomeQuery()
         .Split('&')
         .Select(BuildKeyValue)
         .ToDictionary(kv => kv.Item1, kv => kv.Item2);
-    var dataType = parameters["dataType"] ?? throw new ArgumentException("Missing dataType");
+    var dataType = parameters.GetValueOrDefault("dataType") ?? throw new ArgumentException("Missing dataType");
     var maxPoints = short.Parse(parameters.GetValueOrDefault("maxPoints", "0"));
     Console.WriteLine("maxPoints: {0}", maxPoints);
     Console.WriteLine("dataType: {0}", dataType);
     var (startDate, startDateOffset) =
-        ParseDate(parameters["startDate"] ?? throw new ArgumentException("Missing startDate"));
+        ParseDate(parameters.GetValueOrDefault("startDate") ?? throw new ArgumentException("Missing startDate"));
     if (startDate != null)
         Console.WriteLine("startDate: {0}", startDate);
     else
@@ -107,7 +110,7 @@ SmartHomeQuery BuildSmartHomeQuery()
         Console.WriteLine("startDateOffset.unit: {0}", startDateOffset.Unit);
     }
 
-    var period = ParsePeriod(parameters["period"]);
+    var period = ParsePeriod("period", parameters.GetValueOrDefault("period"));
     if (period != null) {
         Console.WriteLine("period.offset: {0}", period.Offset);
         Console.WriteLine("period.unit: {0}", period.Unit);

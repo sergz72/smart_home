@@ -29,8 +29,6 @@ Task.WaitAll(tasks);
 
 return;
 
-internal record ServerConfiguration(string Name, ushort Port, string KeyFileName);
-
 internal record Configuration(
     ServerConfiguration ServerConfiguration,
     RedisSmartHomeServiceConfiguration ServiceConfiguration);
