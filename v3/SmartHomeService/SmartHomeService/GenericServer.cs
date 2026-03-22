@@ -39,6 +39,7 @@ public abstract class GenericServer
             var logger = _loggerCreator.CreateLogger($"{_configuration.Name} {ep}");
             logger.Debug("New connection");
             Handle(data, ep, logger);
+            logger.Debug("Connection closed");
         }
         Client.Close();
         _logger.Info("Server stopped");

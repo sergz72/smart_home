@@ -4,6 +4,13 @@ using SmartHomeService;
 
 namespace SmartHomeServiceClientLibrary;
 
+public class ResponseStatistics
+{
+    public double ResponseTimeMs;
+    public int ResponseSize;
+    public int DecompressedSize;   
+}
+
 public sealed class SmartHomeClient(NetworkServiceConfig config)
 {
     private readonly NetworkService _service = new(config, false);
@@ -16,9 +23,9 @@ public sealed class SmartHomeClient(NetworkServiceConfig config)
         return outStream;
     }
     
-    public SensorDataResult GetSensorData(SmartHomeQuery query, out double responseTimeMs)
+    public SensorDataResult GetSensorData(SmartHomeQuery query, ResponseStatistics statistics)
     {
-        var response = SendAndDecompress(BuildSensorDataRequest(query), out responseTimeMs);
+        var response = SendAndDecompress(BuildSensorDataRequest(query), statistics);
         ValidateResponse(response);
         return SensorDataResult.ParseResponse(response);
     }
@@ -32,22 +39,26 @@ public sealed class SmartHomeClient(NetworkServiceConfig config)
         return response;
     }
 
-    public Locations GetLocations(out double responseTimeMs)
+    public Locations GetLocations(ResponseStatistics statistics)
     {
-        var response = SendAndDecompress([0], out responseTimeMs);
+        var response = SendAndDecompress([0], statistics);
         ValidateResponse(response);
         return Locations.ParseResponse(response);
     }
 
-    private MemoryStream SendAndDecompress(byte[] request, out double responseTimeMs)
+    private MemoryStream SendAndDecompress(byte[] request, ResponseStatistics statistics)
     {
-        var response = _service.Send(request, out responseTimeMs);
-        return Decompress(response);
+        var response = _service.Send(request, out var responseTimeMs);
+        statistics.ResponseTimeMs = responseTimeMs;
+        statistics.ResponseSize = response.Length;
+        var decompressed = Decompress(response);
+        statistics.DecompressedSize = (int)decompressed.Length;
+        return decompressed;
     }
 
-    public LastSensorData GetLastSensorData(out double responseTimeMs)
+    public LastSensorData GetLastSensorData(ResponseStatistics statistics)
     {
-        var response = SendAndDecompress([1], out responseTimeMs);
+        var response = SendAndDecompress([1], statistics);
         ValidateResponse(response);
         return LastSensorData.ParseResponse(response);
     }

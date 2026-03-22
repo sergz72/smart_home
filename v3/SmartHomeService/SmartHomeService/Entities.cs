@@ -58,17 +58,15 @@ public record SensorData(int LocationId, List<SensorDataItem>? Raw, AggregatedSe
     internal void Save(BinaryWriter writer)
     {
         writer.Write((byte)LocationId);
-        writer.Write(Raw != null ? (byte)0 : (byte)1);
         if (Raw != null)
             WriteSensorDataItemList(writer, Raw);
         else
             Aggregated!.Save(writer);
     }
 
-    public static SensorData ParseResponse(BinaryReader reader)
+    public static SensorData ParseResponse(BinaryReader reader, bool aggregated)
     {
         var locationId = (int)reader.ReadByte();
-        var aggregated = reader.ReadByte() != 0;
         if (aggregated)
             return new SensorData(locationId, null, AggregatedSensorData.ParseResponse(reader));
         return new SensorData(locationId, ParseSensorDataItemList(reader), null);
@@ -176,7 +174,7 @@ public interface ISmartHomeService
     bool IsExtLocation(int locationId);
     DateTime GetDateTime(long timestamp);
     LastSensorData GetLastSensorData();
-    SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery);
+    SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated);
     double ResponseTimeMs { get; }
     SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data);
     string GetValueType(string valueType);
@@ -286,10 +284,11 @@ public sealed class SensorDataResult
         Data = data;
     }
 
-    public byte[] ToBinary()
+    public byte[] ToBinary(bool aggregated)
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
+        writer.Write(aggregated ? (byte)1 : (byte)0);
         foreach (var (valueType, data) in Data)
         {
             LastSensorData.SaveFixedSizeString(writer, valueType, 4, "Value type");
@@ -304,13 +303,14 @@ public sealed class SensorDataResult
     {
         using var reader = new BinaryReader(response);
         var result = new Dictionary<string, List<SensorData>>();
+        var aggregated = response.ReadByte() != 0;
         while (response.Position < response.Length)
         {
             var valueType = LastSensorData.LoadFixedSizeString(reader, 4);
             var length = reader.ReadByte();
             var list = new List<SensorData>();
             while (length-- > 0)
-                list.Add(SensorData.ParseResponse(reader));
+                list.Add(SensorData.ParseResponse(reader, aggregated));
             result[valueType] = list;
         }
         return new SensorDataResult(result);

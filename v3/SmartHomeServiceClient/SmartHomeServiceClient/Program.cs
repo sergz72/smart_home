@@ -20,26 +20,28 @@ var client = new SmartHomeClient(new NetworkServiceConfig(
 
 try
 {
-    double responseTimeMs;
+   ResponseStatistics statistics = new ResponseStatistics();
 
     switch (query)
     {
         case "locations":
-            var locationsResponse = client.GetLocations(out responseTimeMs);
+            var locationsResponse = client.GetLocations(statistics);
             PrintLocationsResponse(locationsResponse);
             break;
         case "last_data":
-            var lastResponse = client.GetLastSensorData(out responseTimeMs);
+            var lastResponse = client.GetLastSensorData(statistics);
             PrintLastResponse(lastResponse);
             break;
         default:
             var q = BuildSmartHomeQuery();
-            var response = client.GetSensorData(q, out responseTimeMs);
+            var response = client.GetSensorData(q, statistics);
             PrintSensorDataResponse(response);
             break;
     }
     
-    Console.WriteLine("Response time {0} ms.", responseTimeMs);
+    Console.WriteLine("Response time {0} ms.", statistics.ResponseTimeMs);
+    Console.WriteLine("Response size {0}.", statistics.ResponseSize);
+    Console.WriteLine("Decompressed size {0}.", statistics.DecompressedSize);
 }
 catch (Exception e)
 {

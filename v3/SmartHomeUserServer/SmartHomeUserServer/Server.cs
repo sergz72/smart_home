@@ -129,8 +129,8 @@ internal sealed class Server: GenericServer
         logger.Debug("Get sensor data request");
         var query = SmartHomeQuery.FromBinary(_service, data[1..]);
         logger.Debug(query.ToString());
-        var result = _service.GetSensorData(query);
-        return BuildOkResponse(result.ToBinary());
+        var result = _service.GetSensorData(query, out var aggregated);
+        return BuildOkResponse(result.ToBinary(aggregated));
     }
 
     private byte[] GetLastData(byte[] data, Logger logger)

@@ -131,12 +131,16 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return new LastSensorData(result);
     }
 
-    public SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery)
+    public SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated)
     {
         var sensors = GetSensors(sensorDataQuery.DataType);
         if (sensors.Count == 0)
+        {
+            aggregated = false;
             return new SensorDataResult([]);
+        }
         var dateRange = BuildDateRange(sensorDataQuery);
+        aggregated = dateRange.Aggregated;
         return dateRange.Aggregated ? GetAggregatedSensorData(sensors, dateRange) : GetRawSensorData(sensors, dateRange); 
     }
 

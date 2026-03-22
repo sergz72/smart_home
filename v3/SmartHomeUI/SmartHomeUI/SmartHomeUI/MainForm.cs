@@ -221,9 +221,9 @@ namespace SmartHomeUI
         {
             try
             {
-                var result = _service.GetSensorData(BuildSensorDataQuery(dataType));
+                var result = _service.GetSensorData(BuildSensorDataQuery(dataType), out var aggregated);
                 view.Refresh(result);
-                UpdateStatus(result.ToBinary());
+                UpdateStatus(result.ToBinary(aggregated));
             }
             catch (Exception e)
             {
