@@ -62,7 +62,7 @@ impl UserMessageProcessor {
 }
 
 impl MessageProcessor for UserMessageProcessor {
-    fn process_message(&self, logger: &Logger, message: &Vec<u8>, _time_offset: i64) -> Vec<u8> {
+    fn process_message(&self, logger: &Logger, message: &Vec<u8>) -> Vec<u8> {
         let message_prefix_length = self.command_processor.get_message_prefix_length();
         if message.len() < 13 + message_prefix_length ||
             !self.command_processor.check_message_length(message.len() - 12 - message_prefix_length) {

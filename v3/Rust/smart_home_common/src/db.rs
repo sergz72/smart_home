@@ -6,13 +6,15 @@ use chrono_tz::Tz;
 use serde::Deserialize;
 use crate::db_postgres::PostgresDatabase;
 use crate::db_redis::RedisDatabase;
-use crate::entities::{Location, MessageDateTime, Messages, Sensor, SensorTimestamp};
+use crate::entities::{DeviceSensor, Location, MessageDateTime, Messages, Sensor, SensorTimestamp};
 
 pub trait Database {
-    fn insert_messages_to_db(&mut self, messages: Vec<Messages>) -> Result<(), Error>;
-    fn get_sensors(&mut self) -> Result<HashMap<usize, Sensor>, Error>;
-    fn get_locations(&mut self) -> Result<HashMap<usize, Location>, Error>;
-    fn get_sensor_timestamps(&mut self) -> Result<HashMap<String, SensorTimestamp>, Error>;
+    fn insert_messages_to_db(&self, messages: Vec<Messages>) -> Result<(), Error>;
+    fn get_sensors(&self) -> Result<HashMap<usize, Sensor>, Error>;
+    fn get_locations(&self) -> Result<HashMap<usize, Location>, Error>;
+    fn get_sensor_timestamps(&self) -> Result<HashMap<String, SensorTimestamp>, Error>;
+    fn get_current_date_time(&self) -> MessageDateTime;
+    fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error>;
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,19 +66,19 @@ pub fn get_current_date_time(tz: &Tz) -> MessageDateTime {
                     time: (dt.hour() * 10000) as i32 + (dt.minute() * 100) as i32 + dt.second() as i32}
 }
 
-pub fn create_database_from_configuration_file(file_name: &String) -> Result<Box<dyn Database>, Error> {
+pub fn create_database_from_configuration_file(file_name: &String) -> Result<Box<dyn Database + Send + Sync>, Error> {
     let file = File::open(file_name)?;
     let reader = BufReader::new(file);
     let configuration: DatabaseConfiguration = serde_json::from_reader(reader)?;
     create_database_from_configuration(&configuration)
 }
 
-pub fn create_database_from_configuration(configuration: &DatabaseConfiguration) -> Result<Box<dyn Database>, Error> {
+pub fn create_database_from_configuration(configuration: &DatabaseConfiguration) -> Result<Box<dyn Database + Send + Sync>, Error> {
     configuration.to_database_parameters().and_then(|parameters| create_database_from_parameters(parameters))
 }
 
-pub fn create_database_from_parameters(parameters: DatabaseParameters) -> Result<Box<dyn Database>, Error> {
-    if parameters.connection_string.starts_with("postgres://") {
+pub fn create_database_from_parameters(parameters: DatabaseParameters) -> Result<Box<dyn Database + Send + Sync>, Error> {
+    if parameters.connection_string.starts_with("postgresql://") {
         return Ok(PostgresDatabase::new(&parameters.connection_string, parameters.tz)?)
     }
     if parameters.connection_string.starts_with("redis://") {

@@ -4,7 +4,7 @@ use chrono::{MappedLocalTime, TimeZone};
 use chrono_tz::Tz;
 use serde::Deserialize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageDateTime {
     pub date: i32,
     pub time: i32
@@ -31,6 +31,12 @@ pub struct Message {
     pub value: i32
 }
 
+impl Message {
+    pub fn to_string(&self) -> String {
+        format!("{}={}", self.value_type, self.value)
+    }
+}
+
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "message value_type={} value={}", self.value_type, self.value)
@@ -40,7 +46,14 @@ impl Display for Message {
 pub struct Messages {
     pub messages: Vec<Message>,
     pub sensor_id: i16,
-    pub date_time: Option<MessageDateTime>
+    pub date_time: MessageDateTime
+}
+
+impl Messages {
+    pub fn to_string(&self) -> String {
+        format!("{}{:6} {} [{}]", self.date_time.date, self.date_time.time, self.sensor_id,
+            self.messages.iter().map(|m| m.to_string()).collect::<Vec<String>>().join(", "))
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -72,4 +85,11 @@ pub struct Location {
 pub struct SensorTimestamp {
     pub id: i16,
     pub last_timestamp: i64
+}
+
+#[derive(Debug)]
+pub struct DeviceSensor {
+    pub sensor_id: i16,
+    pub value_type: String,
+    pub offset_value: i32
 }

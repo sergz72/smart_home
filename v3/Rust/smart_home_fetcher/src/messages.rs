@@ -64,7 +64,7 @@ pub fn build_messages(logger: &Logger, decrypted: String, sensors_map: &HashMap<
                 .map(|(k, v)|Message {value_type: k, value: (v * 100.0) as i32 })
                 .collect();
             result.push(Messages{messages: messages_with_date, sensor_id: sensor.id,
-                date_time: Some(MessageDateTime{date, time})});
+                date_time: MessageDateTime{date, time}});
         }
     }
     Ok(result)
@@ -89,10 +89,8 @@ mod tests {
         )?;
         assert_eq!(messages_vec.len(), 1);
         let mut messages = messages_vec.remove(0);
-        assert!(messages.date_time.is_some());
-        let dt = messages.date_time.unwrap();
-        assert_eq!(dt.date, 20200102);
-        assert_eq!(dt.time, 150459);
+        assert_eq!(messages.date_time.date, 20200102);
+        assert_eq!(messages.date_time.time, 150459);
         assert_eq!(messages.messages.len(), 1);
         assert_eq!(messages.sensor_id, 1);
         let message = messages.messages.remove(0);

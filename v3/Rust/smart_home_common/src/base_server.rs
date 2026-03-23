@@ -7,7 +7,7 @@ use crate::logger::Logger;
 const BUFFER_SIZE: usize = 1024 * 200;
 
 pub trait MessageProcessor {
-    fn process_message(&self, logger: &Logger, message: &Vec<u8>, time_offset: i64) -> Vec<u8>;
+    fn process_message(&self, logger: &Logger, message: &Vec<u8>) -> Vec<u8>;
 }
 
 struct NetworkConnection {
@@ -33,7 +33,6 @@ struct TcpServer {
 pub struct BaseServer {
     network_server: Box<dyn NetworkServer + Sync>,
     message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-    time_offset: i64,
     logger: Logger
 }
 
@@ -93,9 +92,9 @@ fn build_network_server(udp: bool, port_number: u16) -> Result<Box<dyn NetworkSe
 
 impl BaseServer {
     pub fn new(udp: bool, port_number: u16, message_processor: Arc<dyn MessageProcessor + Sync + Send>,
-               time_offset: i64, name: String) -> Result<BaseServer, Error> {
+               name: String) -> Result<BaseServer, Error> {
         Ok(BaseServer { network_server: build_network_server(udp, port_number)?, message_processor,
-                        time_offset, logger: Logger::new(name) })
+                        logger: Logger::new(name) })
     }
 
     pub fn start(&'static self) {
@@ -121,7 +120,7 @@ impl BaseServer {
 
     fn handler(&self, mut connection: NetworkConnection) -> Result<(), Error> {
         let response = 
-            self.message_processor.process_message(&connection.logger, &connection.data, self.time_offset);
+            self.message_processor.process_message(&connection.logger, &connection.data);
         if !response.is_empty() {
             connection.data = response;
             self.network_server.send(connection)?;

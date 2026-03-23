@@ -22,7 +22,7 @@ pub struct Fetcher {
 }
 
 pub fn build_fetcher(config: Configuration) -> Result<Fetcher, Error> {
-    let mut database = create_database_from_configuration(&config.database_configuration)?;
+    let database = create_database_from_configuration(&config.database_configuration)?;
     let sensors_map =database.get_sensor_timestamps()?;
     let key = read_key_file16(&config.key_file_name)?;
     let aes = Aes128Gcm::new(&key.into());

@@ -1,0 +1,11 @@
+{
+  "DatabaseConfiguration": {
+    "ConnectionString": "postgresql://postgres@localhost/smart_home",
+    "TimeZone": "Europe/Berlin",
+    "SensorsFile": "sensors.json",
+    "LocationsFile": "locations.json"
+  },
+  "PortNumber": 59999,
+  "TcpPortNumber": 60002,
+  "DeviceKeyFileName": "device_key.dat"
+}
