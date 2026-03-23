@@ -1,0 +1,15 @@
+[package]
+name = "smart_home_common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.X"
+chrono-tz = "0.X"
+postgres = "0.X"
+redis = "1.X"
+chacha20 = "0.X"
+rand = { version = "0.X", features = ["sys_rng"] }
+bzip2 = "0.X"
+serde_json = "1.X"
+serde = { version = "1.0.228", features = ["derive"] }
