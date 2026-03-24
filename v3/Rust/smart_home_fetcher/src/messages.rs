@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use smart_home_common::entities::{Message, MessageDateTime, Messages, SensorTimestamp};
@@ -52,19 +52,13 @@ pub fn build_messages(logger: &Logger, decrypted: String, sensors_map: &HashMap<
         if message.message.error_message.len() > 0 {
             logger.error(message.message.error_message);
         } else {
-            let date = message.message_time.year() * 10000 +
-                message.message_time.month() as i32 * 100 +
-                message.message_time.day() as i32;
-            let time = (message.message_time.hour() * 10000 +
-                message.message_time.minute() * 100 +
-                message.message_time.second()) as i32;
             let sensor = sensors_map.get(&message.sensor_name)
                 .ok_or(Error::new(ErrorKind::Other, format!("Unknown sensor {}", message.sensor_name)))?;
             let messages_with_date: Vec<Message> = message.message.value_map.into_iter()
                 .map(|(k, v)|Message {value_type: k, value: (v * 100.0) as i32 })
                 .collect();
             result.push(Messages{messages: messages_with_date, sensor_id: sensor.id,
-                date_time: MessageDateTime{date, time}});
+                date_time: MessageDateTime{date_time: message.message_time, timestamp: None}});
         }
     }
     Ok(result)
@@ -89,8 +83,9 @@ mod tests {
         )?;
         assert_eq!(messages_vec.len(), 1);
         let mut messages = messages_vec.remove(0);
-        assert_eq!(messages.date_time.date, 20200102);
-        assert_eq!(messages.date_time.time, 150459);
+        let (date, time) = messages.date_time.to_date_and_time();
+        assert_eq!(date, 20200102);
+        assert_eq!(time, 150459);
         assert_eq!(messages.messages.len(), 1);
         assert_eq!(messages.sensor_id, 1);
         let message = messages.messages.remove(0);

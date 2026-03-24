@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind};
 use chrono_tz::Tz;
 use redis::Client;
 use crate::db::{get_current_date_time, Database, DatabaseParameters};
-use crate::entities::{DeviceSensor, Location, MessageDateTime, Messages, Sensor, SensorTimestamp};
+use crate::entities::{DeviceSensor, LastSensorData, Location, MessageDateTime, Messages, Sensor, SensorDataQuery, SensorDataResult, SensorTimestamp};
 
 pub struct RedisDatabase {
     client: Client,
@@ -27,15 +27,17 @@ impl Database for RedisDatabase {
         let mut connection = self.client.get_connection()
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
         for msg in messages {
-            let timestamp = msg.date_time.to_millis(&self.tz);
-            for message in msg.messages {
-                let value_type = format!("{:4}", message.value_type);
-                let _: () = redis::cmd("TS.ADD")
-                    .arg(format!("{}:{}", msg.sensor_id, value_type))
-                    .arg(timestamp)
-                    .arg(message.value as f64 / 100.0)
-                    .query(&mut connection)
-                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            let timestamp_opt = msg.date_time.to_timestamp_millis(&self.tz);
+            if let Some(timestamp) = timestamp_opt {
+                for message in msg.messages {
+                    let value_type = format!("{:4}", message.value_type);
+                    let _: () = redis::cmd("TS.ADD")
+                        .arg(format!("{}:{}", msg.sensor_id, value_type))
+                        .arg(timestamp)
+                        .arg(message.value as f64 / 100.0)
+                        .query(&mut connection)
+                        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                }
             }
         }
         Ok(())
@@ -59,5 +61,17 @@ impl Database for RedisDatabase {
 
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error> {
         todo!()
+    }
+
+    fn get_last_sensor_data(&self) -> Result<LastSensorData, Error> {
+        todo!()
+    }
+
+    fn get_sensor_data(&self, query: SensorDataQuery) -> Result<SensorDataResult, Error> {
+        todo!()
+    }
+
+    fn get_time_zone(&self) -> String {
+        self.tz.name().to_string()
     }
 }
