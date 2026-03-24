@@ -1,0 +1,73 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ListPreference
+        android:key="default_server"
+        android:summary="Default server"
+        android:title="@string/pref_title_default_server"
+        android:entries="@array/servers"
+        android:entryValues="@array/serverIds" />
+
+    <EditTextPreference
+        android:defaultValue="localhost"
+        android:key="server1"
+        android:summary="Host name to connect"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_1" />
+
+    <ListPreference
+        android:key="server_protocol1"
+        android:summary="Protocol version"
+        android:title="@string/pref_title_server_protocol1"
+        android:entries="@array/protocolVersions"
+        android:entryValues="@array/protocolVersionIds" />
+
+    <EditTextPreference
+        android:defaultValue="Server1"
+        android:key="server_name1"
+        android:summary="Host title"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_name1" />
+
+    <EditTextPreference
+        android:defaultValue=""
+        android:key="server2"
+        android:summary="Host name to connect"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_2" />
+
+    <ListPreference
+        android:key="server_protocol2"
+        android:summary="Protocol version"
+        android:title="@string/pref_title_server_protocol2"
+        android:entries="@array/protocolVersions"
+        android:entryValues="@array/protocolVersionIds" />
+
+    <EditTextPreference
+        android:defaultValue=""
+        android:key="server_name2"
+        android:summary="Host title"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_name2" />
+
+    <EditTextPreference
+        android:defaultValue=""
+        android:key="server3"
+        android:summary="Host name to connect"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_3" />
+
+    <ListPreference
+        android:key="server_protocol3"
+        android:summary="Protocol version"
+        android:title="@string/pref_title_server_protocol3"
+        android:entries="@array/protocolVersions"
+        android:entryValues="@array/protocolVersionIds" />
+
+    <EditTextPreference
+        android:defaultValue=""
+        android:key="server_name3"
+        android:summary="Host title"
+        android:singleLine="true"
+        android:title="@string/pref_title_server_name3" />
+
+</PreferenceScreen>

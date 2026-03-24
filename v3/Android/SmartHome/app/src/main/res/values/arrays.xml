@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="filterTypeNames">
+        <item>Date</item>
+        <item>Offset</item>
+    </string-array>
+    <string-array name="filterTypeValues">
+        <item>Date</item>
+        <item>Offset</item>
+    </string-array>
+    <string-array name="periodUnitNames">
+        <item>Days</item>
+        <item>Months</item>
+        <item>Years</item>
+    </string-array>
+    <integer-array name="periodUnitValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </integer-array>
+    <string-array name="chartLineColors">
+        <item>Red,Green</item>
+        <item>Yellow,Blue</item>
+        <item>Cyan,Magenta</item>
+        <item>Black,#800080</item>
+        <item>Green,Cyan</item>
+        <item>Blue,Yellow</item>
+    </string-array>
+    <string-array name="servers">
+        <item>Server 1</item>
+        <item>Server 2</item>
+        <item>Server 3</item>
+    </string-array>
+    <string-array name="serverIds">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string-array name="protocolVersions">
+        <item>v2</item>
+        <item>v3</item>
+    </string-array>
+    <string-array name="protocolVersionIds">
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+</resources>

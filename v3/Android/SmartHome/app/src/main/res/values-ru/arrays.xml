@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="filterTypeNames">
+        <item>Дата</item>
+        <item>Смещение</item>
+    </string-array>
+    <string-array name="periodUnitNames">
+        <item>Дни</item>
+        <item>Месяцы</item>
+        <item>Годы</item>
+    </string-array>
+</resources>
