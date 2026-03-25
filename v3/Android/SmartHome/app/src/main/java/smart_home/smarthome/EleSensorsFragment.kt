@@ -9,9 +9,8 @@ import android.widget.TextView
 import com.sz.charts.LineChart
 import smart_home.smarthome.entities.SensorData
 import smart_home.smarthome.entities.SensorDataResponse
-import smart_home.smarthome.service.SmartHomeService
 
-class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
+class EleSensorsFragment(params: IGraphParameters, service: ServiceHolder) :
     SensorsFragment(service, R.layout.fragment_ele_sensors, params, "ele"), View.OnClickListener {
     private var mNextPowerGraph: Button? = null
     private var mTotalLabel: TextView? = null
@@ -78,7 +77,7 @@ class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     }
 
     override fun refresh() {
-        service.getSensorData(
+        service.service!!.getSensorData(
             buildQuery(),
             {response -> mHandler.post { refresh(response) }},
             { t -> onFailure(t) },

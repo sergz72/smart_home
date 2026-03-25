@@ -9,11 +9,9 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import smart_home.smarthome.entities.SensorData
-
 import smart_home.smarthome.service.SensorDataQuery
-import smart_home.smarthome.service.SmartHomeService
 
-abstract class SensorsFragment(protected val service: SmartHomeService,
+abstract class SensorsFragment(protected val service: ServiceHolder,
                                private val mId: Int, protected val params: IGraphParameters?,
                                   private val  dataType: String, private val maxPoints: Int = 200):
     Fragment(), ISmartHomeData {
@@ -51,6 +49,6 @@ abstract class SensorsFragment(protected val service: SmartHomeService,
     }
 
     protected fun getLocationName(sensorData: SensorData?): String {
-        return if (sensorData == null) { "" } else { service.getLocations().locations[sensorData.locationId]!!.name }
+        return if (sensorData == null) { "" } else { service.service!!.getLocations().locations[sensorData.locationId]!!.name }
     }
 }

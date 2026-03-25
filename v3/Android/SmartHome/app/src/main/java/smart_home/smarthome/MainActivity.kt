@@ -23,6 +23,8 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 import smart_home.smarthome.service.SmartHomeService
 
+data class ServiceHolder(var service: SmartHomeService? = null)
+
 class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener, IGraphParameters,
     ActivityResultCallback<ActivityResult>, AdapterView.OnItemSelectedListener {
     companion object {
@@ -45,7 +47,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     private var mActivityResultLauncher: ActivityResultLauncher<Intent>? = null
     private var mServerList: Spinner? = null
     private var disableRefresh = true
-    private var mService: SmartHomeService? = null
+    private var mService: ServiceHolder = ServiceHolder()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +79,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         })
 
         try {
+            buildServerList()
             updateServer(false)
             openPage(0)
         } catch (e: Exception) {
@@ -84,7 +87,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         }
     }
 
-    private fun updateServer(refreshData: Boolean) {
+    private fun buildServerList() {
         val settings = getSharedPreferences(PREFS_NAME, 0)
 
         val serverList = IntRange(1, 3)
@@ -97,6 +100,10 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         if (defaultServer != null && defaultServer <= serverList.size) {
             mServerList!!.setSelection(defaultServer - 1)
         }
+    }
+
+    private fun updateServer(refreshData: Boolean) {
+        val settings = getSharedPreferences(PREFS_NAME, 0)
 
         val serverNameObject = mServerList!!.selectedItem ?: return
         val serverName = serverNameObject as String
@@ -132,7 +139,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             }
         }
 
-        mService = SmartHomeService.build(serverAddress, port, serverProtocol,
+        mService.service = SmartHomeService.build(serverAddress, port, serverProtocol,
             resources.openRawResource(R.raw.keyv2))
 
         refresh(refreshData)
@@ -197,10 +204,10 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             }
         }
         when (pageId) {
-            0 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, HomePageFragment(mService!!)).commit()
-            1 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EnvSensorsFragment(this, mService!!)).commit()
-            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, WatSensorsFragment(this, mService!!)).commit()
-            3 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment(this, mService!!)).commit()
+            0 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, HomePageFragment(mService)).commit()
+            1 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EnvSensorsFragment(this, mService)).commit()
+            2 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, WatSensorsFragment(this, mService)).commit()
+            3 -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, EleSensorsFragment(this, mService)).commit()
         }
     }
 
@@ -225,7 +232,8 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             when (requestCode) {
                 SETTINGS -> {
                     try {
-                        updateServer(true)
+                        buildServerList()
+                        //updateServer(true)
                     } catch (e: Exception) {
                         alert(this, e.message)
                     }
@@ -246,7 +254,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
         if (!disableRefresh)
-            refresh(true)
+            updateServer(true)
         else
             disableRefresh = false
     }

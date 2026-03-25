@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.service.SmartHomeService
 
-class HomePageFragment(service: SmartHomeService) :
+class HomePageFragment(service: ServiceHolder) :
     SensorsFragment(service, R.layout.fragment_home_page, null, "all") {
     private var mSensorsView: RecyclerView? = null
     private var mSensorsViewAdapter: SensorsViewAdapter? = null
@@ -36,7 +36,7 @@ class HomePageFragment(service: SmartHomeService) :
     }
 
     override fun refresh() {
-        service.getLastSensorData(
+        service.service!!.getLastSensorData(
             {response -> mHandler.post { refresh(response) } },
             { t -> onFailure(t) },
             requireActivity())

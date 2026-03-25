@@ -46,10 +46,9 @@ data class SensorDataQuery(
     val period: DateOffset?
 ) {
     internal fun toBinary(): ByteArray {
-        if (dataType.length < 3)
-            throw IllegalArgumentException("dataType must be more than 2 characters")
-        val buffer = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.put(2)
+        if (dataType.length != 3)
+            throw IllegalArgumentException("dataType length must be 3 characters")
+        val buffer = ByteBuffer.allocate(11).order(ByteOrder.LITTLE_ENDIAN)
         buffer.putShort(maxPoints)
         val bytes = dataType.toByteArray()
         buffer.put(bytes[0])

@@ -10,9 +10,8 @@ import com.sz.charts.LineChart
 
 import smart_home.smarthome.entities.SensorData
 import smart_home.smarthome.entities.SensorDataResponse
-import smart_home.smarthome.service.SmartHomeService
 
-class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
+class EnvSensorsFragment(params: IGraphParameters, service: ServiceHolder) :
     SensorsFragment(service, R.layout.fragment_env_sensors, params, "env"), View.OnClickListener {
     private var mNextTempIntGraph: Button? = null
     private var mNextTempExtGraph: Button? = null
@@ -49,12 +48,12 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
 
     private fun buildSensorLists(results: Map<String, List<SensorData>>) {
         val tempSensors = results["temp"]
-        mIntTempSensors = tempSensors?.filter { !service.getLocations().isExtLocation(it.locationId) }
-        mExtTempSensors = tempSensors?.filter { service.getLocations().isExtLocation(it.locationId) }
+        mIntTempSensors = tempSensors?.filter { !service.service!!.getLocations().isExtLocation(it.locationId) }
+        mExtTempSensors = tempSensors?.filter { service.service!!.getLocations().isExtLocation(it.locationId) }
         mHumiSensors = results["humi"]
         mPresSensor = results["pres"]?.firstOrNull()
-        mCO2Sensors = results["co2"]
-        mLuxSensors = results["lux"]
+        mCO2Sensors = results["co2 "]
+        mLuxSensors = results["lux "]
     }
 
     private fun refresh(results: SensorDataResponse) {
@@ -200,7 +199,7 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     }
 
     override fun refresh() {
-        service.getSensorData(
+        service.service!!.getSensorData(
             buildQuery(),
             {response -> mHandler.post { refresh(response) }},
             { t -> onFailure(t) },
