@@ -81,9 +81,9 @@ pub struct Sensor {
     pub location_id: usize,
     #[serde(rename = "DeviceId")]
     pub device_id: Option<usize>,
-    #[serde(rename = "DeviceSensors")]
+    #[serde(rename = "DeviceSensors", default)]
     pub device_sensors: HashMap<usize, String>,
-    #[serde(rename = "Offsets")]
+    #[serde(rename = "Offsets", default)]
     pub offsets: HashMap<String, f64>,
     #[serde(rename = "Enabled")]
     pub enabled: bool
@@ -129,10 +129,14 @@ impl SensorDataItem {
 }
 
 pub struct LastSensorData {
-    data: HashMap<usize, HashMap<String, SensorDataItem>>
+    pub data: HashMap<usize, HashMap<String, SensorDataItem>>
 }
 
 impl LastSensorData {
+    pub fn new(data: HashMap<usize, HashMap<String, SensorDataItem>>) -> LastSensorData {
+        LastSensorData{data}
+    }
+
     pub fn to_binary(&self) -> Result<Vec<u8>, Error>{
         let mut v = Vec::new();
         for (location_id, last_data_by_location) in &self.data {

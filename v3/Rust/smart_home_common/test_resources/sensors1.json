@@ -1,0 +1,108 @@
+{
+  "1": {
+    "Name": "sp_int",
+    "DataType": "env",
+    "LocationId": 1,
+    "DeviceId": 1,
+    "DeviceSensors": {
+       "0": "temp",
+       "1": "humi",
+       "2": "pres",
+       "8": "co2 ",
+       "9": "lux "
+    },
+    "Offsets": { "temp": -1.50 },
+    "Enabled": true
+  },
+  "2": {
+    "Name": "dascha_int",
+    "DataType": "env",
+    "LocationId": 2,
+    "DeviceId": 2,
+    "DeviceSensors": {
+       "0": "temp",
+       "1": "humi",
+       "2": "co2 ",
+       "3": "lux "
+    },
+    "Enabled": true
+  },
+  "3": {
+    "Name": "g_int",
+    "DataType": "env",
+    "LocationId": 3,
+    "DeviceId": 3,
+    "DeviceSensors": {
+       "0": "temp",
+       "1": "humi",
+       "2": "co2 ",
+       "3": "lux "
+    },
+    "Enabled": true
+  },
+  "4": {
+    "Name": "mama_int",
+    "DataType": "env",
+    "LocationId": 4,
+    "DeviceId": 4,
+    "DeviceSensors": {
+       "0": "temp",
+       "1": "humi",
+       "2": "co2 ",
+       "3": "lux "
+    },
+    "Enabled": true
+  },
+  "5": {
+    "Name": "hall_ele",
+    "DataType": "ele",
+    "LocationId": 5,
+    "DeviceId": 5,
+    "DeviceSensors": {
+       "0": "pwr "
+    },
+    "Enabled": true
+  },
+  "6": {
+    "Name": "sp_ext",
+    "DataType": "env",
+    "LocationId": 6,
+    "DeviceId": 1,
+    "DeviceSensors": {
+       "3": "temp",
+       "4": "humi"
+    },
+    "Enabled": true
+  },
+  "7": {
+    "Name": "sp_ext2",
+    "DataType": "env",
+    "LocationId": 7,
+    "DeviceId": 1,
+    "DeviceSensors": {
+       "5": "temp"
+    },
+    "Enabled": false
+  },
+  "8": {
+    "Name": "mama_bresser",
+    "DataType": "env",
+    "LocationId": 4,
+    "DeviceId": 1,
+    "DeviceSensors": {
+       "6": "temp",
+       "7": "humi"
+    },
+    "Enabled": false
+  },
+  "9": {
+    "Name": "g_ext",
+    "DataType": "env",
+    "LocationId": 7,
+    "DeviceId": 3,
+    "DeviceSensors": {
+       "4": "temp"
+    },
+    "Enabled": true
+  }
+}

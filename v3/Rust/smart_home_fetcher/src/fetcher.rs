@@ -32,7 +32,7 @@ pub fn build_fetcher(config: Configuration) -> Result<Fetcher, Error> {
 }
 
 impl Fetcher {
-    pub fn fetch_messages(&mut self) -> Result<(), Error> {
+    pub fn fetch_messages(&mut self, dry_run: bool) -> Result<(), Error> {
         for (address, sensors) in &self.config.addresses {
             let logger = Logger::new(address.clone());
             let last_timestamp = sensors.iter()
@@ -43,7 +43,7 @@ impl Fetcher {
             match self.process_request(&logger, request, address) {
                 Ok(messages) => {
                     logger.info(format!("messages count {}", messages.len()));
-                    if let Err(e) = self.database.insert_messages_to_db(messages) {
+                    if let Err(e) = self.database.insert_messages_to_db(messages, &logger, dry_run) {
                         logger.error(e.to_string());
                     }
                 },

@@ -7,13 +7,15 @@ use serde::Deserialize;
 use crate::db_postgres::PostgresDatabase;
 use crate::db_redis::RedisDatabase;
 use crate::entities::{DeviceSensor, LastSensorData, Location, MessageDateTime, Messages, Sensor, SensorDataQuery, SensorDataResult, SensorTimestamp};
+use crate::logger::Logger;
 
 pub trait Database {
-    fn insert_messages_to_db(&self, messages: Vec<Messages>) -> Result<(), Error>;
+    fn insert_messages_to_db(&self, messages: Vec<Messages>, logger: &Logger, dry_run: bool) -> Result<(), Error>;
     fn get_sensors(&self) -> Result<HashMap<usize, Sensor>, Error>;
     fn get_locations(&self) -> Result<HashMap<usize, Location>, Error>;
     fn get_sensor_timestamps(&self) -> Result<HashMap<String, SensorTimestamp>, Error>;
     fn get_current_date_time(&self) -> MessageDateTime;
+    // map device id to map sensor_idx -> DeviceSensor
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error>;
     fn get_last_sensor_data(&self) -> Result<LastSensorData, Error>;
     fn get_sensor_data(&self, query: SensorDataQuery) -> Result<SensorDataResult, Error>;
@@ -105,12 +107,31 @@ fn build_sensors(file_name: &String) -> Result<HashMap<usize, Sensor>, Error> {
     Ok(sensors)
 }
 
+// map device id to map sensor_idx -> DeviceSensor
+pub fn build_device_sensors(sensors: &HashMap<usize, Sensor>) -> HashMap<usize, HashMap<usize, DeviceSensor>> {
+    let mut result = HashMap::new();
+    for (sensor_id, sensor) in sensors {
+        if let Some(device_id) = sensor.device_id {
+            for (sensor_idx, value_type) in &sensor.device_sensors {
+                let idx_map = result.entry(device_id).or_insert(HashMap::new());
+                let offset_value = (*sensor.offsets.get(value_type).unwrap_or(&0.0) * 100.0) as i32;
+                idx_map.insert(*sensor_idx, DeviceSensor {
+                    sensor_id: *sensor_id as i16,
+                    value_type: value_type.clone(),
+                    offset_value
+                });
+            }
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{Error, ErrorKind};
     use chrono::{Datelike, NaiveDateTime, TimeZone, Timelike};
     use chrono_tz::Tz;
-    use crate::db::Database;
+    use crate::db::{build_device_sensors, build_sensors, Database};
     use crate::db_postgres::PostgresDatabase;
 
     #[test]
@@ -147,6 +168,29 @@ mod tests {
         let db = PostgresDatabase::new("postgresql://postgres@localhost/smart_home".to_string(),
                                        "Europe/Kyiv".to_string().parse().map_err(|e|Error::new(ErrorKind::Other, e))?)?;
         assert_eq!(db.get_time_zone(), "Europe/Kyiv");
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_device_sensors1() -> Result<(), Error> {
+        let sensors = build_sensors(&"test_resources/sensors1.json".to_string())?;
+        let device_sensors = build_device_sensors(&sensors);
+        assert_eq!(device_sensors.len(), 5);
+        let device1_sensors = device_sensors.get(&1);
+        assert!(device1_sensors.is_some());
+        assert_eq!(device1_sensors.unwrap().len(), 10);
+        let humi_idx = device1_sensors.unwrap().get(&1);
+        assert!(humi_idx.is_some());
+        assert_eq!(humi_idx.unwrap().sensor_id, 1);
+        assert_eq!(humi_idx.unwrap().value_type, "humi".to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_device_sensors2() -> Result<(), Error> {
+        let sensors = build_sensors(&"test_resources/sensors2.json".to_string())?;
+        let device_sensors = build_device_sensors(&sensors);
+        assert_eq!(device_sensors.len(), 0);
         Ok(())
     }
 }

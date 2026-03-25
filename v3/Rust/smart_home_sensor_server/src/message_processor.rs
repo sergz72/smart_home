@@ -18,12 +18,13 @@ struct SensorMessageProcessor {
     aes: Aes128,
     last_device_time: Mutex<HashMap<u16, u32>>,
     key_sum: u32,
-    db: Mutex<Box<dyn Database + Send + Sync>>
+    db: Mutex<Box<dyn Database + Send + Sync>>,
+    dry_run: bool,
 }
 
 impl SensorMessageProcessor {
     fn new(key_file_name: &String, device_sensors: HashMap<usize, HashMap<usize, DeviceSensor>>,
-            db: Box<dyn Database + Send + Sync>)
+            db: Box<dyn Database + Send + Sync>, dry_run: bool)
         -> Result<SensorMessageProcessor, Error> {
         let key_bytes = read_key_file16(key_file_name)?;
         let mut key_sum: u32 = 0;
@@ -37,7 +38,7 @@ impl SensorMessageProcessor {
         let key = GenericArray::from(key_bytes);
         let aes = Aes128::new(&key);
         Ok(SensorMessageProcessor {device_sensors, aes,
-            last_device_time: Mutex::new(HashMap::new()), key_sum, db: Mutex::new(db)})
+            last_device_time: Mutex::new(HashMap::new()), key_sum, db: Mutex::new(db), dry_run})
     }
 }
 
@@ -135,7 +136,7 @@ impl SensorMessageProcessor {
         if let Some(messages) =
             build_messages(logger, decrypted, sensors, self.db.lock().unwrap().get_current_date_time()) {
             self.last_device_time.lock().unwrap().insert(device_id, event_time);
-            if let Err(error) = self.db.lock().unwrap().insert_messages_to_db(messages) {
+            if let Err(error) = self.db.lock().unwrap().insert_messages_to_db(messages, &logger, self.dry_run) {
                 logger.error(format!("insert_messages_to_db error: {}", error));
             }
         }
@@ -174,7 +175,8 @@ impl SensorMessageProcessor {
 }
 
 pub fn build_message_processor(device_key_file_name: &String, device_sensors: HashMap<usize,
-                                HashMap<usize, DeviceSensor>>, db: Box<dyn Database + Send + Sync>)
+                               HashMap<usize, DeviceSensor>>, db: Box<dyn Database + Send + Sync>,
+                               dry_run: bool)
     -> Result<Arc<dyn MessageProcessor + Sync + Send>, Error> {
-    Ok(Arc::new(SensorMessageProcessor::new(device_key_file_name, device_sensors, db)?))
+    Ok(Arc::new(SensorMessageProcessor::new(device_key_file_name, device_sensors, db, dry_run)?))
 }

@@ -5,6 +5,7 @@ use chrono_tz::Tz;
 use postgres::{Client, NoTls, Row};
 use crate::db::{get_current_date_time, Database};
 use crate::entities::{DeviceSensor, LastSensorData, Location, MessageDateTime, Messages, Sensor, SensorDataQuery, SensorDataResult, SensorTimestamp};
+use crate::logger::Logger;
 
 pub struct PostgresDatabase {
     connection_string: String,
@@ -23,7 +24,7 @@ impl PostgresDatabase {
 }
 
 impl Database for PostgresDatabase {
-    fn insert_messages_to_db(&self, messages: Vec<Messages>) -> Result<(), Error> {
+    fn insert_messages_to_db(&self, messages: Vec<Messages>, logger: &Logger, dry_run: bool) -> Result<(), Error> {
         let mut client = self.build_client()?;
         for msg in messages {
             for message in msg.messages {
@@ -61,7 +62,6 @@ impl Database for PostgresDatabase {
         get_current_date_time(&self.tz)
     }
 
-    // map device id to vector of DeviceSensor
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error> {
         let mut client = self.build_client()?;
         let result = client.query("

@@ -1,0 +1,74 @@
+{
+  "1": {
+    "Name": "cabinet_int",
+    "DataType": "env",
+    "LocationId": 1,
+    "Enabled": true
+  },
+  "2": {
+    "Name": "cabinet_ext",
+    "DataType": "env",
+    "LocationId": 2,
+    "Enabled": true
+  },
+  "3": {
+    "Name": "garderob_int",
+    "DataType": "env",
+    "LocationId": 3,
+    "Enabled": true
+  },
+  "4": {
+    "Name": "garderob_ext",
+    "DataType": "env",
+    "LocationId": 4,
+    "Enabled": true
+  },
+  "5": {
+    "Name": "garderob_ele",
+    "DataType": "ele",
+    "LocationId": 3,
+    "Enabled": true
+  },
+  "6": {
+    "Name": "dascha_int",
+    "DataType": "env",
+    "LocationId": 5,
+    "Enabled": true
+  },
+  "7": {
+    "Name": "dascha_ele",
+    "DataType": "ele",
+    "LocationId": 5,
+    "Enabled": true
+  },
+  "8": {
+    "Name": "zal_int",
+    "DataType": "env",
+    "LocationId": 9,
+    "Enabled": true
+  },
+  "9": {
+    "Name": "zal_ext",
+    "DataType": "env",
+    "LocationId": 13,
+    "Enabled": true
+  },
+  "10": {
+    "Name": "pump",
+    "DataType": "wat",
+    "LocationId": 13,
+    "Enabled": true
+  },
+  "11": {
+    "Name": "sp_int",
+    "DataType": "env",
+    "LocationId": 6,
+    "Enabled": true
+  },
+  "12": {
+    "Name": "sp_ele",
+    "DataType": "ele",
+    "LocationId": 6,
+    "Enabled": true
+  }
+}
