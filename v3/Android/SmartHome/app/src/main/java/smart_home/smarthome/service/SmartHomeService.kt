@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.NetworkOnMainThreadException
+import smart_home.smarthome.MainActivity
 import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.entities.Locations
 import smart_home.smarthome.entities.SensorDataResponse
@@ -116,9 +117,10 @@ abstract class SmartHomeService {
     }
 
     abstract fun getLocations(): Locations
-    abstract fun getLastSensorData(callback: Callback<LastSensorDataResponse>, context: Activity)
-    abstract fun getSensorData(query: SensorDataQuery, callback: Callback<SensorDataResponse>,
-                               context: Activity)
+    abstract fun getLastSensorData(onResponse: (response: LastSensorDataResponse) -> Unit,
+                                   onFailure: (t: Throwable) -> Unit, context: Activity)
+    abstract fun getSensorData(query: SensorDataQuery, onResponse: (response: SensorDataResponse) -> Unit,
+                               onFailure: (t: Throwable) -> Unit, context: Activity)
 
     protected abstract fun isReady(): Boolean
     protected abstract fun encrypt(request: ByteArray): ByteArray

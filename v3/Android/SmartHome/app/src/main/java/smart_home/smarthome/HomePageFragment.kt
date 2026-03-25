@@ -1,12 +1,16 @@
 package smart_home.smarthome
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.service.SmartHomeService
 
 class HomePageFragment(service: SmartHomeService) :
@@ -27,11 +31,20 @@ class HomePageFragment(service: SmartHomeService) :
     }
 
     override fun onAttach(context: Context) {
-        mSensorsViewAdapter = SensorsViewAdapter(this.resources)
+        mSensorsViewAdapter = SensorsViewAdapter(this.resources, this.service)
         super.onAttach(context)
     }
 
     override fun refresh() {
-        TODO("Not yet implemented")
+        service.getLastSensorData(
+            {response -> mHandler.post { refresh(response) } },
+            { t -> onFailure(t) },
+            requireActivity())
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun refresh(results: LastSensorDataResponse) {
+        mSensorsViewAdapter!!.setData(results)
+        mSensorsViewAdapter!!.notifyDataSetChanged()
     }
 }

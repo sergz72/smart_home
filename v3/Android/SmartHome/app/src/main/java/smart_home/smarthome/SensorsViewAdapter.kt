@@ -13,10 +13,8 @@ import smart_home.smarthome.entities.Locations
 
 import smart_home.smarthome.entities.SensorData
 import smart_home.smarthome.entities.SensorDataItem
-import smart_home.smarthome.service.SmartHomeServiceV3
+import smart_home.smarthome.service.SmartHomeService
 import java.time.format.DateTimeFormatter
-
-
 
 data class SensorViewItem(val valueType: String, val data: SensorDataItem)
 data class SensorViewLocation(val locationName: String, val data: List<SensorViewItem>) {
@@ -25,9 +23,10 @@ data class SensorViewLocation(val locationName: String, val data: List<SensorVie
 
         fun build(
             kv: Map.Entry<Int, Map<String, SensorDataItem>>,
+            service: SmartHomeService,
             resources: Resources
         ): SensorViewLocation {
-            val locationName = SmartHomeServiceV3.mLocations!!.locations[kv.key]!!.name
+            val locationName = service.getLocations().locations[kv.key]!!.name
             val data = kv.value.map { SensorViewItem(Locations.getDataPresentation(resources, it.key), it.value) }
             return SensorViewLocation(locationName, data)
         }
@@ -51,7 +50,8 @@ data class SensorViewLocation(val locationName: String, val data: List<SensorVie
 }
 
 
-class SensorsViewAdapter(private val mResources: Resources) : RecyclerView.Adapter<SensorsViewAdapter.ViewHolder>() {
+class SensorsViewAdapter(private val mResources: Resources, private val mService: SmartHomeService) :
+    RecyclerView.Adapter<SensorsViewAdapter.ViewHolder>() {
     private val mData = mutableListOf<SensorViewLocation>()
     var selectedPosition = 0
         private set
@@ -68,7 +68,7 @@ class SensorsViewAdapter(private val mResources: Resources) : RecyclerView.Adapt
     fun setData(data: LastSensorDataResponse) {
         mData.clear()
         for (kv in data.response) {
-            mData.add(SensorViewLocation.build(kv, mResources))
+            mData.add(SensorViewLocation.build(kv, mService, mResources))
         }
         selectedPosition = 0
     }

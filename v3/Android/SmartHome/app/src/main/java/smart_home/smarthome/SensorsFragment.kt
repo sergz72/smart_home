@@ -2,12 +2,14 @@ package smart_home.smarthome
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-
 import smart_home.smarthome.entities.SensorData
+
 import smart_home.smarthome.service.SensorDataQuery
 import smart_home.smarthome.service.SmartHomeService
 
@@ -16,11 +18,9 @@ abstract class SensorsFragment(protected val service: SmartHomeService,
                                   private val  dataType: String, private val maxPoints: Int = 200):
     Fragment(), ISmartHomeData {
 
-    fun findSensors(results: List<SensorData>, locationTypeChecker: (String) -> Boolean, dataTypeChecker: (Set<String>) -> Boolean): List<SensorData> {
-        return results.filter { sd -> locationTypeChecker(sd.locationType) && dataTypeChecker(sd.series.last().data.keys) }
-    }
+    protected val mHandler = Handler(Looper.getMainLooper())
 
-    private fun buildQuery(): SensorDataQuery {
+    protected fun buildQuery(): SensorDataQuery {
         val period = params!!.getData().getPeriod()
         if (params.getData().mDateStart == null) {
             return SensorDataQuery(
@@ -43,5 +43,14 @@ abstract class SensorsFragment(protected val service: SmartHomeService,
     override fun onAttach(context: Context) {
         super.onAttach(context)
         refresh()
+    }
+
+
+    protected fun onFailure(t: Throwable) {
+        mHandler.post { MainActivity.alert(requireActivity(), t.message) }
+    }
+
+    protected fun getLocationName(sensorData: SensorData?): String {
+        return if (sensorData == null) { "" } else { service.getLocations().locations[sensorData.locationId]!!.name }
     }
 }

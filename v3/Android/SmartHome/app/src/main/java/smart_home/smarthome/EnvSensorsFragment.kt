@@ -9,8 +9,8 @@ import android.widget.Button
 import com.sz.charts.LineChart
 
 import smart_home.smarthome.entities.SensorData
+import smart_home.smarthome.entities.SensorDataResponse
 import smart_home.smarthome.service.SmartHomeService
-import smart_home.smarthome.service.SmartHomeServiceV3
 
 class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     SensorsFragment(service, R.layout.fragment_env_sensors, params, "env"), View.OnClickListener {
@@ -30,7 +30,6 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     private var mHumiSensorIdx: Int = 0
     private var mCO2SensorIdx: Int = 0
     private var mLuxSensorIdx: Int = 0
-    private var mAggregated: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
@@ -50,21 +49,22 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
 
     private fun buildSensorLists(results: Map<String, List<SensorData>>) {
         val tempSensors = results["temp"]
-        val intTempSensors = tempSensors?.filter { !service.getLocations().isExtLocation(it.locationId) }
-        val extTempSensors = tempSensors?.filter { service.getLocations().isExtLocation(it.locationId) }
-        val humiSensors = results["humi"]
-        val presSensor = results["pres"]?.firstOrNull()
-        val co2Sensors = results["co2"]
-        val luxSensors = results["lux"]
+        mIntTempSensors = tempSensors?.filter { !service.getLocations().isExtLocation(it.locationId) }
+        mExtTempSensors = tempSensors?.filter { service.getLocations().isExtLocation(it.locationId) }
+        mHumiSensors = results["humi"]
+        mPresSensor = results["pres"]?.firstOrNull()
+        mCO2Sensors = results["co2"]
+        mLuxSensors = results["lux"]
     }
 
-    private fun buildSensorLists(results: List<SensorData>) {
-        /*mIntTempSensors = findSensors(results, { it != "ext" }, { it.contains("temp") })
-        mExtTempSensors = findSensors(results, { it == "ext" }, { it.contains("temp") })
-        mHumiSensors = findSensors(results, { true }, { it.contains("humi") })
-        mPresSensor = findSensors(results, { true }, { it.contains("pres") }).firstOrNull()
-        mCO2Sensors = findSensors(results, { true }, { it.contains("co2") })
-        mLuxSensors = findSensors(results, { true }, { it.contains("lux") })*/
+    private fun refresh(results: SensorDataResponse) {
+        buildSensorLists(results.response)
+        mIntTempSensorIdx = 0
+        mExtTempSensorIdx = 0
+        mHumiSensorIdx = 0
+        mCO2SensorIdx = 0
+        mLuxSensorIdx = 0
+        showResults(requireView())
     }
 
     private fun showResults(v: View) {
@@ -74,20 +74,22 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
         showCO2Sensors(v)
         showLuxSensors(v)
         val plot = v.findViewById<LineChart>(R.id.plot_pres)
-        //Graph.buildGraph(plot, mPresSensor, "pres", false, mAggregated, false)
+        Graph.buildGraph(plot, mPresSensor, getLocationName(mPresSensor), onlyAvg = false, useFloat0 = false)
     }
 
     private fun showIntTempSensors(v: View) {
         if (mIntTempSensors != null && mIntTempSensorIdx < mIntTempSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_temp_int)
-            //Graph.buildGraph(plot, mIntTempSensors!![mIntTempSensorIdx], "temp", false, mAggregated, false)
+            val sensor = mIntTempSensors!![mIntTempSensorIdx]
+            Graph.buildGraph(plot, sensor, getLocationName(sensor), onlyAvg = false, useFloat0 = false)
         }
     }
 
     private fun showExtTempSensors(v: View) {
         val plot = v.findViewById<LineChart>(R.id.plot_temp_ext)
         if (mExtTempSensors != null && mExtTempSensorIdx < mExtTempSensors!!.size) {
-            //Graph.buildGraph(plot, mExtTempSensors!![mExtTempSensorIdx], "temp", false, mAggregated, false)
+            val sensor = mExtTempSensors!![mExtTempSensorIdx]
+            Graph.buildGraph(plot, sensor, getLocationName(sensor), onlyAvg = false, useFloat0 = false)
         } else {
             plot.clearSeries()
         }
@@ -96,21 +98,28 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     private fun showHumiSensors(v: View) {
         if (mHumiSensors != null && mHumiSensorIdx < mHumiSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_humi)
-            //Graph.buildGraph(plot, mHumiSensors!![mHumiSensorIdx], "humi", false, mAggregated, false)
+            val sensor = mHumiSensors!![mHumiSensorIdx]
+            Graph.buildGraph(plot, sensor, getLocationName(sensor), onlyAvg = false, useFloat0 = false)
         }
     }
 
     private fun showCO2Sensors(v: View) {
+        val plot = v.findViewById<LineChart>(R.id.plot_co2)
         if (mCO2Sensors != null && mCO2SensorIdx < mCO2Sensors!!.size) {
-            val plot = v.findViewById<LineChart>(R.id.plot_co2)
-            //Graph.buildGraph(plot, mCO2Sensors!![mCO2SensorIdx], "co2", false, mAggregated, false)
+            val sensor = mCO2Sensors!![mCO2SensorIdx]
+            Graph.buildGraph(plot, sensor, getLocationName(sensor), onlyAvg = false, useFloat0 = false)
+        } else {
+            plot.clearSeries()
         }
     }
 
     private fun showLuxSensors(v: View) {
+        val plot = v.findViewById<LineChart>(R.id.plot_lux)
         if (mLuxSensors != null && mLuxSensorIdx < mLuxSensors!!.size) {
-            val plot = v.findViewById<LineChart>(R.id.plot_lux)
-            //Graph.buildGraph(plot, mLuxSensors!![mLuxSensorIdx], "lux", false, mAggregated, false)
+            val sensor = mLuxSensors!![mLuxSensorIdx]
+            Graph.buildGraph(plot, sensor, getLocationName(sensor), onlyAvg = false, useFloat0 = false)
+        } else {
+            plot.clearSeries()
         }
     }
 
@@ -191,6 +200,10 @@ class EnvSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     }
 
     override fun refresh() {
-        TODO("Not yet implemented")
+        service.getSensorData(
+            buildQuery(),
+            {response -> mHandler.post { refresh(response) }},
+            { t -> onFailure(t) },
+            requireActivity())
     }
 }

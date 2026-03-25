@@ -2,6 +2,7 @@ package smart_home.smarthome
 
 import com.sz.charts.GraphSeries
 import com.sz.charts.LineChart
+import smart_home.smarthome.entities.SensorData
 import java.text.FieldPosition
 import java.text.Format
 import java.text.ParsePosition
@@ -11,7 +12,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.*
-
 
 object Graph {
 
@@ -68,43 +68,23 @@ object Graph {
         }
     }
 
-    private fun buildGraphParameters(d: SensorDataV3, isPrefix: Boolean, isSuffix: Boolean): Map<String, String> {
-        if (isPrefix) {
-            return d.series.last().data.keys.filter { it.startsWith(dataName) }.associateBy { d.locationName + ":" + it }
-        }
-        if (isSuffix) {
-            if (dataName == "pwr") {
-                return mapOf(d.locationName to "Avg$dataName")
-            }
-            return mapOf(d.locationName + ":Min" to "Min$dataName",
-                         d.locationName + ":Avg" to "Avg$dataName",
-                         d.locationName + ":Max" to "Max$dataName")
-        }
-        return mapOf(d.locationName to dataName)
+    private fun buildSeries(d: List<SensorData>, locationName: String, onlyAvg: Boolean = false): GraphSeries {
+        val data = d.flatMap { it.buildGraphData(onlyAvg) }
+        return GraphSeries(data, locationName, null, null)
+
     }
 
-    private fun buildSeries(d: List<SensorDataV3>, isPrefix: Boolean, isSuffix: Boolean): GraphSeries {
-        val result = GraphSeries()
-        d.filter { it.getLength() > 1 }
-         .forEach { data -> buildGraphParameters(data, isPrefix, isSuffix).forEach { (title, dn) ->
-                    result.addGraph(data.buildGraphData(title, dn, dataName))
-            }
-        }
-
-        return result
-    }
-
-    fun buildGraph(plot: LineChart, data: SensorDataV3?, isPrefix: Boolean,
-                   isSuffix: Boolean, useFloat0: Boolean) {
+    fun buildGraph(plot: LineChart, data: SensorData?, locationName: String, onlyAvg: Boolean,
+                   useFloat0: Boolean) {
         if (data == null) {
             plot.clearSeries()
         } else {
-            buildGraph(plot, listOf(data), isPrefix, isSuffix, useFloat0)
+            buildGraph(plot, listOf(data), locationName, onlyAvg, useFloat0)
         }
     }
 
-    fun buildGraph(plot: LineChart, data: List<SensorDataV3>, isPrefix: Boolean,
-                   isSuffix: Boolean, useFloat0: Boolean) {
+    fun buildGraph(plot: LineChart, data: List<SensorData>, locationName: String,
+                   onlyAvg: Boolean, useFloat0: Boolean) {
         if (data.isNotEmpty() && data.maxOf { sd -> sd.getLength() } > 1) {
             val start = data.minOf { d -> d.minDate() }
             val end = data.maxOf { d -> d.maxDate() }
@@ -121,8 +101,8 @@ object Graph {
                     multiplier = 24 * days.toInt() / 30
                 }
             }
-            val seriesInfo = buildSeries(data, isPrefix, isSuffix)
-            val dy = seriesInfo.mUpperYBoundary - seriesInfo.mLowerYBoundary
+            val seriesInfo = buildSeries(data, locationName, onlyAvg)
+            val dy = seriesInfo.yBoundaries.upperYBoundary - seriesInfo.yBoundaries.lowerYBoundary
             var rangeStepValue = 0.1F
             when {
                 dy > 1.0F && dy <= 2.0F -> {

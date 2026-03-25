@@ -6,7 +6,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import com.sz.charts.LineChart
 import smart_home.smarthome.entities.SensorData
+import smart_home.smarthome.entities.SensorDataResponse
 import smart_home.smarthome.service.SmartHomeService
 
 class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
@@ -14,9 +16,9 @@ class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     private var mNextPowerGraph: Button? = null
     private var mTotalLabel: TextView? = null
     private var mPowerSensors: List<SensorData>? = null
-    private var mVoltageSensors: List<SensorData>? = null
+    // map locationId -> map valueType -> data
+    private var mVoltageSensors: Map<Int, Map<String, SensorData>>? = null
     private var mPowerSensorIdx: Int = 0
-    private var mAggregated: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
@@ -27,27 +29,36 @@ class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
         return rootView
     }
 
-    private fun buildSensorLists(results: List<SensorData>) {
-        mPowerSensors = findSensors(results, { true }, { it.contains("pwr") })
-        mVoltageSensors = findSensors(results, { true }, { it -> it.any { it.startsWith("v") } })
+    private fun buildSensorLists(results: SensorDataResponse) {
+        mPowerSensors = results.response["pwr "]
+        mVoltageSensors = results.response
+            .filter { it.key.startsWith("v") }
+            .flatMap { s -> s.value.map { ss -> Pair(ss.locationId, Pair(s.key, ss)) } }
+            .groupBy { it.first }
+            .map { (key, value) -> key to value.map { it.second.first to it.second.second }.toMap()}
+            .toMap()
     }
 
-    private fun showResults(v: View, aggregated: Boolean) {
-        /*mAggregated = aggregated
+    fun refresh(results: SensorDataResponse) {
+        buildSensorLists(results)
+        mPowerSensorIdx = 0
+        showResults(requireView())
+    }
+
+    private fun showResults(v: View) {
         showPowerSensors(v)
-        if (!aggregated) {
-            val plot = requireView().findViewById<View>(R.id.plot_voltage) as LineChart
-            Graph.buildGraph(plot, mVoltageSensors!!, "v", true, false, true)
-        }*/
+        val plot = requireView().findViewById<View>(R.id.plot_voltage) as LineChart
+        //todo
+        //Graph.buildGraph(plot, mVoltageSensors!!, getLocationName(mVoltageSensors!!), onlyAvg = true, useFloat0 = false)
     }
 
     private fun showPowerSensors(v: View) {
-        /*if (mPowerSensors != null && mPowerSensorIdx < mPowerSensors!!.size) {
+        if (mPowerSensors != null && mPowerSensorIdx < mPowerSensors!!.size) {
             val plot = v.findViewById<LineChart>(R.id.plot_power)
             val data = mPowerSensors!![mPowerSensorIdx]
-            Graph.buildGraph(plot, data, "pwr", false, mAggregated, false)
-            mTotalLabel!!.text = getString(R.string.total, data.total / 100)
-        }*/
+            Graph.buildGraph(plot, data, getLocationName(data), onlyAvg = true, useFloat0 = false)
+            mTotalLabel!!.text = getString(R.string.total, data.calculateTotal())
+        }
     }
 
     private fun showNextPowerGraph() {
@@ -67,6 +78,10 @@ class EleSensorsFragment(params: IGraphParameters, service: SmartHomeService) :
     }
 
     override fun refresh() {
-        TODO("Not yet implemented")
+        service.getSensorData(
+            buildQuery(),
+            {response -> mHandler.post { refresh(response) }},
+            { t -> onFailure(t) },
+            requireActivity())
     }
 }

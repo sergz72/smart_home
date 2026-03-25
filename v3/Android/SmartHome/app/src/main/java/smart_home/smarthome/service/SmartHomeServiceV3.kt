@@ -66,13 +66,62 @@ class SmartHomeServiceV3: SmartHomeService {
         return mLocations!!
     }
 
-    override fun getLastSensorData(callback: Callback<LastSensorDataResponse>, context: Activity) {
-        doInBackground(byteArrayOf(1), callback, context)
+    private fun createLastSensorDataResponse(response: ByteArray): LastSensorDataResponse {
+        return when (response[0]) {
+            //no error
+            0.toByte() -> LastSensorDataResponse.parseResponse(response.drop(1), mLocations!!.timeZone)
+            // error
+            else -> throw ResponseErrorV3(response)
+        }
     }
 
-    override fun getSensorData(query: SensorDataQuery, callback: Callback<SensorDataResponse>,
-                               context: Activity) {
-        doInBackground(byteArrayOf(2).plus(query.toBinary()), callback, context)
+    private fun createSensorDataResponse(response: ByteArray): SensorDataResponse {
+        return when (response[0]) {
+            //no error
+            0.toByte() -> SensorDataResponse.parseResponse(response.drop(1), mLocations!!.timeZone)
+            // error
+            else -> throw ResponseErrorV3(response)
+        }
+    }
+
+    override fun getLastSensorData(onResponse: (response: LastSensorDataResponse) -> Unit,
+                                   onFailure: (t: Throwable) -> Unit, context: Activity) {
+        doInBackground(byteArrayOf(1), object: Callback<LastSensorDataResponse> {
+            override fun deserialize(
+                request: ByteArray,
+                response: ByteArray
+            ): LastSensorDataResponse {
+                return createLastSensorDataResponse(response)
+            }
+
+            override fun onResponse(response: LastSensorDataResponse) {
+                onResponse(response)
+            }
+
+            override fun onFailure(t: Throwable) {
+                onFailure(t)
+            }
+        }, context)
+    }
+
+    override fun getSensorData(query: SensorDataQuery, onResponse: (response: SensorDataResponse) -> Unit,
+                               onFailure: (t: Throwable) -> Unit, context: Activity) {
+        doInBackground(byteArrayOf(2).plus(query.toBinary()), object: Callback<SensorDataResponse> {
+            override fun deserialize(
+                request: ByteArray,
+                response: ByteArray
+            ): SensorDataResponse {
+                return createSensorDataResponse(response)
+            }
+
+            override fun onResponse(response: SensorDataResponse) {
+                onResponse(response)
+            }
+
+            override fun onFailure(t: Throwable) {
+                onFailure(t)
+            }
+        }, context)
     }
 
     private fun getLocationsFromServer() {
