@@ -234,10 +234,10 @@ namespace SmartHomeUI
         private SmartHomeQuery BuildSensorDataQuery(string dataType)
         {
             var period = _enablePeriodBox.Checked ?? 
-                         false ? BuildDateOffset(_periodBox, _periodTypeBox) : null;
+                         false ? BuildDateOffset(_periodBox, _periodTypeBox, 1) : null;
             if (_filterTypeBox.SelectedIndex == 0) // offset
                 return new SmartHomeQuery((short)Width, dataType, null, 
-                        BuildDateOffset(_offsetBox, _offsetTypeBox), period);
+                        BuildDateOffset(_offsetBox, _offsetTypeBox, -1), period);
             return new SmartHomeQuery((short)Width, dataType, BuildStartDate(), null, period); 
         }
 
@@ -249,16 +249,16 @@ namespace SmartHomeUI
             return new DateTime(year, month, day);
         }
 
-        private static DateOffset BuildDateOffset(ComboBox offsetBox, ComboBox offsetTypeBox)
+        private static DateOffset BuildDateOffset(ComboBox offsetBox, ComboBox offsetTypeBox, int multiplier)
         {
             var n = offsetBox.SelectedIndex + 1;
             return offsetTypeBox.SelectedIndex switch
             {
                 0 => // Days
-                    new DateOffset(n, TimeUnit.Day),
+                    new DateOffset(n * multiplier, TimeUnit.Day),
                 1 => // Months
-                    new DateOffset(n, TimeUnit.Month),
-                _ => new DateOffset(n, TimeUnit.Year)
+                    new DateOffset(n * multiplier, TimeUnit.Month),
+                _ => new DateOffset(n * multiplier, TimeUnit.Year)
             };
         }
 

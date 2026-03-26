@@ -232,10 +232,10 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     {
         var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
         var now = TimeZoneInfo.ConvertTime(DateTime.Now, _timeZone);
-        var startDateTime = query.StartDate ?? query.StartDateOffset!.CalculateDate(now);
-        var endDateTime = query.Period?.CalculateDate(startDateTime) ?? now;
-        var startMillis = new DateTimeOffset(startDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
-        var endMillis = new DateTimeOffset(endDateTime.ToUniversalTime()).ToUnixTimeMilliseconds();
+        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), _timeZone);
+        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, _timeZone);
+        var startMillis = new DateTimeOffset(startDateTime).ToUnixTimeMilliseconds();
+        var endMillis = new DateTimeOffset(endDateTime).ToUnixTimeMilliseconds();
         var maxUnaggregatedMilliseconds = MillisecondsInHour * maxPoints;
         var aggregated = endMillis - startMillis > maxUnaggregatedMilliseconds;
         return new DateRange(aggregated, startMillis, endMillis, 
