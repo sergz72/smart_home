@@ -133,10 +133,11 @@ impl SensorMessageProcessor {
             logger.error("wrong event_time");
             return;
         }
+        let db_lock = self.db.lock().unwrap();
         if let Some(messages) =
-            build_messages(logger, decrypted, sensors, self.db.lock().unwrap().get_current_date_time()) {
+            build_messages(logger, decrypted, sensors, db_lock.get_current_date_time()) {
             self.last_device_time.lock().unwrap().insert(device_id, event_time);
-            if let Err(error) = self.db.lock().unwrap().insert_messages_to_db(messages, &logger, self.dry_run) {
+            if let Err(error) = db_lock.insert_messages_to_db(messages, &logger, self.dry_run) {
                 logger.error(format!("insert_messages_to_db error: {}", error));
             }
         }

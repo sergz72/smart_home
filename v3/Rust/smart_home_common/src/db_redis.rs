@@ -29,6 +29,9 @@ impl Database for RedisDatabase {
     fn insert_messages_to_db(&self, messages: Vec<Messages>, logger: &Logger, dry_run: bool) -> Result<(), Error> {
         let mut connection = self.client.get_connection()
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        if dry_run {
+            logger.info(format!("{} messages will be inserted", messages.len()));
+        }
         for msg in messages {
             let timestamp_opt = msg.date_time.to_timestamp_millis(&self.tz);
             if let Some(timestamp) = timestamp_opt {
