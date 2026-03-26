@@ -34,7 +34,7 @@ class EleSensorsFragment(params: IGraphParameters, service: ServiceHolder) :
             .filter { it.key.startsWith("v") }
             .flatMap { s -> s.value.map { ss -> Pair(ss.locationId, Pair(s.key, ss)) } }
             .groupBy { it.first }
-            .map { (key, value) -> key to value.map { it.second.first to it.second.second }.toMap()}
+            .map { (key, value) -> key to value.associate { it.second.first to it.second.second } }
             .toMap()
     }
 

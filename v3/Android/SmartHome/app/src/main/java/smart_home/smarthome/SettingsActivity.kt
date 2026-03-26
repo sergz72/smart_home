@@ -1,6 +1,6 @@
 package smart_home.smarthome
 
-import android.app.Activity
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.MenuItem
@@ -25,6 +25,7 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            @SuppressLint("UnsafeIntentLaunch")
             override fun handleOnBackPressed() {
                 setResult(mResult, intent)
                 finish()
@@ -59,11 +60,11 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
 
     public override fun onResume() {
         super.onResume()
-        mResult = Activity.RESULT_CANCELED
+        mResult = RESULT_CANCELED
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        mResult = Activity.RESULT_OK
+        mResult = RESULT_OK
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

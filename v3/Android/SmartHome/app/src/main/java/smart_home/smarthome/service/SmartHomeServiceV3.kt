@@ -3,6 +3,7 @@ package smart_home.smarthome.service
 import android.app.Activity
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import smart_home.smarthome.Chacha
+import smart_home.smarthome.Graph
 import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.entities.Locations
 import smart_home.smarthome.entities.SensorDataResponse
@@ -69,7 +70,7 @@ class SmartHomeServiceV3: SmartHomeService {
     private fun createLastSensorDataResponse(response: ByteArray): LastSensorDataResponse {
         return when (response[0]) {
             //no error
-            0.toByte() -> LastSensorDataResponse.parseResponse(response.drop(1), mLocations!!.timeZone)
+            0.toByte() -> LastSensorDataResponse.parseResponse(response.drop(1))
             // error
             else -> throw ResponseErrorV3(response)
         }
@@ -78,7 +79,7 @@ class SmartHomeServiceV3: SmartHomeService {
     private fun createSensorDataResponse(response: ByteArray): SensorDataResponse {
         return when (response[0]) {
             //no error
-            0.toByte() -> SensorDataResponse.parseResponse(response.drop(1), mLocations!!.timeZone)
+            0.toByte() -> SensorDataResponse.parseResponse(response.drop(1))
             // error
             else -> throw ResponseErrorV3(response)
         }
@@ -133,6 +134,7 @@ class SmartHomeServiceV3: SmartHomeService {
             // error
             else -> throw ResponseErrorV3(decompressed)
         }
+        Graph.timeZone = mLocations!!.timeZone
     }
 
     override fun isReady(): Boolean {

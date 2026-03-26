@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.NetworkOnMainThreadException
-import smart_home.smarthome.MainActivity
 import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.entities.Locations
 import smart_home.smarthome.entities.SensorDataResponse
@@ -28,15 +27,7 @@ enum class TimeUnit {
 data class DateOffset (
     val offset: Int,
     val unit: TimeUnit
-) {
-    fun toHours(): Int {
-        return when (unit) {
-            TimeUnit.Day -> offset * 24
-            TimeUnit.Month -> 24
-            TimeUnit.Year -> 24
-        }
-    }
-}
+)
 
 data class SensorDataQuery(
     val maxPoints: Short,

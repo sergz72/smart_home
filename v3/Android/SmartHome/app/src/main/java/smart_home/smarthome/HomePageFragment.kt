@@ -3,15 +3,12 @@ package smart_home.smarthome
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import smart_home.smarthome.entities.LastSensorDataResponse
-import smart_home.smarthome.service.SmartHomeService
 
 class HomePageFragment(service: ServiceHolder) :
     SensorsFragment(service, R.layout.fragment_home_page, null, "all") {

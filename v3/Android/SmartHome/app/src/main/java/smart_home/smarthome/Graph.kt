@@ -19,10 +19,12 @@ object Graph {
     private val DAY_FORMATTER = DateTimeFormatter.ofPattern("dd.MM", Locale.US)
     private val HOUR_FORMATTER = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
+    lateinit var timeZone: ZoneId
+
     private val LABEL_FORMATTER = object : Format() {
         override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
             val time = (obj as Number).toLong()
-            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), timeZone)
             if (date.hour != 0 || date.minute != 0) {
                 return toAppendTo.append(FORMATTER.format(date))
             }
@@ -37,7 +39,7 @@ object Graph {
     private val LABEL_HOUR_FORMATTER = object : Format() {
         override fun format(obj: Any, toAppendTo: StringBuffer, pos: FieldPosition): StringBuffer {
             val time = (obj as Number).toLong()
-            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+            val date = LocalDateTime.ofInstant(Instant.ofEpochSecond(time), timeZone)
             return toAppendTo.append(HOUR_FORMATTER.format(date))
         }
 

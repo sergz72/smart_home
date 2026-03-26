@@ -5,10 +5,6 @@ import smart_home.smarthome.R
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.ZoneId
-import java.util.HashSet
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.iterator
 
 data class Location(val name: String, val locationType: String) {
     companion object {

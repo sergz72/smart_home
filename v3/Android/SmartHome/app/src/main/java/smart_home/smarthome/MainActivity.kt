@@ -228,7 +228,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     override fun onActivityResult(result: ActivityResult) {
         val requestCode = result.data!!.getIntExtra("code", -2)
-        if (result.resultCode == Activity.RESULT_OK) {
+        if (result.resultCode == RESULT_OK) {
             when (requestCode) {
                 SETTINGS -> {
                     try {

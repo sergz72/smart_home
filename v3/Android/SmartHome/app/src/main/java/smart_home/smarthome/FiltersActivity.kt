@@ -1,5 +1,6 @@
 package smart_home.smarthome
 
+import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.os.Bundle
 import android.os.Parcel
@@ -88,15 +89,6 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
             return date.year * 10000 + date.month.value * 100 + date.dayOfMonth
         }
 
-        fun getToDate(): Int {
-            val date = if (mPeriod == 0) {
-                LocalDate.now()
-            } else {
-                parsePeriod(getFromDateDate(), mPeriod, mPeriodUnit)
-            }
-            return date.year * 10000 + date.month.value * 100 + date.dayOfMonth
-        }
-
         fun getPeriod(): DateOffset? {
             return if (mPeriod == 0) {
                 null
@@ -156,6 +148,7 @@ class FiltersActivity : AppCompatActivity(), View.OnClickListener, AdapterView.O
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            @SuppressLint("UnsafeIntentLaunch")
             override fun handleOnBackPressed() {
                 setResult(mData.mResult, intent)
                 finish()

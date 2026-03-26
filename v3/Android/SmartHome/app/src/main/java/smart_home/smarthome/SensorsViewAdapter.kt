@@ -11,8 +11,10 @@ import androidx.recyclerview.widget.RecyclerView
 import smart_home.smarthome.entities.LastSensorDataResponse
 import smart_home.smarthome.entities.Locations
 
-import smart_home.smarthome.entities.SensorData
 import smart_home.smarthome.entities.SensorDataItem
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 data class SensorViewItem(val valueType: String, val data: SensorDataItem)
@@ -32,7 +34,7 @@ data class SensorViewLocation(val locationName: String, val data: List<SensorVie
     }
 
     @SuppressLint("DefaultLocale")
-    fun buildText(): String {
+    fun buildText(zoneId: ZoneId): String {
         val sb = StringBuilder()
         for (d in data) {
             sb.append("  ")
@@ -40,7 +42,7 @@ data class SensorViewLocation(val locationName: String, val data: List<SensorVie
                 .append(": ")
                 .append(String.format("%.2f", d.data.value))
                 .append('(')
-                .append(d.data.timestamp.format(formatter))
+                .append(LocalDateTime.ofInstant(Instant.ofEpochMilli(d.data.timestamp), zoneId).format(formatter))
                 .append(')')
                 .append('\n')
         }
@@ -54,15 +56,6 @@ class SensorsViewAdapter(private val mResources: Resources, private val mService
     private val mData = mutableListOf<SensorViewLocation>()
     var selectedPosition = 0
         private set
-
-    fun setData(data: Map<String, List<SensorData>>) {
-        mData.clear()
-        /*val keys = data.keys.sorted()
-        for (key in keys) {
-            mData.add(data[key]!!)
-        }*/
-        selectedPosition = 0
-    }
 
     fun setData(data: LastSensorDataResponse) {
         mData.clear()
@@ -81,7 +74,7 @@ class SensorsViewAdapter(private val mResources: Resources, private val mService
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val d = mData[position]
         holder.mLocationNameView.text = d.locationName
-        holder.mDataView.text = d.buildText()
+        holder.mDataView.text = d.buildText(mService.service!!.getLocations().timeZone)
         holder.itemView.setBackgroundColor(if (selectedPosition == position) Color.GREEN else Color.TRANSPARENT)
     }
 
