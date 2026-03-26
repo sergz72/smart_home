@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind};
 use chrono::{DateTime, Datelike, Timelike};
 use chrono_tz::Tz;
 use postgres::{Client, NoTls, Row};
-use crate::db::{get_current_date_time, Database};
+use crate::db::{get_current_date_time, get_date_and_time, Database};
 use crate::entities::{DeviceSensor, LastSensorData, Location, MessageDateTime, Messages, Sensor, SensorDataQuery, SensorDataResult, SensorTimestamp};
 use crate::logger::Logger;
 
@@ -60,6 +60,10 @@ impl Database for PostgresDatabase {
 
     fn get_current_date_time(&self) -> MessageDateTime {
         get_current_date_time(&self.tz)
+    }
+
+    fn get_date_and_time(&self, timestamp: i64) -> Result<(i32, i32), Error> {
+        get_date_and_time(timestamp, self.tz)
     }
 
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error> {

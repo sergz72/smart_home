@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::io::{Error, ErrorKind};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Deserializer};
@@ -12,6 +13,15 @@ struct InputMessage {
     value_map: HashMap<String, f64>
 }
 
+impl Display for InputMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.error_message.len() != 0 {
+            return write!(f, "Error message: {}", self.error_message);
+        }
+        write!(f, "ValueMap: {:?}", self.value_map)
+    }
+}
+
 #[derive(Deserialize)]
 #[allow(dead_code)]
 struct ResponseMessage {
@@ -21,6 +31,12 @@ struct ResponseMessage {
     sensor_name: String,
     #[serde(deserialize_with = "map_or_error")]
     message: InputMessage
+}
+
+impl Display for ResponseMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MessageTime: {}, SensorName: {}, Message: {}", self.message_time, self.sensor_name, self.message)
+    }
 }
 
 fn datefmt<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error> where D: Deserializer<'de>
@@ -44,7 +60,8 @@ fn map_or_error<'de, D>(deserializer: D) -> Result<InputMessage, D::Error> where
     }
 }
 
-pub fn build_messages(logger: &Logger, decrypted: String, sensors_map: &HashMap<String, SensorTimestamp>)
+pub fn build_messages(logger: &Logger, decrypted: String,
+                      sensors_map: &HashMap<String, SensorTimestamp>, dry_run: bool)
                   -> Result<Vec<Messages>, Error> {
     let messages: Vec<ResponseMessage> = serde_json::from_str(&decrypted)?;
     let mut result = Vec::new();
@@ -52,6 +69,9 @@ pub fn build_messages(logger: &Logger, decrypted: String, sensors_map: &HashMap<
         if message.message.error_message.len() > 0 {
             logger.error(message.message.error_message);
         } else {
+            if dry_run {
+                logger.info(format!("Message: {}", message));
+            }
             let sensor = sensors_map.get(&message.sensor_name)
                 .ok_or(Error::new(ErrorKind::Other, format!("Unknown sensor {}", message.sensor_name)))?;
             let messages_with_date: Vec<Message> = message.message.value_map.into_iter()

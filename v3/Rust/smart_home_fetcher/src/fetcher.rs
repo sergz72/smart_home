@@ -39,8 +39,8 @@ impl Fetcher {
                 .map(|s|self.sensors_map.get(s).map(|sensor|sensor.last_timestamp).unwrap_or(0))
                 .max()
                 .unwrap_or(0);
-            let request = build_request(last_timestamp);
-            match self.process_request(&logger, request, address) {
+            let request = self.build_request(last_timestamp, &logger, dry_run)?;
+            match self.process_request(&logger, request, address, dry_run) {
                 Ok(messages) => {
                     logger.info(format!("messages count {}", messages.len()));
                     if let Err(e) = self.database.insert_messages_to_db(messages, &logger, dry_run) {
@@ -53,7 +53,7 @@ impl Fetcher {
         Ok(())
     }
 
-    fn process_request(&self, logger: &Logger, request: Vec<u8>, address: &String)
+    fn process_request(&self, logger: &Logger, request: Vec<u8>, address: &String, dry_run: bool)
         -> Result<Vec<Messages>, Error> {
         logger.info(format!("Request size {}", request.len()));
         let encrypted = aes_encrypt(&self.aes, request, self.time)?;
@@ -64,7 +64,7 @@ impl Fetcher {
         logger.info(format!("decrypted size {}", decrypted.len()));
         let decompressed = decompress(decrypted)?;
         logger.info(format!("decompressed size {}", decompressed.len()));
-        build_messages(&logger, decompressed, &self.sensors_map)
+        build_messages(&logger, decompressed, &self.sensors_map, dry_run)
     }
     
     fn send(&self, logger: &Logger, request: Vec<u8>, address: &String) -> Result<Vec<u8>, Error> {
@@ -76,6 +76,16 @@ impl Fetcher {
         }
         udp_send(address, &request, self.timeout)
     }
+
+    fn build_request(&self, last_timestamp: i64, logger: &Logger, dry_run: bool) -> Result<Vec<u8>, Error> {
+        let (date , time) = self.database.get_date_and_time(last_timestamp)?;
+        let datetime = date as i64 * 1000000 + time as i64;
+        let request = "GET /sensor_data/all@".to_string() + datetime.to_string().as_str();
+        if dry_run {
+            logger.info(format!("Request: {}", request));
+        }
+        Ok(request.as_bytes().to_vec())
+    }
 }
 
 fn decompress(data: Vec<u8>) -> Result<String, Error> {
@@ -84,11 +94,6 @@ fn decompress(data: Vec<u8>) -> Result<String, Error> {
     decoder.read_to_end(&mut decompressed)?;
     String::from_utf8(decompressed)
         .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))
-}
-
-fn build_request(last_timestamp: i64) -> Vec<u8> {
-    let request = "GET /sensor_data/all@".to_string() + last_timestamp.to_string().as_str();
-    request.as_bytes().to_vec()
 }
 
 #[cfg(test)]

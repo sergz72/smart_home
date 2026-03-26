@@ -4,7 +4,7 @@ use std::ops::Sub;
 use chrono::{Days, Utc};
 use chrono_tz::Tz;
 use redis::Client;
-use crate::db::{build_device_sensors, get_current_date_time, Database, DatabaseParameters};
+use crate::db::{build_device_sensors, get_current_date_time, get_date_and_time, Database, DatabaseParameters};
 use crate::entities::{DeviceSensor, LastSensorData, Location, MessageDateTime, Messages, Sensor, SensorDataItem, SensorDataQuery, SensorDataResult, SensorTimestamp};
 use crate::logger::Logger;
 
@@ -93,6 +93,10 @@ impl Database for RedisDatabase {
         get_current_date_time(&self.tz)
     }
 
+    fn get_date_and_time(&self, timestamp: i64) -> Result<(i32, i32), Error> {
+        get_date_and_time(timestamp, self.tz)
+    }
+    
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error> {
         Ok(build_device_sensors(&self.sensors))
     }

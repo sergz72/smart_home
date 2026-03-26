@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind};
-use chrono::Utc;
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::Deserialize;
 use crate::db_postgres::PostgresDatabase;
@@ -15,6 +15,7 @@ pub trait Database {
     fn get_locations(&self) -> Result<HashMap<usize, Location>, Error>;
     fn get_sensor_timestamps(&self) -> Result<HashMap<String, SensorTimestamp>, Error>;
     fn get_current_date_time(&self) -> MessageDateTime;
+    fn get_date_and_time(&self, timestamp: i64) -> Result<(i32, i32), Error>;
     // map device id to map sensor_idx -> DeviceSensor
     fn build_device_sensors(&self) -> Result<HashMap<usize, HashMap<usize, DeviceSensor>>, Error>;
     fn get_last_sensor_data(&self) -> Result<LastSensorData, Error>;
@@ -63,6 +64,19 @@ impl DatabaseConfiguration {
         }
         Ok(())
     }
+}
+
+pub fn get_date_and_time(timestamp: i64, time_zone: Tz) -> Result<(i32, i32), Error> {
+    let dt_utc = DateTime::from_timestamp_millis(timestamp)
+        .ok_or(Error::new(ErrorKind::InvalidData, "Invalid timestamp"))?;
+    let dt_tz = dt_utc.with_timezone(&time_zone);
+    let date = dt_tz.year() * 10000 +
+        (dt_tz.month() * 100) as i32 +
+        dt_tz.day() as i32;
+    let time = (dt_tz.hour() * 10000) as i32 +
+        (dt_tz.minute() * 100) as i32 +
+        dt_tz.second() as i32;
+    Ok((date, time))
 }
 
 pub fn get_current_date_time(tz: &Tz) -> MessageDateTime {
