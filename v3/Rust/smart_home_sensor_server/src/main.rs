@@ -12,7 +12,7 @@ use crate::message_processor::build_message_processor;
 fn main() -> Result<(), Error> {
     let mut arguments = args();
     let ini_file_name = &arguments.nth(1).expect("no file name given");
-    let dry_run = arguments.nth(2) == Some("--dry-run".to_string());
+    let dry_run = arguments.nth(0) == Some("--dry-run".to_string());
     if dry_run {
         println!("Dry run mode");
     }
