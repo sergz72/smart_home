@@ -125,7 +125,7 @@ fn build_sensors(file_name: &String) -> Result<HashMap<usize, Sensor>, Error> {
 pub fn build_device_sensors(sensors: &HashMap<usize, Sensor>) -> HashMap<usize, HashMap<usize, DeviceSensor>> {
     let mut result = HashMap::new();
     for (sensor_id, sensor) in sensors {
-        if let Some(device_id) = sensor.device_id {
+        if let Some(device_id) = sensor.device_id && sensor.enabled {
             for (sensor_idx, value_type) in &sensor.device_sensors {
                 let idx_map = result.entry(device_id).or_insert(HashMap::new());
                 let offset_value = (*sensor.offsets.get(value_type).unwrap_or(&0.0) * 100.0) as i32;
@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(device_sensors.len(), 5);
         let device1_sensors = device_sensors.get(&1);
         assert!(device1_sensors.is_some());
-        assert_eq!(device1_sensors.unwrap().len(), 10);
+        assert_eq!(device1_sensors.unwrap().len(), 7);
         let humi_idx = device1_sensors.unwrap().get(&1);
         assert!(humi_idx.is_some());
         assert_eq!(humi_idx.unwrap().sensor_id, 1);
