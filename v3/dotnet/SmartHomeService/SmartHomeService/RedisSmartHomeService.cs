@@ -122,7 +122,10 @@ public sealed class RedisSmartHomeService: ISmartHomeService
             var valueType = parts[1];
             var value = v.value.Val;
             if (result.TryGetValue(locationId, out var lastData))
-                lastData[valueType] = new SensorDataItem(timestamp, value);
+            {
+                if (!lastData.TryGetValue(valueType, out var lastValue) || lastValue.Timestamp < timestamp)
+                    lastData[valueType] = new SensorDataItem(timestamp, value);
+            }
             else
                 result[locationId] = new Dictionary<string, SensorDataItem> {{valueType, new SensorDataItem(timestamp, value)}};
         }
