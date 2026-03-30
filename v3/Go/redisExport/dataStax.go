@@ -56,7 +56,7 @@ func (d *astraDatabase) getMaxTimestamp() (int64, error) {
 			maxTimestamp = timestamp
 		}
 	}
-	return maxTimestamp, iter.Close()
+	return maxTimestamp + 1, iter.Close()
 }
 
 func (d *astraDatabase) importData(rows redisExport) error {

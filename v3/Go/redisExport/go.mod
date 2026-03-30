@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/datastax/gocql-astra v0.0.0-20251218183120-dc69dee20334
 	github.com/gocql/gocql v1.7.0
+	github.com/lib/pq v1.12.0
 	github.com/redis/go-redis/v9 v9.18.0
 )
 

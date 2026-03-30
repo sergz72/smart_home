@@ -38,7 +38,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	maxTimestamp++
 	fmt.Printf("max timestamp: %d\n", maxTimestamp)
 	rows, err := redis.exportData(maxTimestamp)
 	if err != nil {
