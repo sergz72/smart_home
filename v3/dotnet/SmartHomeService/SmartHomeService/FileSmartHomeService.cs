@@ -18,15 +18,45 @@ public static class ValueTypes
 }
 
 [System.Runtime.CompilerServices.InlineArray(8)]
-public record struct ValueTypeArray
+public struct ValueTypeArray
 {
     private byte _element0;
+    
+    public bool Equals(ValueTypeArray other)
+    {
+        for (var i = 0; i < 8; i++)
+        {
+            if (this[i] != other[i])
+                return false;
+        }
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        return 0;
+    }
 }
 
 [System.Runtime.CompilerServices.InlineArray(8)]
-public record struct ValueArray<T>
+public struct ValueArray<T> : IEquatable<ValueArray<T>>
 {
     private T _element0;
+
+    public bool Equals(ValueArray<T> other)
+    {
+        for (var i = 0; i < 8; i++)
+        {
+            if (!this[i]!.Equals(other[i]))
+                return false;
+        }
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        return 0;
+    }
 }
 
 public record ValueTypeValue<T>(byte ValueType, T Value);
@@ -58,6 +88,16 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
 
     public uint SensorId => TimeAndSensorId & 0xFF;
     public uint EventTimeMs => (TimeAndSensorId >> 8) * 10;
+    
+    public bool Equals(SensorDataFileItem<T> other)
+    {
+        return TimeAndSensorId == other.TimeAndSensorId && ValueTypes.Equals(other.ValueTypes) && Values.Equals(other.Values);
+    }
+    
+    public override int GetHashCode()
+    {
+        return 0;
+    }
 }
 
 public abstract class SensorEvents<T>

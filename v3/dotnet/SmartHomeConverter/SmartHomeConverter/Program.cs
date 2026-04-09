@@ -192,26 +192,36 @@ void ProcessPostgresData<T>(NpgsqlConnection connection, string sql, Func<uint, 
 
 internal sealed class EventHolder<T>
 {
-    private readonly Dictionary<byte, T> _valueMap = new();
+    public readonly Dictionary<byte, T> ValueMap;
+
+    public EventHolder()
+    {
+        ValueMap = [];
+    }
+    
+    public EventHolder(Dictionary<byte, T> valueMap)
+    {
+        ValueMap = valueMap;
+    }
     
     internal void AddEvent(string valueType, T value)
     {
-        if (_valueMap.Count >= 8)
-            throw new ArgumentOutOfRangeException(nameof(_valueMap), "Event number exceeds allowed maximum");
+        if (ValueMap.Count >= 8)
+            throw new ArgumentOutOfRangeException(nameof(ValueMap), "Event number exceeds allowed maximum");
         var valueTypeId = (byte)ValueTypes.Map[valueType];
-        _valueMap.Add(valueTypeId, value);
+        ValueMap.Add(valueTypeId, value);
     }
     
     internal SensorDataFileItem<T> BuildItem(uint timeAndSensorId)
     {
-        return new SensorDataFileItem<T>(timeAndSensorId, _valueMap.Select(kv => new ValueTypeValue<T>(kv.Key, kv.Value)).ToList());
+        return new SensorDataFileItem<T>(timeAndSensorId, ValueMap.Select(kv => new ValueTypeValue<T>(kv.Key, kv.Value)).ToList());
     }
 
     public void AddEvent(byte valueTypeId, T value)
     {
-        if (_valueMap.Count >= 8)
-            throw new ArgumentOutOfRangeException(nameof(_valueMap), "Event number exceeds allowed maximum");
-        _valueMap.Add(valueTypeId, value);
+        if (ValueMap.Count >= 8)
+            throw new ArgumentOutOfRangeException(nameof(ValueMap), "Event number exceeds allowed maximum");
+        ValueMap.Add(valueTypeId, value);
     }
 }
 
@@ -302,6 +312,18 @@ internal sealed class RedisRawDataProcessor(TimeSeriesCommands ts, int from, Tim
     }
 }
 
+internal record struct AggregatedValuesL(int Min, long Sum, int Max, long Cnt)
+{
+    public AggregatedValuesL() : this(0, 0L, 0, 0L)
+    {
+    }
+    
+    internal AggregatedValues ToAggregatedValues()
+    {
+        return new AggregatedValues(Min, (int)(Sum / Cnt), Max);
+    }
+}
+
 internal sealed class RedisAggregatedDataProcessor(TimeSeriesCommands ts, int from, TimeZoneInfo timeZone) :
     RedisProcessor(ts, from, timeZone)
 {
@@ -322,13 +344,28 @@ internal sealed class RedisAggregatedDataProcessor(TimeSeriesCommands ts, int fr
         );
     }
     
-    private EventHolder<AggregatedValues> Aggregate(IEnumerable<KeyValuePair<uint, EventHolder<int>>> grp)
+    private static EventHolder<AggregatedValues> Aggregate(IEnumerable<KeyValuePair<uint, EventHolder<int>>> grp)
     {
-        foreach (var i in grp.SelectMany(item => item.Value.Values.ToList())
-                     .GroupBy(v => v.Key))
+        var map = new Dictionary<byte, AggregatedValuesL>();
+        foreach (var i in grp)
         {
-            var v = new AggregatedValues(i.Min(v => v.Value), (int)Math.Round(i.Average(v => v.Value)), i.Max(v => v.Value));
-            Values.Add(i.Key, v);
+            foreach (var (vt, v) in i.Value.ValueMap)
+            {
+                if (map.TryGetValue(vt, out var values))
+                {
+                    if (values.Min > v)
+                        values.Min = v;
+                    else if (values.Max < v)
+                        values.Max = v;
+                    else
+                        values.Sum += v;
+                    values.Cnt++;
+                }
+                else
+                    map[vt] = new AggregatedValuesL(v, v, v, 1);
+            }
         }
+
+        return new EventHolder<AggregatedValues>(map.Select(kv => (kv.Key, kv.Value.ToAggregatedValues())).ToDictionary());
     }
 }
