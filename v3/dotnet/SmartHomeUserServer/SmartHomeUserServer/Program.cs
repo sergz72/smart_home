@@ -9,7 +9,7 @@ var configurations = JsonSerializer.Deserialize<List<Configuration>>(configurati
 var servers = new List<Server>();
 foreach (var configuration in configurations)
 {
-    var service = new RedisSmartHomeService(configuration.ServiceConfiguration);
+    var service = configuration.BuildService();
     var server = new Server(configuration.ServerConfiguration, service, new ConsoleLoggerCreator(null));
     servers.Add(server);
 }
@@ -31,4 +31,15 @@ return;
 
 internal record Configuration(
     ServerConfiguration ServerConfiguration,
-    RedisSmartHomeServiceConfiguration ServiceConfiguration);
+    RedisSmartHomeServiceConfiguration? RedisServiceConfiguration,
+    FileSmartHomeServiceConfiguration? FileServiceConfiguration)
+{
+    public ISmartHomeService BuildService()
+    {
+        if (RedisServiceConfiguration != null && RedisServiceConfiguration.RedisConnectionString.Length != 0)
+            return new RedisSmartHomeService(RedisServiceConfiguration);
+        if (FileServiceConfiguration != null && FileServiceConfiguration.BaseFolder.Length != 0)
+            return new FileSmartHomeService(FileServiceConfiguration);
+        throw new InvalidDataException("No valid Smart Home service configuration provided");
+    }
+}

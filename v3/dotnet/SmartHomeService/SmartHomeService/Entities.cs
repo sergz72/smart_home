@@ -165,7 +165,7 @@ public record Location(string Name, string LocationType)
     }
 }
 
-internal record Sensor(string Name, string DataType, int LocationId, int? DeviceId,
+public record Sensor(string Name, string DataType, int LocationId, int? DeviceId,
     Dictionary<int, string> DeviceSensors, Dictionary<string, double> Offsets, bool Enabled);
 
 public interface ISmartHomeService

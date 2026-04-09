@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartHomeConverter", "SmartHomeConverter\SmartHomeConverter.csproj", "{C5780037-A75B-45A0-B409-FEC849322C8A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartHomeService", "..\SmartHomeService\SmartHomeService\SmartHomeService.csproj", "{C0F039ED-5E18-4A0F-81B3-68C859A7F88C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{C5780037-A75B-45A0-B409-FEC849322C8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5780037-A75B-45A0-B409-FEC849322C8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C5780037-A75B-45A0-B409-FEC849322C8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C0F039ED-5E18-4A0F-81B3-68C859A7F88C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0F039ED-5E18-4A0F-81B3-68C859A7F88C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0F039ED-5E18-4A0F-81B3-68C859A7F88C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0F039ED-5E18-4A0F-81B3-68C859A7F88C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

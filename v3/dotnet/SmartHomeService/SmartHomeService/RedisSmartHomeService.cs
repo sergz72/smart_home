@@ -9,7 +9,7 @@ namespace SmartHomeService;
 
 public record RedisSmartHomeServiceConfiguration(string RedisConnectionString, string SensorsFile, string LocationsFile, string TimeZone);
 
-public sealed class RedisSmartHomeService: ISmartHomeService
+public sealed class RedisSmartHomeService: BaseSmartHomeService
 {
     private record DateRange(bool Aggregated, long From, long To, long BucketDuration);
     
@@ -17,26 +17,8 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     private const long MinimumRawBucketDuration = 5 * 60 * 1000; // 5 minutes
     private const long MinimumAggregatedBucketDuration = 24 * 60 * 60 * 1000; // 1 Day
     
-    private static readonly Dictionary<string, string> ValueTypeMap = new Dictionary<string, string>
-    {
-        {"humi", "Humidity"},
-        {"temp", "Temperature"},
-        {"pres", "Pressure"},
-        {"co2 ", "CO2"},
-        {"lux ", "Luminosity"},
-        {"pwr ", "Power"},
-        {"icc ", "Current"},
-        {"vcc ", "Voltage"}
-    };
-    
+    private readonly Dictionary<string, HashSet<uint>> _sensorValueTypeMap;
     private readonly ConnectionMultiplexer _redisConnection;
-    private readonly Dictionary<int, Sensor> _sensors;
-    private readonly Dictionary<int, Location> _locations;
-    private readonly Dictionary<string, HashSet<int>> _sensorValueTypeMap;
-    private readonly TimeZoneInfo _timeZone;
-    private readonly string _timeZoneName;
-    
-    public double ResponseTimeMs { get; private set; }
 
     private static RedisSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
     {
@@ -49,25 +31,19 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     {
     }
 
-    public RedisSmartHomeService(RedisSmartHomeServiceConfiguration redisSmartHomeServiceConfiguration)
+    public RedisSmartHomeService(RedisSmartHomeServiceConfiguration redisSmartHomeServiceConfiguration): 
+        base(redisSmartHomeServiceConfiguration.SensorsFile, redisSmartHomeServiceConfiguration.LocationsFile,
+             redisSmartHomeServiceConfiguration.TimeZone)
     {
-        _timeZone = TimeZoneInfo.FindSystemTimeZoneById(redisSmartHomeServiceConfiguration.TimeZone);
-        _timeZoneName = redisSmartHomeServiceConfiguration.TimeZone;
-        using var sensorsStream = File.OpenRead(redisSmartHomeServiceConfiguration.SensorsFile);
-        _sensors = JsonSerializer.Deserialize<Dictionary<int, Sensor>>(sensorsStream)
-                   ?? throw new Exception("Invalid sensors file");
-        using var locationsStream = File.OpenRead(redisSmartHomeServiceConfiguration.LocationsFile);
-        _locations = JsonSerializer.Deserialize<Dictionary<int, Location>>(locationsStream)
-                     ?? throw new Exception("Invalid locations file");
         _redisConnection = ConnectionMultiplexer.Connect(redisSmartHomeServiceConfiguration.RedisConnectionString);
         
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
-        _sensorValueTypeMap = new Dictionary<string, HashSet<int>>();
+        _sensorValueTypeMap = new Dictionary<string, HashSet<uint>>();
         foreach (var seriesName in ts.QueryIndex(["type=sensor"]))
         {
             var parts = seriesName.Split(':');
-            var sensorId = int.Parse(parts[0]);
+            var sensorId = uint.Parse(parts[0]);
             var valueType = parts[1];
             if (_sensorValueTypeMap.TryGetValue(valueType, out var sensorIds))
                 sensorIds.Add(sensorId);
@@ -75,34 +51,8 @@ public sealed class RedisSmartHomeService: ISmartHomeService
                 _sensorValueTypeMap[valueType] = [sensorId];
         }
     }
-
-    public string GetValueType(string valueType)
-    {
-        return ValueTypeMap[valueType];
-    }
-
-    public string GetLocationName(int locationId)
-    {
-        return _locations[locationId].Name;
-    }
     
-    public SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data)
-    {
-        return new SensorDataItemWithDate(GetDateTime(data.Timestamp), data.Value);
-    }
-    
-    public DateTime GetDateTime(long timestamp)
-    {
-        return TimeZoneInfo
-            .ConvertTimeFromUtc(DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime, _timeZone);
-    }
-    
-    public DateTime BuildDate(int date)
-    {
-        return TimeZoneInfo.ConvertTime(new DateTime(date / 10000, (date / 100) % 100, date % 100), _timeZone);
-    }
-    
-    public LastSensorData GetLastSensorData()
+    public override LastSensorData GetLastSensorData()
     {
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
@@ -117,8 +67,8 @@ public sealed class RedisSmartHomeService: ISmartHomeService
             if (timestamp < minimumTimestamp)
                 continue;
             var parts = v.key.Split(':');
-            var sensorId = int.Parse(parts[0]);
-            var locationId = _sensors[sensorId].LocationId;
+            var sensorId = uint.Parse(parts[0]);
+            var locationId = Sensors[sensorId].LocationId;
             var valueType = parts[1];
             var value = v.value.Val;
             if (result.TryGetValue(locationId, out var lastData))
@@ -134,7 +84,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return new LastSensorData(result);
     }
 
-    public SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated)
+    public override SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated)
     {
         var sensors = GetSensors(sensorDataQuery.DataType);
         if (sensors.Count == 0)
@@ -147,7 +97,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
         return dateRange.Aggregated ? GetAggregatedSensorData(sensors, dateRange) : GetRawSensorData(sensors, dateRange); 
     }
 
-    private SensorDataResult GetAggregatedSensorData(HashSet<int> sensors, DateRange dateRange)
+    private SensorDataResult GetAggregatedSensorData(HashSet<uint> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
@@ -175,7 +125,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
                     bucketDuration);
                 if (minList.Count != 0 || avgList.Count != 0 || maxList.Count != 0)
                     sensorDataList.Add(
-                        new SensorData(_sensors[sensorId].LocationId, null, new AggregatedSensorData(minList, avgList, maxList)));
+                        new SensorData(Sensors[sensorId].LocationId, null, new AggregatedSensorData(minList, avgList, maxList)));
             }
             if (sensorDataList.Count != 0)
                 result[kv.Key] = sensorDataList;
@@ -195,7 +145,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
             .ToList();
     }
 
-    private SensorDataResult GetRawSensorData(HashSet<int> sensors, DateRange dateRange)
+    private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();
         var ts = db.TS();
@@ -221,7 +171,7 @@ public sealed class RedisSmartHomeService: ISmartHomeService
                 var sensorData = range
                     .Select(item => new SensorDataItem((long)item.Time.Value, item.Val))
                     .ToList();
-                sensorDataList.Add(new SensorData(_sensors[sensorId].LocationId, sensorData, null));
+                sensorDataList.Add(new SensorData(Sensors[sensorId].LocationId, sensorData, null));
             }
             if (sensorDataList.Count != 0)
                 result[kv.Key] = sensorDataList;
@@ -234,32 +184,14 @@ public sealed class RedisSmartHomeService: ISmartHomeService
     private DateRange BuildDateRange(SmartHomeQuery query)
     {
         var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
-        var now = TimeZoneInfo.ConvertTime(DateTime.Now, _timeZone);
-        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), _timeZone);
-        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, _timeZone);
+        var now = TimeZoneInfo.ConvertTime(DateTime.Now, TimeZone);
+        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), TimeZone);
+        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, TimeZone);
         var startMillis = new DateTimeOffset(startDateTime).ToUnixTimeMilliseconds();
         var endMillis = new DateTimeOffset(endDateTime).ToUnixTimeMilliseconds();
         var maxUnaggregatedMilliseconds = MillisecondsInHour * maxPoints;
         var aggregated = endMillis - startMillis > maxUnaggregatedMilliseconds;
         return new DateRange(aggregated, startMillis, endMillis, 
                     (endMillis - startMillis) / maxPoints);
-    }
-
-    private HashSet<int> GetSensors(string dataType)
-    {
-        return _sensors
-            .Where(s => s.Value.DataType == dataType)
-            .Select(s => s.Key)
-            .ToHashSet();
-    }
-
-    public bool IsExtLocation(int locationId)
-    {
-        return _locations[locationId].LocationType == "ext";
-    }
-
-    public Locations GetLocations()
-    {
-        return new Locations(_locations, _timeZoneName);
     }
 }
