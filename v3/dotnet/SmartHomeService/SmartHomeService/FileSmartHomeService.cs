@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 
 namespace SmartHomeService;
@@ -98,6 +99,21 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
     {
         return 0;
     }
+    
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+        sb.Append("EventTime=").Append(EventTimeMs);
+        sb.Append(" SensorId=").Append(SensorId);
+        var idx = 0;
+        foreach (var vt in ValueTypes)
+        {
+            if (vt == 0)
+                break;
+            sb.Append(' ').Append(SmartHomeService.ValueTypes.ReverseMap[vt]).Append('=').Append(Values[idx++]);
+        }
+        return sb.ToString();
+    }
 }
 
 public abstract class SensorEvents<T>
@@ -107,6 +123,11 @@ public abstract class SensorEvents<T>
     protected SensorEvents()
     {
         Items = [];
+    }
+
+    protected SensorEvents(List<SensorDataFileItem<T>> items)
+    {
+        Items = items;
     }
     
     protected SensorEvents(byte[] data)
@@ -126,6 +147,10 @@ public sealed class RawSensorEvents: SensorEvents<int>
     {
     }
 
+    public RawSensorEvents(List<SensorDataFileItem<int>> items): base(items)
+    {
+    }
+    
     public RawSensorEvents(byte[] data): base(data)
     {
     }
@@ -141,12 +166,52 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
     public AggregatedSensorEvents(byte[] data): base(data)
     {
     }
+
+    internal AggregatedSensorEvents(Dictionary<uint, Dictionary<byte, AggregatedValuesL>> data): base(Convert(data))
+    {
+    }
+    
+    private static List<SensorDataFileItem<AggregatedValues>> Convert(Dictionary<uint, Dictionary<byte, AggregatedValuesL>> data)
+    {
+        return data
+            .Select(kv => new SensorDataFileItem<AggregatedValues>(kv.Key,
+                kv.Value.Select(v => new ValueTypeValue<AggregatedValues>(v.Key, v.Value.ToAggregatedValues())).ToList()))
+            .ToList();
+    }
 }
 
-public record struct AggregatedValues(int Min, int Avg, int Max)
+public record struct AggregatedValue(uint Time, int Value);
+
+public record struct AggregatedValues(AggregatedValue Min, int Avg, AggregatedValue Max);
+
+internal class AggregatedValuesL
 {
-    public AggregatedValues() : this(0, 0, 0)
+    private AggregatedValue _min;
+    private AggregatedValue _max;
+    private long _sum;
+    private long _cnt;
+
+    internal AggregatedValuesL(uint time, int value)
     {
+        _min = new AggregatedValue(time, value);
+        _max = new AggregatedValue(time, value);
+        _sum = value;
+        _cnt = 1;
+    }
+
+    internal void ProcessValue(uint time, int value)
+    {
+        if (_min.Value > value)
+            _min = new AggregatedValue(time, value);
+        else if (_max.Value < value)
+            _max = new AggregatedValue(time, value);
+        _sum += value;
+        _cnt++;
+    }
+    
+    internal AggregatedValues ToAggregatedValues()
+    {
+        return new AggregatedValues(_min, (int)(_sum / _cnt), _max);
     }
 }
 
@@ -156,6 +221,9 @@ public record FileSmartHomeServiceConfiguration(
 
 public sealed class FileSmartHomeService: BaseSmartHomeService
 {
+    public const string RawFileExtension = ".raw";
+    public const string AggregatedFileExtension = ".aggregated";
+    
     private readonly string _baseFolder;
     private readonly int _keyDivider;
     
@@ -188,7 +256,7 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
             .Where(s => s.Value.Enabled)
             .Select(s => s.Key)
             .ToHashSet();
-        foreach (var fileData in ReadFiles(from, null, "", true))
+        foreach (var fileData in ReadFiles(_baseFolder, _keyDivider, from, null, "", true))
         {
             var items = new RawSensorEvents(fileData.Data);
             if (items.Items.Count == 0)
@@ -238,20 +306,65 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
         throw new NotImplementedException();
     }
 
-    private IEnumerable<FileData> ReadFiles(int from, int? to, string extension, bool reverse)
+    private static IEnumerable<FileData> ReadFiles(string baseFolder, int keyDivider, int from, int? to,
+        string extension, bool reverse)
     {
-        var fromYear = from / _keyDivider;
-        var toYear = to / _keyDivider;
-        return Directory.EnumerateDirectories(_baseFolder)
+        var fromYear = from / keyDivider;
+        var toYear = to / keyDivider;
+        return Directory.EnumerateDirectories(baseFolder)
             .Select(path => int.Parse(Path.GetFileName(path)))
             .Where(year => year >= fromYear && (toYear == null || year <= toYear))
-            .SelectMany(year => Directory.EnumerateFiles(Path.Combine(_baseFolder, year.ToString())))
-            .Where(name => Path.GetExtension(name) == extension)
-            .Select(name => (int.Parse(Path.GetFileName(name)), name))
+            .SelectMany(year => Directory.EnumerateFiles(Path.Combine(baseFolder, year.ToString()), "*" + extension))
+            .Select(name => (int.Parse(Path.GetFileNameWithoutExtension(name)), name))
             .Where(pair => pair.Item1 >= from && (to == null || pair.Item1 <= to))
             .OrderBy(pair => reverse ? -pair.Item1 : pair.Item1)
             .Select(pair => new FileData(pair.Item1, File.ReadAllBytes(pair.name)));
     }
+    
+    public static void AggregateRawData(int from, string baseFolder, int keyDivider)
+    {
+        Parallel.ForEach(ReadFiles(baseFolder, keyDivider, from, null,
+            "", false), fileData =>
+        {
+            var items = new RawSensorEvents(fileData.Data);
+            if (items.Items.Count == 0)
+                return;
+            var aggregated = AggregateRawData(items);
+            var data = aggregated.ToBinary();
+            var fileName = BuildFileName(fileData.Key, baseFolder, keyDivider, AggregatedFileExtension);
+            File.WriteAllBytes(fileName, data);
+        });
+    }
+
+    private static string BuildFileName(int key, string baseFolder, int keyDivider, string extension)
+    {
+        return Path.Combine(baseFolder, (key / keyDivider).ToString(), key.ToString() + extension);
+    }
+    
+    private static AggregatedSensorEvents AggregateRawData(RawSensorEvents rawData)
+    {
+        var aggregated = new Dictionary<uint, Dictionary<byte, AggregatedValuesL>>();
+        foreach (var e in rawData.Items)
+        {
+            if (!aggregated.TryGetValue(e.SensorId, out var sensorData))
+            {
+                sensorData = new Dictionary<byte, AggregatedValuesL>();
+                aggregated[e.SensorId] = sensorData;
+            }
+            var idx = 0;
+            foreach (var vt in e.ValueTypes)
+            {
+                if (vt == 0)
+                    break;
+                var value = e.Values[idx++];
+                if (sensorData.TryGetValue(vt, out var aValue))
+                    aValue.ProcessValue(e.TimeAndSensorId >> 8, value);
+                else
+                    sensorData[vt] = new AggregatedValuesL(e.TimeAndSensorId >> 8, value);
+            }
+        }
+        return new AggregatedSensorEvents(aggregated);
+    }
 }
 
-internal record FileData(int Key, byte[] Data);
+public record FileData(int Key, byte[] Data);

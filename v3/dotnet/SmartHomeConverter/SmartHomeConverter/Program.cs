@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using Npgsql;
+﻿using Npgsql;
 using NRedisStack;
 using NRedisStack.DataTypes;
 using NRedisStack.RedisStackCommands;
@@ -8,48 +7,82 @@ using StackExchange.Redis;
 
 if (args.Length is < 3 or > 6)
 {
-    Console.WriteLine("Usage: SmartHomeConverter [connection_string start_date [raw|aggregated] value_types_file_name output_folder_name [time zone]][compare file1 file2]");
+    Console.WriteLine("Usage: SmartHomeConverter\n" +
+    "  [raw connection_string start_date value_types_file_name output_folder_name [time zone]]\n" +
+    "  [aggregate start_date output_folder_name]\n" +
+    "  [compare file1 file2]\n" +
+    "  [show value_types_file_name file_name]");
     return;
 }
 
-var connectionString = args[0];
-
-if (connectionString == "compare")
+switch (args[0])
 {
-    Compare(args[1], args[2]);
-    return;
+    case "raw":
+        var connectionString = args[1];
+        var startDate = int.Parse(args[2]);
+        ValueTypes.Init(args[3]);
+        var outputFolderName = args[4];
+
+        if (connectionString.StartsWith("postgres://"))
+        {
+            var parts = connectionString.Split('/');
+            if (parts.Length != 4 || parts[1].Length != 0 || parts[2].Length == 0 || parts[3].Length == 0)
+            {
+                Console.WriteLine("Invalid connection string");
+                return;
+            }
+            ConvertFromPostgres(startDate, outputFolderName, parts[2], parts[3]);
+            return;
+        }
+
+        if (connectionString.StartsWith("redis://"))
+        {
+            ConvertFromRedis(connectionString, startDate, outputFolderName, args[5]); // time zone
+            return;
+        }
+
+        Console.WriteLine("Unsupported database type");
+        break;
+    case "aggregate":
+        var aStartDate = int.Parse(args[1]);
+        var aOutputFolderName = args[2];
+        FileSmartHomeService.AggregateRawData(aStartDate, aOutputFolderName, 10000);
+        break;
+    case "compare":
+        Compare(args[1], args[2]);
+        break;
+    case "show":
+        ValueTypes.Init(args[1]);
+        Show(args[2]);
+        break;
+    default:
+        Console.WriteLine("Unknown command");
+        break;
 }
-
-var startDate = int.Parse(args[1]);
-var aggregated = args[2] == "aggregated";
-ValueTypes.Init(args[3]);
-var outputFolderName = args[4];
-
-if (connectionString.StartsWith("postgres://"))
-{
-    var parts = connectionString.Split('/');
-    if (parts.Length != 4 || parts[1].Length != 0 || parts[2].Length == 0 || parts[3].Length == 0)
-    {
-        Console.WriteLine("Invalid connection string");
-        return;
-    }
-    ConvertFromPostgres(parts[2], parts[3]);
-    return;
-}
-
-if (connectionString.StartsWith("redis://"))
-{
-    ConvertFromRedis(args[5]); // time zone
-    return;
-}
-
-Console.WriteLine("Unsupported database type");
 
 return;
 
+void Show(string fileName)
+{
+    if (fileName.EndsWith(FileSmartHomeService.AggregatedFileExtension))
+    {
+        var aData = new AggregatedSensorEvents(File.ReadAllBytes(fileName));
+        ShowData(aData);
+        return;
+    }
+    var data = new RawSensorEvents(File.ReadAllBytes(fileName));
+    ShowData(data);
+}
+
+void ShowData<T>(SensorEvents<T> data)
+{
+    foreach (var item in data.Items)
+        Console.WriteLine(item);
+}
+
 void Compare(string file1, string file2)
 {
-    if (file1.EndsWith(".aggregated"))
+    if (file1.EndsWith(FileSmartHomeService.AggregatedFileExtension))
     {
         var data1 = new AggregatedSensorEvents(File.ReadAllBytes(file1));
         var data2 = new AggregatedSensorEvents(File.ReadAllBytes(file2));
@@ -81,7 +114,7 @@ void CompareEvents<T>(SensorEvents<T> e1, SensorEvents<T> e2)
     }
 }
 
-void ConvertFromRedis(string timeZoneName)
+void ConvertFromRedis(string connectionString, int startDate, string outputFolderName, string timeZoneName)
 {
     var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneName);
     
@@ -94,9 +127,7 @@ void ConvertFromRedis(string timeZoneName)
         var db = redisConnection.GetDatabase();
         var ts = db.TS();
 
-        IProcessor processor = aggregated
-            ? new RedisAggregatedDataProcessor(ts, startDate, timeZone)
-            : new RedisRawDataProcessor(ts, startDate, timeZone);
+        var processor = new RedisProcessor(ts, startDate, timeZone);
         
         foreach (var seriesName in ts.QueryIndex(["type=sensor"]))
         {
@@ -106,7 +137,7 @@ void ConvertFromRedis(string timeZoneName)
             var valueTypeId = ValueTypes.Map[valueType];
             processor.Process(seriesName, sensorId, (byte)valueTypeId);
         }
-        processor.WriteData(outputFolderName);
+        processor.WriteData(10000, outputFolderName);
     }
     catch (Exception e)
     {
@@ -114,50 +145,35 @@ void ConvertFromRedis(string timeZoneName)
     }
 }
 
-void ConvertFromPostgres(string hostName, string databaseName)
+void ConvertFromPostgres(int startDate, string outputFolderName, string hostName, string databaseName)
 {
     Console.WriteLine($"Converting database '{databaseName}' to '{outputFolderName}'");
 
-    var connection = new NpgsqlConnection($"Host={hostName};Username=postgres;Database={databaseName}");
+    using var connection = new NpgsqlConnection($"Host={hostName};Username=postgres;Database={databaseName}");
     try
     {
         connection.Open();
-        if (aggregated)
-            ProcessPostgresAggregatedData(connection);
-        else
-            ProcessPostgresRawData(connection);
+        ProcessPostgresRawData(connection, startDate, outputFolderName);
     }
     catch (Exception e)
     {
         Console.WriteLine(e);
     }
-    finally
-    {
-        connection.Close();
-    }
 }
 
-void ProcessPostgresRawData(NpgsqlConnection connection)
+void ProcessPostgresRawData(NpgsqlConnection connection, int startDate, string outputFolderName)
 {
-    ProcessPostgresData(connection,
+    ProcessPostgresData(connection, startDate, outputFolderName,
         "select sensor_id, event_date, value_type, event_time, value from sensor_events",
         (eventTime, sensorId) => (eventTime << 8) | sensorId,
-        (v4, v5, f) => v5,"");
+        (v4, v5, f) => v5);
 }
 
-void ProcessPostgresAggregatedData(NpgsqlConnection connection)
-{
-    ProcessPostgresData(connection,
-        "select sensor_id, event_date, value_type, min_value, max_value, avg_value from sensor_events_aggregated",
-        (_, sensorId) => sensorId,
-        (v4, v5, f) => new AggregatedValues(v4, f(5), v5), ".aggregated");
-}
-
-void ProcessPostgresData<T>(NpgsqlConnection connection, string sql, Func<uint, uint, uint> keyBuilder,
-    Func<int, int, Func<int, int>, T> objectBuilder, string fileSuffix) where T : struct
+void ProcessPostgresData(NpgsqlConnection connection, int startDate, string outputFolderName, string sql,
+    Func<uint, uint, uint> keyBuilder, Func<int, int, Func<int, int>, int> objectBuilder)
 {
     sql += $" where event_date >= {startDate}";
-    var data = new SortedDictionary<int, SortedDictionary<uint, EventHolder<T>>>();
+    var data = new SortedDictionary<int, SortedDictionary<uint, EventHolder<int>>>();
     using (var reader = new NpgsqlCommand(sql, connection).ExecuteReader())
     {
         while (reader.Read())
@@ -172,7 +188,7 @@ void ProcessPostgresData<T>(NpgsqlConnection connection, string sql, Func<uint, 
             {
                 if (!dateEvents.TryGetValue(key, out var events))
                 {
-                    events = new EventHolder<T>();
+                    events = new EventHolder<int>();
                     dateEvents[key] = events;
                 }
 
@@ -180,14 +196,14 @@ void ProcessPostgresData<T>(NpgsqlConnection connection, string sql, Func<uint, 
             }
             else
             {
-                var events = new EventHolder<T>();
+                var events = new EventHolder<int>();
                 events.AddEvent(valueType, objectBuilder(v4, v5, reader.GetInt32));
-                data[eventDate] = new SortedDictionary<uint, EventHolder<T>> { { key, events } };
+                data[eventDate] = new SortedDictionary<uint, EventHolder<int>> { { key, events } };
             }
         }
     }
     
-    IProcessor.WriteData(data, fileSuffix, outputFolderName);
+    RedisProcessor.WriteData(data, 10000, outputFolderName);
 }
 
 internal sealed class EventHolder<T>
@@ -225,32 +241,7 @@ internal sealed class EventHolder<T>
     }
 }
 
-internal interface IProcessor
-{
-    void Process(string seriesName, uint sensorId, byte valueTypeId);
-    void WriteData(string outputFolderName);
-    
-    internal static void WriteData<T>(SortedDictionary<int, SortedDictionary<uint, EventHolder<T>>> data,
-        string fileSuffix, string outputFolderName) where T: struct
-    {
-        foreach (var entry in data)
-        {
-            var year = entry.Key / 10000;
-            var folderName = Path.Combine(outputFolderName, year.ToString());
-            var fileName = Path.Combine(folderName, entry.Key.ToString()) + fileSuffix;
-            if (!Directory.Exists(folderName))
-                Directory.CreateDirectory(folderName);
-
-            var arr = entry.Value
-                .Select(v => v.Value.BuildItem(v.Key))
-                .ToArray();
-            var bytes = MemoryMarshal.AsBytes(arr);
-            File.WriteAllBytes(fileName, bytes);
-        }
-    }
-}
-
-internal abstract class RedisProcessor(TimeSeriesCommands ts, int from, TimeZoneInfo timeZone): IProcessor
+internal class RedisProcessor(TimeSeriesCommands ts, int from, TimeZoneInfo timeZone)
 {
     protected readonly SortedDictionary<int, SortedDictionary<uint, EventHolder<int>>> Data = new();
     private readonly TimeStamp _from = BuildTimestamp(from, timeZone);
@@ -300,72 +291,25 @@ internal abstract class RedisProcessor(TimeSeriesCommands ts, int from, TimeZone
         }
     }
 
-    public abstract void WriteData(string outputFolderName);
-}
-
-internal sealed class RedisRawDataProcessor(TimeSeriesCommands ts, int from, TimeZoneInfo timeZone) :
-    RedisProcessor(ts, from, timeZone)
-{
-    public override void WriteData(string outputFolderName)
-    {
-        IProcessor.WriteData(Data, "", outputFolderName);
-    }
-}
-
-internal record struct AggregatedValuesL(int Min, long Sum, int Max, long Cnt)
-{
-    public AggregatedValuesL() : this(0, 0L, 0, 0L)
-    {
-    }
+    internal void WriteData(int keyDivider, string outputFolderName) => WriteData(Data, keyDivider, outputFolderName);
     
-    internal AggregatedValues ToAggregatedValues()
+    internal static void WriteData(SortedDictionary<int, SortedDictionary<uint, EventHolder<int>>> data, int keyDivider,
+        string outputFolderName)
     {
-        return new AggregatedValues(Min, (int)(Sum / Cnt), Max);
-    }
-}
-
-internal sealed class RedisAggregatedDataProcessor(TimeSeriesCommands ts, int from, TimeZoneInfo timeZone) :
-    RedisProcessor(ts, from, timeZone)
-{
-    public override void WriteData(string outputFolderName)
-    {
-        var transformed = new SortedDictionary<int, SortedDictionary<uint, EventHolder<AggregatedValues>>>(Data
-            .Select(d => (d.Key, Aggregate(d.Value)))
-            .ToDictionary());
-        IProcessor.WriteData(transformed, ".aggregated", outputFolderName);
-    }
-    
-    private SortedDictionary<uint, EventHolder<AggregatedValues>> Aggregate(SortedDictionary<uint, EventHolder<int>> rawData)
-    {
-        return new SortedDictionary<uint, EventHolder<AggregatedValues>>(rawData
-            .GroupBy(kv => kv.Key & 0xFF)
-            .Select(grp => (grp.Key, Aggregate(grp.AsEnumerable())))
-            .ToDictionary(kv => kv.Key, kv => kv.Item2)
-        );
-    }
-    
-    private static EventHolder<AggregatedValues> Aggregate(IEnumerable<KeyValuePair<uint, EventHolder<int>>> grp)
-    {
-        var map = new Dictionary<byte, AggregatedValuesL>();
-        foreach (var i in grp)
+        foreach (var entry in data)
         {
-            foreach (var (vt, v) in i.Value.ValueMap)
-            {
-                if (map.TryGetValue(vt, out var values))
-                {
-                    if (values.Min > v)
-                        values.Min = v;
-                    else if (values.Max < v)
-                        values.Max = v;
-                    else
-                        values.Sum += v;
-                    values.Cnt++;
-                }
-                else
-                    map[vt] = new AggregatedValuesL(v, v, v, 1);
-            }
-        }
+            var year = entry.Key / keyDivider;
+            var folderName = Path.Combine(outputFolderName, year.ToString());
+            if (!Directory.Exists(folderName))
+                Directory.CreateDirectory(folderName);
+            var fileName = Path.Combine(folderName, entry.Key.ToString()) + FileSmartHomeService.RawFileExtension;
 
-        return new EventHolder<AggregatedValues>(map.Select(kv => (kv.Key, kv.Value.ToAggregatedValues())).ToDictionary());
+            var list = entry.Value
+                .Select(v => v.Value.BuildItem(v.Key))
+                .ToList();
+            var events = new RawSensorEvents(list);
+            var bytes = events.ToBinary();
+            File.WriteAllBytes(fileName, bytes);
+        }
     }
 }
