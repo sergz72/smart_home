@@ -183,15 +183,12 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
 
     private DateRange BuildDateRange(SmartHomeQuery query)
     {
-        var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
-        var now = TimeZoneInfo.ConvertTime(DateTime.Now, TimeZone);
-        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), TimeZone);
-        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, TimeZone);
-        var startMillis = new DateTimeOffset(startDateTime).ToUnixTimeMilliseconds();
-        var endMillis = new DateTimeOffset(endDateTime).ToUnixTimeMilliseconds();
-        var maxUnaggregatedMilliseconds = MillisecondsInHour * maxPoints;
+        var range = BuildBaseDateRange(query);
+        var startMillis = new DateTimeOffset(range.StartDateTime).ToUnixTimeMilliseconds();
+        var endMillis = new DateTimeOffset(range.EndDateTime).ToUnixTimeMilliseconds();
+        var maxUnaggregatedMilliseconds = MillisecondsInHour * range.MaxPoints;
         var aggregated = endMillis - startMillis > maxUnaggregatedMilliseconds;
         return new DateRange(aggregated, startMillis, endMillis, 
-                    (endMillis - startMillis) / maxPoints);
+                    (endMillis - startMillis) / range.MaxPoints);
     }
 }

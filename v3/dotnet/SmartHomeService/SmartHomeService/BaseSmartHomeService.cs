@@ -82,4 +82,15 @@ public abstract class BaseSmartHomeService: ISmartHomeService
             .Select(s => s.Key)
             .ToHashSet();
     }
+    
+    protected BaseDateRange BuildBaseDateRange(SmartHomeQuery query)
+    {
+        var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
+        var now = TimeZoneInfo.ConvertTime(DateTime.Now, TimeZone);
+        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), TimeZone);
+        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, TimeZone);
+        return new BaseDateRange(maxPoints, startDateTime, endDateTime);
+    }
+
+    protected record BaseDateRange(int MaxPoints, DateTime StartDateTime, DateTime EndDateTime);
 }

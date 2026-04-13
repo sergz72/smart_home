@@ -89,6 +89,7 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
 
     public uint SensorId => TimeAndSensorId & 0xFF;
     public uint EventTimeMs => (TimeAndSensorId >> 8) * 10;
+    public uint EventTime => (TimeAndSensorId >> 8);
     
     public bool Equals(SensorDataFileItem<T> other)
     {
@@ -103,7 +104,7 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
     public override string ToString()
     {
         var sb = new StringBuilder();
-        sb.Append("EventTime=").Append(EventTimeMs);
+        sb.Append("EventTime=").Append(TimeToString(EventTimeMs));
         sb.Append(" SensorId=").Append(SensorId);
         var idx = 0;
         foreach (var vt in ValueTypes)
@@ -113,6 +114,12 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
             sb.Append(' ').Append(SmartHomeService.ValueTypes.ReverseMap[vt]).Append('=').Append(Values[idx++]);
         }
         return sb.ToString();
+    }
+
+    internal static string TimeToString(uint timeMs)
+    {
+        var t = new TimeOnly(timeMs * TimeSpan.TicksPerMillisecond);
+        return t.ToString("HH:mm:ss.fff");
     }
 }
 
@@ -154,6 +161,16 @@ public sealed class RawSensorEvents: SensorEvents<int>
     public RawSensorEvents(byte[] data): base(data)
     {
     }
+    
+    internal static IEnumerable<(string, int, SensorDataItem)> ToSensorData(int date, SensorDataFileItem<int> item, int locationId, TimeZoneInfo timeZone)
+    {
+        var idx = 0;
+        foreach (var vt in item.ValueTypes)
+        {
+            yield return (ValueTypes.ReverseMap[vt], locationId,
+                new SensorDataItem(FileSmartHomeService.BuildTimestamp(date, item.EventTimeMs, timeZone), (double)item.Values[idx++] / 100));
+        }
+    }
 }
 
 public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
@@ -178,11 +195,43 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
                 kv.Value.Select(v => new ValueTypeValue<AggregatedValues>(v.Key, v.Value.ToAggregatedValues())).ToList()))
             .ToList();
     }
+
+    internal static IEnumerable<AggregatedSensorDataItem> ToSensorData(int date, SensorDataFileItem<AggregatedValues> item, int locationId, TimeZoneInfo timeZone)
+    {
+        var idx = 0;
+        foreach (var vt in item.ValueTypes)
+        {
+            yield return (new AggregatedSensorDataItem(ValueTypes.ReverseMap[vt], locationId,
+                FileSmartHomeService.BuildTimestamp(date, 0, timeZone), item.Values[idx++]));
+        }
+    }
 }
 
-public record struct AggregatedValue(uint Time, int Value);
+internal record AggregatedSensorDataItem(string ValueType, int LocationId, SensorDataItem Min, SensorDataItem Avg, SensorDataItem Max)
+{
+    public AggregatedSensorDataItem(string valueType, int locationId, long timestamp, AggregatedValues itemValue):
+        this(valueType, locationId, new SensorDataItem(timestamp + itemValue.Min.Time, (double)itemValue.Min.Value / 100),
+            new SensorDataItem(timestamp, (double)itemValue.Avg / 100), 
+            new SensorDataItem(timestamp + itemValue.Max.Time, (double)itemValue.Max.Value / 100))
+    {
+    }
+}
 
-public record struct AggregatedValues(AggregatedValue Min, int Avg, AggregatedValue Max);
+public record struct AggregatedValue(uint Time, int Value)
+{
+    public override string ToString()
+    {
+        return SensorDataFileItem<int>.TimeToString(Time * 10) + "," + Value;
+    }
+}
+
+public record struct AggregatedValues(AggregatedValue Min, int Avg, AggregatedValue Max)
+{
+    public override string ToString()
+    {
+        return "[min=" + Min + " avg=" + Avg + " max=" + Max + "]";
+    }
+}
 
 internal class AggregatedValuesL
 {
@@ -221,6 +270,8 @@ public record FileSmartHomeServiceConfiguration(
 
 public sealed class FileSmartHomeService: BaseSmartHomeService
 {
+    private record DateRange(int MaxPoints, bool Aggregated, int StartDate, uint StartTime, int EndDate, uint EndTime);
+
     public const string RawFileExtension = ".raw";
     public const string AggregatedFileExtension = ".aggregated";
     
@@ -272,7 +323,7 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
                     if (vt == 0)
                         break;
                     var valueType = ValueTypes.ReverseMap[vt];
-                    var di = new SensorDataItem(BuildTimestamp(fileData.Key, item.EventTimeMs),
+                    var di = new SensorDataItem(BuildTimestamp(fileData.Key, item.EventTimeMs, TimeZone),
                         (double)item.Values[idx] / 100);
                     if (data.TryGetValue(locationId, out var locationValues))
                         locationValues[valueType] = di;
@@ -290,7 +341,7 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
         return new LastSensorData(data);
     }
 
-    private long BuildTimestamp(int date, uint timeMs)
+    internal static long BuildTimestamp(int date, uint timeMs, TimeZoneInfo timeZone)
     {
         var t = (int)(timeMs / 1000);
         var ms = (int)(timeMs % 1000);
@@ -298,12 +349,111 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
         var minute = (t / 60) % 60;
         var second = t % 60;
         var dt = new DateTime(date / 10000, (date / 100) % 100, date % 100, hour, minute, second, ms, DateTimeKind.Unspecified);
-        return new DateTimeOffset(TimeZoneInfo.ConvertTime(dt, TimeZone).ToUniversalTime()).ToUnixTimeMilliseconds();
+        return new DateTimeOffset(TimeZoneInfo.ConvertTime(dt, timeZone).ToUniversalTime()).ToUnixTimeMilliseconds();
     }
 
     public override SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated)
     {
-        throw new NotImplementedException();
+        var sensors = GetSensors(sensorDataQuery.DataType);
+        if (sensors.Count == 0)
+        {
+            aggregated = false;
+            return new SensorDataResult([]);
+        }
+        var dateRange = BuildDateRange(sensorDataQuery);
+        aggregated = dateRange.Aggregated;
+        var data = ReadFiles(
+            _baseFolder,
+            _keyDivider,
+            dateRange.StartDate,
+            sensorDataQuery.Period == null ? null : dateRange.EndDate,
+            aggregated ? AggregatedFileExtension : RawFileExtension,
+            false);
+        return dateRange.Aggregated ? GetAggregatedSensorData(sensors, dateRange.MaxPoints, data) : GetRawSensorData(sensors, dateRange, data); 
+    }
+
+    private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange, IEnumerable<FileData> data)
+    {
+        var d = data.SelectMany(dt => new RawSensorEvents(dt.Data).Items.Select(item => (dt.Key, item)))
+            .Where(di =>
+                sensors.Contains(di.item.SensorId)
+                && (di.Key > dateRange.StartDate
+                 || (di.Key == dateRange.StartDate && di.item.EventTime >= dateRange.StartTime))
+                && (di.Key < dateRange.EndDate
+                    || (di.Key == dateRange.EndDate && di.item.EventTime <= dateRange.EndTime)))
+            .SelectMany(di => RawSensorEvents.ToSensorData(di.Key, di.item, Sensors[di.item.SensorId].LocationId, TimeZone))
+            // valueType, locationId, sensorDataItem
+            .GroupBy(li => li.Item1)
+            // grouped by valueType
+            .Select(grp => (grp.Key, ToItemList(grp.GroupBy(item => item.Item2), dateRange.MaxPoints)))
+            .ToDictionary();
+        return new SensorDataResult(d); 
+    }
+
+    private static List<SensorData> ToItemList(IEnumerable<IGrouping<int, (string, int, SensorDataItem)>> items, int maxPoints)
+    {
+        return items.Select(item => new SensorData(item.Key, Aggregate(item.Select(i => i.Item3).ToList(), maxPoints), null)).ToList();
+    }
+
+    private static List<SensorDataItem> Aggregate(List<SensorDataItem> list, int maxPoints)
+    {
+        if (list.Count <= maxPoints)
+            return list;
+        var coef = maxPoints / list.Count + (maxPoints % list.Count == 0 ? 0 : 1);
+        var result = new List<SensorDataItem>();
+        for (var i = 0; i < list.Count; i += coef)
+        {
+            var t = list[i].Timestamp;
+            var sum = 0.0;
+            var cnt = 0;
+            for (var k = 0; k < coef; k++)
+            {
+                var idx = i + k;
+                if (idx >= list.Count)
+                    break;
+                sum += list[idx].Value;
+                cnt++;
+            }
+            result.Add(new SensorDataItem(t, sum / cnt));
+        }
+        return result;
+    }
+
+    private static List<SensorData> ToItemList(IEnumerable<IGrouping<int, AggregatedSensorDataItem>> items, int maxPoints)
+    {
+        return items.Select(item => new SensorData(item.Key, null, 
+            new AggregatedSensorData(
+                Aggregate(item.Select(i => i.Min).ToList(), maxPoints).ToList(),
+                Aggregate(item.Select(i => i.Avg).ToList(), maxPoints).ToList(),
+                Aggregate(item.Select(i => i.Max).ToList(), maxPoints).ToList()
+                ))).ToList();
+    }
+    
+    private SensorDataResult GetAggregatedSensorData(HashSet<uint> sensors, int maxPoints, IEnumerable<FileData> data)
+    {
+        var d = data.SelectMany(dt => new AggregatedSensorEvents(dt.Data).Items.Select(item => (dt.Key, item)))
+            .Where(di => sensors.Contains(di.item.SensorId))
+            .SelectMany(di => AggregatedSensorEvents.ToSensorData(di.Key, di.item, Sensors[di.item.SensorId].LocationId, TimeZone))
+            .GroupBy(vti => vti.ValueType)
+            .Select(grp => (grp.Key, ToItemList(grp.GroupBy(item => item.LocationId), maxPoints)))
+            .ToDictionary();
+        return new SensorDataResult(d); 
+    }
+    
+    private DateRange BuildDateRange(SmartHomeQuery query)
+    {
+        var range = BuildBaseDateRange(query);
+        var aggregated = (range.EndDateTime - range.StartDateTime).TotalMinutes / 5 > range.MaxPoints;
+        var (startDate, startTime) = SplitDate(range.StartDateTime);
+        var (endDate, endTime) = SplitDate(range.EndDateTime);
+        return new DateRange(range.MaxPoints, aggregated, startDate, startTime, endDate, endTime);
+    }
+
+    private static (int startDate, uint startTime) SplitDate(DateTime dateTime)
+    {
+        var date = dateTime.Year * 10000 + dateTime.Month * 100 + dateTime.Day;
+        var time = dateTime.TimeOfDay.TotalMilliseconds / 10;
+        return (date, (uint)time);
     }
 
     private static IEnumerable<FileData> ReadFiles(string baseFolder, int keyDivider, int from, int? to,

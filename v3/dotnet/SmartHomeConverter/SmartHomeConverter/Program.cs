@@ -165,8 +165,16 @@ void ProcessPostgresRawData(NpgsqlConnection connection, int startDate, string o
 {
     ProcessPostgresData(connection, startDate, outputFolderName,
         "select sensor_id, event_date, value_type, event_time, value from sensor_events",
-        (eventTime, sensorId) => (eventTime << 8) | sensorId,
+        (eventTime, sensorId) => (To10Ms(eventTime) << 8) | sensorId,
         (v4, v5, f) => v5);
+}
+
+uint To10Ms(uint eventTime)
+{
+    var hour = eventTime / 10000;
+    var minute = (eventTime / 100) % 100;
+    var second = eventTime % 100;
+    return (hour * 3600 + minute * 60 + second) * 100;
 }
 
 void ProcessPostgresData(NpgsqlConnection connection, int startDate, string outputFolderName, string sql,
