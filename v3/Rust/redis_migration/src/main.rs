@@ -278,7 +278,7 @@ fn do_delete_rules(redis_connection: &mut redis::Connection) -> Result<(), Error
         .query(redis_connection)
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     for value in results {
-        println!("Creating aggregations for sensor {}", value);
+        println!("Delete rules for sensor {}", value);
         let min_agg_name = format!("{}:min", value);
         let avg_agg_name = format!("{}:avg", value);
         let max_agg_name = format!("{}:max", value);
@@ -322,7 +322,7 @@ fn run_daily_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, fro
     let from_timestamp = to_millis(tz, from, 0).unwrap();
     println!("from_timestamp={}", from_timestamp);
     for value in results {
-        println!("Building yearly aggregations for sensor {}", value);
+        println!("Building daily aggregations for sensor {}", value);
         let min_agg_name = format!("{}:min", value);
         let avg_agg_name = format!("{}:avg", value);
         let max_agg_name = format!("{}:max", value);
@@ -335,12 +335,15 @@ fn run_daily_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, fro
 
         let data = ts_range(redis_connection, &value, from_timestamp)?;
         let grouped = group_by(data, |timestamp|build_day_start_timestamp(tz, timestamp));
-        let min_agg = grouped.iter().map(|(_, value)|get_min(value))
+        let mut min_agg = grouped.iter().map(|(_, value)|get_min(value))
             .collect::<Vec<(i64, f64)>>();
-        let avg_agg = grouped.iter().map(|(_, value)|get_avg(value))
+        min_agg.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut avg_agg = grouped.iter().map(|(_, value)|get_avg(value))
             .collect::<Vec<(i64, f64)>>();
-        let max_agg = grouped.iter().map(|(_, value)|get_max(value))
+        avg_agg.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut max_agg = grouped.iter().map(|(_, value)|get_max(value))
             .collect::<Vec<(i64, f64)>>();
+        max_agg.sort_by(|a, b| a.0.cmp(&b.0));
 
         for v in min_agg.into_iter() {
             if dry_run {
@@ -370,7 +373,7 @@ fn run_daily_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, fro
 }
 
 fn get_min(data: &Vec<(i64, f64)>) -> (i64, f64) {
-    let (t, v) = data.iter().min_by(|a, b| b.1.total_cmp(&a.1)).unwrap();
+    let (t, v) = data.iter().min_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
     (*t, *v)
 }
 
@@ -439,8 +442,10 @@ fn run_yearly_aggregation(tz: &Tz, redis_connection: &mut redis::Connection, key
     }
 
     let grouped = group_by(data, |timestamp|build_year_start_timestamp(tz, timestamp));
-    let agg = grouped.iter().map(|(_, value)|f(value))
+    let mut agg = grouped.iter().map(|(_, value)|f(value))
         .collect::<Vec<(i64, f64)>>();
+
+    agg.sort_by(|a, b| a.0.cmp(&b.0));
 
     for v in agg.into_iter() {
         if dry_run {
