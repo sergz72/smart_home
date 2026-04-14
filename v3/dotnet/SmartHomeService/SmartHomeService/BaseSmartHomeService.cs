@@ -53,6 +53,8 @@ public abstract class BaseSmartHomeService: ISmartHomeService
 
     public abstract SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated);
 
+    public abstract YearlySensorDataResult GetYearlySensorData();
+    
     public SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data)
     {
         return new SensorDataItemWithDate(GetDateTime(data.Timestamp), data.Value);

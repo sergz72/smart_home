@@ -193,6 +193,42 @@ public static class Compressor
     }
 }
 
+public sealed class YearlySensorDataResult
+{
+    // map year to location id to map valueType to sensor data
+    public readonly Dictionary<int, LastSensorData> Data;
+
+    private YearlySensorDataResult(Dictionary<int, LastSensorData> data)
+    {
+        Data = data;
+    }
+    
+    public byte[] ToBinary()
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        foreach (var kv in Data)
+        {
+            writer.Write((short)kv.Key);
+            kv.Value.ToBinary(writer);
+        }
+        return stream.ToArray();
+    }
+
+    public static YearlySensorDataResult ParseResponse(MemoryStream response)
+    {
+        var data = new Dictionary<int, LastSensorData>();
+        using var reader = new BinaryReader(response);
+        while (response.Position < response.Length)
+        {
+            var year = (int)reader.ReadInt16();
+            var sd = LastSensorData.ParseResponse(reader);
+            data.Add(year, sd);
+        }
+        return new YearlySensorDataResult(data);
+    }
+}
+
 public sealed class LastSensorData
 {
     // map location id to map valueType to sensor data
@@ -235,11 +271,17 @@ public sealed class LastSensorData
     {
         return Encoding.UTF8.GetString(reader.ReadBytes(length));
     }
-    
+
     public byte[] ToBinary()
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
+        ToBinary(writer);
+        return stream.ToArray();
+    }
+
+    public void ToBinary(BinaryWriter writer)
+    {
         foreach (var (locationId, lastDataByLocation) in Data)
         {
             writer.Write((byte)locationId);
@@ -250,17 +292,22 @@ public sealed class LastSensorData
                 lastData.Save(writer);
             }           
         }
-        return stream.ToArray();
     }
 
     public static LastSensorData ParseResponse(MemoryStream response)
     {
         using var reader = new BinaryReader(response);
+        return ParseResponse(reader);
+    }
+
+    public static LastSensorData ParseResponse(BinaryReader reader)
+    {
         var result = new Dictionary<int, Dictionary<string, SensorDataItem>>();
-        while (response.Position < response.Length)
+        var count = reader.ReadByte();
+        while (count-- > 0)
         {
             var locationId = (int)reader.ReadByte();
-            var length = (int)reader.ReadByte();
+            var length = reader.ReadByte();
             var map = new Dictionary<string, SensorDataItem>();
             while (length-- > 0)
             {

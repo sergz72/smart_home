@@ -97,6 +97,11 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
         return dateRange.Aggregated ? GetAggregatedSensorData(sensors, dateRange) : GetRawSensorData(sensors, dateRange); 
     }
 
+    public override YearlySensorDataResult GetYearlySensorData()
+    {
+        throw new NotImplementedException();
+    }
+
     private SensorDataResult GetAggregatedSensorData(HashSet<uint> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();

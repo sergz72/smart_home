@@ -9,7 +9,8 @@ if (args.Length is < 3 or > 6)
 {
     Console.WriteLine("Usage: SmartHomeConverter\n" +
     "  [raw connection_string start_date value_types_file_name output_folder_name [time zone]]\n" +
-    "  [aggregate start_date output_folder_name]\n" +
+    "  [aggregate start_date folder_name]\n" +
+    "  [aggregate_yearly start_year folder_name]\n" +
     "  [compare file1 file2]\n" +
     "  [show value_types_file_name file_name]");
     return;
@@ -45,8 +46,13 @@ switch (args[0])
         break;
     case "aggregate":
         var aStartDate = int.Parse(args[1]);
-        var aOutputFolderName = args[2];
-        FileSmartHomeService.AggregateRawData(aStartDate, aOutputFolderName, 10000);
+        var aFolderName = args[2];
+        FileSmartHomeService.AggregateRawData(aStartDate, aFolderName, 10000);
+        break;
+    case "aggregate_yearly":
+        var year = int.Parse(args[1]);
+        var yFolderName = args[2];
+        FileSmartHomeService.AggregateYearly(year, yFolderName, 10000);
         break;
     case "compare":
         Compare(args[1], args[2]);
