@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using Eto.Forms;
 using Eto.Drawing;
 using SmartHomeService;
@@ -8,16 +7,17 @@ namespace SmartHomeUI
 {
     public sealed partial class MainForm : Form
     {
-        private readonly TreeGridView _summaryView;
+        private readonly TreeGridView _latestView;
         private readonly ComboBox _offsetBox, _offsetTypeBox;
         private readonly ComboBox _periodBox, _periodTypeBox, _filterTypeBox;
         private readonly CheckBox _enablePeriodBox;
         private readonly ComboBox _startDay, _startMonth, _startYear;
-        private readonly TabControl _tabControl;
+        private readonly TabControl _tabControl, _summaryView;
         private readonly Label _statusLabel;
-        private readonly StatusDataStore _summaryViewDataStore;
+        private readonly StatusDataStore _latestViewDataStore;
         private readonly ISmartHomeService _service;
         private readonly GraphsView _envGraphsView, _watGraphsView, _eleGraphsView;
+        private readonly SummaryDataView _thisYearView, _lastYearView, _totalView;
 
         public MainForm(ISmartHomeService service)
         {
@@ -26,17 +26,43 @@ namespace SmartHomeUI
             Title = "Smart home UI";
             MinimumSize = new Size(1900, 1000);
 
-            _summaryViewDataStore = new StatusDataStore();
+            _latestViewDataStore = new StatusDataStore();
             
-            _summaryView = new TreeGridView();
-            _summaryView.Columns.Add(new GridColumn
+            _latestView = new TreeGridView();
+            _latestView.Columns.Add(new GridColumn
             {
                 DataCell = new TextBoxCell
                 {
                     Binding = new DelegateBinding<StatusItem, string>(r => r.Text),
                 }
             });
-            _summaryView.DataStore = _summaryViewDataStore;
+            _latestView.DataStore = _latestViewDataStore;
+            
+            _thisYearView = new SummaryDataView(_service, false);
+            _lastYearView = new SummaryDataView(_service, false);
+            _totalView = new SummaryDataView(_service, true);
+            
+            _summaryView = new TabControl
+            {
+                Pages =
+                {
+                    new TabPage
+                    {
+                        Text = "This year",
+                        Content = _thisYearView
+                    },
+                    new TabPage
+                    {
+                        Text = "Last year",
+                        Content = _lastYearView
+                    },
+                    new TabPage
+                    {
+                        Text = "Total",
+                        Content = _totalView
+                    }
+                }
+            };
             
             _filterTypeBox = new ComboBox { Items = { "Offset", "Date" }, ReadOnly = true, SelectedIndex = 0 };
             _filterTypeBox.TextChanged += FilterTypeChanged;
@@ -91,8 +117,8 @@ namespace SmartHomeUI
                 {
                     new TabPage
                     {
-                        Text = "Summary",
-                        Content = _summaryView
+                        Text = "Latest",
+                        Content = _latestView
                     },
                     new TabPage
                     {
@@ -108,6 +134,11 @@ namespace SmartHomeUI
                     {
                         Text = "Electrical sensors",
                         Content = _eleGraphsView
+                    },
+                    new TabPage
+                    {
+                        Text = "Summary",
+                        Content = _summaryView
                     }
                 }
             };
@@ -202,8 +233,8 @@ namespace SmartHomeUI
         {
             switch (_tabControl.SelectedIndex)
             {
-                case 0: // Summary page
-                    UpdateSummaryPage();
+                case 0: // Latest page
+                    UpdateLatestPage();
                     break;
                 case 1: // Environmental sensors page
                     UpdateSensorsPage("env", _envGraphsView);
@@ -211,8 +242,11 @@ namespace SmartHomeUI
                 case 2: // Water sensors page
                     UpdateSensorsPage("wat", _watGraphsView);
                     break;
-                default: // Electrical sensors page
+                case 3: // Electrical sensors page
                     UpdateSensorsPage("ele", _eleGraphsView);
+                    break;
+                default: // Summary page
+                    UpdateSummaryPage();
                     break;
             }
         }
@@ -241,12 +275,12 @@ namespace SmartHomeUI
             return new SmartHomeQuery((short)Width, dataType, BuildStartDate(), null, period); 
         }
 
-        private DateTime BuildStartDate()
+        private DateOnly BuildStartDate()
         {
             var day = _startDay.SelectedIndex + 1;
             var month = _startMonth.SelectedIndex + 1;
             var year = int.Parse(_startYear.SelectedKey);
-            return new DateTime(year, month, day);
+            return new DateOnly(year, month, day);
         }
 
         private static DateOffset BuildDateOffset(ComboBox offsetBox, ComboBox offsetTypeBox, int multiplier)
@@ -262,13 +296,29 @@ namespace SmartHomeUI
             };
         }
 
-        private void UpdateSummaryPage()
+        private void UpdateLatestPage()
         {
             try
             {
                 var result = _service.GetLastSensorData();
-                _summaryViewDataStore.Update(_service, result);
-                _summaryView.ReloadData();
+                _latestViewDataStore.Update(_service, result);
+                _latestView.ReloadData();
+                UpdateStatus(result.ToBinary());
+            }
+            catch (Exception e)
+            {
+                _statusLabel.Text = e.Message;
+            }
+        }
+
+        private void UpdateSummaryPage()
+        {
+            try
+            {
+                var result = _service.GetYearlySensorData();
+                _thisYearView.Update(result.GetThisYearData());
+                _lastYearView.Update(result.GetLastYearData());
+                _totalView.Update(result.BuildTotalData());
                 UpdateStatus(result.ToBinary());
             }
             catch (Exception e)

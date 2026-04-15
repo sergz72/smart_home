@@ -5,7 +5,7 @@ using SmartHomeService;
 
 namespace SmartHomeUI;
 
-class StatusDataStore : ITreeGridStore<StatusItem>
+internal class StatusDataStore : ITreeGridStore<StatusItem>
 {
     private readonly List<StatusItem> _items = new();
     public int Count => _items.Count;
@@ -24,7 +24,7 @@ class StatusDataStore : ITreeGridStore<StatusItem>
     }
 }
 
-class StatusItem : ITreeGridItem<StatusItem>
+internal class StatusItem : ITreeGridItem<StatusItem>
 {
     public bool Expanded { get; set; }
     public bool Expandable => _children.Count != 0;

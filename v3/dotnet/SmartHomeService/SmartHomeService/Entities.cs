@@ -3,9 +3,9 @@ using ICSharpCode.SharpZipLib.BZip2;
 
 namespace SmartHomeService;
 
-public record SensorDataItem(long Timestamp, double Value)
+public record SensorDataItem(long Timestamp, double Value): IDataSaver
 {
-    internal void Save(BinaryWriter writer)
+    public void Save(BinaryWriter writer)
     {
         writer.Write((int)(Timestamp / 1000));
         writer.Write((int)(Value * 100));
@@ -16,6 +16,60 @@ public record SensorDataItem(long Timestamp, double Value)
         var timestamp = (long)reader.ReadInt32() * 1000;
         var value = (double)reader.ReadInt32() / 100;
         return new SensorDataItem(timestamp, value);
+    }
+}
+
+public record AggregatedSensorDataItem(SensorDataItem Min, double Avg, SensorDataItem Max): IDataSaver
+{
+    public void Save(BinaryWriter writer)
+    {
+        Min.Save(writer);
+        writer.Write((int)(Avg * 100));
+        Max.Save(writer);
+    }
+    
+    public static AggregatedSensorDataItem ParseResponse(BinaryReader reader)
+    {
+        var min = SensorDataItem.ParseResponse(reader);
+        var avg = (double)reader.ReadInt32() / 100;
+        var max = SensorDataItem.ParseResponse(reader);
+        return new AggregatedSensorDataItem(min, avg, max);
+    }
+}
+
+internal sealed class AggregatedSensorDataItemWithCounter: IDataSaver
+{
+    private SensorDataItem _min;
+    private double _sum;
+    private SensorDataItem _max;
+    private int _cnt;
+
+    internal AggregatedSensorDataItemWithCounter(AggregatedSensorDataItem i)
+    {
+        _min = i.Min;
+        _sum = i.Avg;
+        _max = i.Max;
+        _cnt = 1;
+    }
+    
+    internal void Process(AggregatedSensorDataItem i)
+    {
+        if (i.Min.Value < _min.Value)
+            _min = i.Min;
+        if (i.Max.Value > _max.Value)
+            _max = i.Max;
+        _sum += i.Avg;
+        _cnt++; 
+    }
+    
+    internal AggregatedSensorDataItem ToAggregatedSensorDataItem()
+    {
+        return new AggregatedSensorDataItem(_min, _sum / _cnt, _max);
+    }
+
+    public void Save(BinaryWriter writer)
+    {
+        throw new NotImplementedException();
     }
 }
 
@@ -104,7 +158,7 @@ public record DateOffset(int Offset, TimeUnit Unit)
 public record SmartHomeQuery(
     short MaxPoints,
     string DataType,
-    DateTime? StartDate,
+    DateOnly? StartDate,
     DateOffset? StartDateOffset,
     DateOffset? Period)
 {
@@ -123,7 +177,12 @@ public record SmartHomeQuery(
             var offsetUnit = (TimeUnit)(dateOrOffset & 0xFF);
             return new SmartHomeQuery(maxPoints, dataType, null, new DateOffset(offsetValue, offsetUnit), period);
         }
-        return new SmartHomeQuery(maxPoints, dataType, service.BuildDate(dateOrOffset), null, period);
+        return new SmartHomeQuery(maxPoints, dataType, BuildDate(dateOrOffset), null, period);
+    }
+    
+    public static DateOnly BuildDate(int date)
+    {
+        return new DateOnly(date / 10000, (date / 100) % 100, date % 100);
     }
     
     public byte[] ToBinary()
@@ -175,11 +234,11 @@ public interface ISmartHomeService
     DateTime GetDateTime(long timestamp);
     LastSensorData GetLastSensorData();
     SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated);
+    YearlySensorDataResult GetYearlySensorData();
     double ResponseTimeMs { get; }
     SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data);
     string GetValueType(string valueType);
     Locations GetLocations();
-    DateTime BuildDate(int date);
 }
 
 public static class Compressor
@@ -196,9 +255,9 @@ public static class Compressor
 public sealed class YearlySensorDataResult
 {
     // map year to location id to map valueType to sensor data
-    public readonly Dictionary<int, LastSensorData> Data;
+    public readonly SortedDictionary<int, LastAggregatedSensorData> Data;
 
-    private YearlySensorDataResult(Dictionary<int, LastSensorData> data)
+    internal YearlySensorDataResult(SortedDictionary<int, LastAggregatedSensorData> data)
     {
         Data = data;
     }
@@ -217,24 +276,125 @@ public sealed class YearlySensorDataResult
 
     public static YearlySensorDataResult ParseResponse(MemoryStream response)
     {
-        var data = new Dictionary<int, LastSensorData>();
+        var data = new SortedDictionary<int, LastAggregatedSensorData>();
         using var reader = new BinaryReader(response);
         while (response.Position < response.Length)
         {
             var year = (int)reader.ReadInt16();
-            var sd = LastSensorData.ParseResponse(reader);
+            var sd = LastAggregatedSensorData.ParseResponse(reader);
             data.Add(year, sd);
         }
         return new YearlySensorDataResult(data);
     }
+
+    public LastAggregatedSensorData GetThisYearData()
+    {
+        var thisYear = DateTime.Now.Year; 
+        return Data.TryGetValue(thisYear, out var data) ? data : new LastAggregatedSensorData();
+    }
+    
+    public LastAggregatedSensorData GetLastYearData()
+    {
+        var lastYear = DateTime.Now.Year - 1; 
+        return Data.TryGetValue(lastYear, out var data) ? data : new LastAggregatedSensorData();
+    }
+    
+    public LastAggregatedSensorData BuildTotalData()
+    {
+        LastData<AggregatedSensorDataItemWithCounter>? data = null;
+        foreach (var yearData in Data.Values)
+        {
+            if (data == null)
+                data = new LastData<AggregatedSensorDataItemWithCounter>(WithCounter(yearData.Data));
+            else
+                Process(data, yearData.Data);
+        }
+        return data == null ? new LastAggregatedSensorData() : BuildLastAggregatedSensorData(data);
+    }
+
+    private static LastAggregatedSensorData BuildLastAggregatedSensorData(LastData<AggregatedSensorDataItemWithCounter> data)
+    {
+        var items = data.Data.Select(
+            kv => (kv.Key, kv.Value.Select(
+                    kv2 => (kv2.Key, kv2.Value.ToAggregatedSensorDataItem()))
+                .ToDictionary())).ToDictionary();
+        return new LastAggregatedSensorData(items);
+    }
+
+    private static Dictionary<int, Dictionary<string, AggregatedSensorDataItemWithCounter>> WithCounter(
+        Dictionary<int, Dictionary<string, AggregatedSensorDataItem>> data)
+    {
+        return data.Select(
+            kv => (kv.Key, kv.Value.Select(
+                kv2 => (kv2.Key, new AggregatedSensorDataItemWithCounter(kv2.Value)))
+                .ToDictionary())).ToDictionary();
+    }
+
+    private static void Process(LastData<AggregatedSensorDataItemWithCounter> data,
+        Dictionary<int, Dictionary<string, AggregatedSensorDataItem>> other)
+    {
+        foreach (var ld in other)
+        {
+            if (!data.Data.TryGetValue(ld.Key, out var locationData))
+            {
+                locationData = new Dictionary<string, AggregatedSensorDataItemWithCounter>();
+                data.Data[ld.Key] = locationData;
+            }
+            foreach (var vtd in ld.Value)
+            {
+                if (!locationData.TryGetValue(vtd.Key, out var valueTypeData))
+                {
+                    valueTypeData = new AggregatedSensorDataItemWithCounter(vtd.Value);
+                    locationData[vtd.Key] = valueTypeData;
+                }
+                else
+                    valueTypeData.Process(vtd.Value);
+            }
+        }
+    }
 }
 
-public sealed class LastSensorData
+public sealed class LastSensorData: LastData<SensorDataItem>
+{
+    internal LastSensorData(Dictionary<int, Dictionary<string, SensorDataItem>> data): base(data)
+    {
+    }
+    
+    public static LastSensorData ParseResponse(BinaryReader reader)
+    {
+        return ParseResponse(reader, SensorDataItem.ParseResponse,
+            d => new LastSensorData(d));
+    }
+}
+
+public sealed class LastAggregatedSensorData: LastData<AggregatedSensorDataItem>
+{
+    internal LastAggregatedSensorData(): base(new Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>())
+    {
+    }
+
+    internal LastAggregatedSensorData(Dictionary<int, Dictionary<string, AggregatedSensorDataItem>> data): base(data)
+    {
+    }
+
+    public static LastAggregatedSensorData ParseResponse(BinaryReader reader)
+    {
+        return ParseResponse(reader, AggregatedSensorDataItem.ParseResponse, 
+            d => new LastAggregatedSensorData(d));
+    }
+}
+
+public interface IDataSaver
+{
+    void Save(BinaryWriter writer);
+}
+
+public class LastData<T> where T: IDataSaver
 {
     // map location id to map valueType to sensor data
-    public readonly Dictionary<int, Dictionary<string, SensorDataItem>> Data;
+    public readonly Dictionary<int, Dictionary<string, T>> Data;
     
-    internal LastSensorData(Dictionary<int, Dictionary<string, SensorDataItem>> data)
+    internal LastData(Dictionary<int, Dictionary<string, T>> data)
     {
         Data = data;
     }
@@ -294,30 +454,32 @@ public sealed class LastSensorData
         }
     }
 
-    public static LastSensorData ParseResponse(MemoryStream response)
+    protected static T2 ParseResponse<T2>(MemoryStream response, Func<BinaryReader, T> creator,
+        Func<Dictionary<int, Dictionary<string, T>>, T2> creator2)
     {
         using var reader = new BinaryReader(response);
-        return ParseResponse(reader);
+        return ParseResponse(reader, creator, creator2);
     }
 
-    public static LastSensorData ParseResponse(BinaryReader reader)
+    protected static T2 ParseResponse<T2>(BinaryReader reader, Func<BinaryReader, T> creator,
+        Func<Dictionary<int, Dictionary<string, T>>, T2> creator2)
     {
-        var result = new Dictionary<int, Dictionary<string, SensorDataItem>>();
+        var result = new Dictionary<int, Dictionary<string, T>>();
         var count = reader.ReadByte();
         while (count-- > 0)
         {
             var locationId = (int)reader.ReadByte();
             var length = reader.ReadByte();
-            var map = new Dictionary<string, SensorDataItem>();
+            var map = new Dictionary<string, T>();
             while (length-- > 0)
             {
                 var valueType = LoadFixedSizeString(reader, 4);
-                var lastData = SensorDataItem.ParseResponse(reader);
+                var lastData = creator(reader);
                 map[valueType] = lastData;
             }
             result[locationId] = map;
         }
-        return new LastSensorData(result);
+        return creator2(result);
     }
 }
 

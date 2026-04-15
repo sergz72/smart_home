@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text.Json;
 using NRedisStack;
@@ -51,7 +52,7 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
                 _sensorValueTypeMap[valueType] = [sensorId];
         }
     }
-    
+
     public override LastSensorData GetLastSensorData()
     {
         var db = _redisConnection.GetDatabase();
@@ -99,7 +100,56 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
 
     public override YearlySensorDataResult GetYearlySensorData()
     {
-        throw new NotImplementedException();
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        // year to location to valueType
+        var result = new Dictionary<int, Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>>();
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+        foreach (var kv in _sensorValueTypeMap)
+        {
+            foreach (var sensorId in kv.Value)
+            {
+                var minList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:min_y");
+                ProcessList(result, minList, sensorId, kv.Key, (aggregated, item) => aggregated with {Min = item});
+                var avgList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:avg_y");
+                ProcessList(result, avgList, sensorId, kv.Key, (aggregated, item) => aggregated with {Avg = item.Value});
+                var maxList = BuildSensorDataMap(ts, $"{sensorId}:{kv.Key}:max_y");
+                ProcessList(result, maxList, sensorId, kv.Key, (aggregated, item) => aggregated with {Max = item});
+            }
+        }
+        stopwatch.Stop();
+        ResponseTimeMs = stopwatch.Elapsed.TotalMilliseconds;
+        var dict = result.Select(kv => (kv.Key, new LastAggregatedSensorData(kv.Value))).ToDictionary();
+        return new YearlySensorDataResult(new SortedDictionary<int, LastAggregatedSensorData>(dict));
+    }
+
+    private void ProcessList(Dictionary<int, Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>> result, 
+        List<SensorDataItem> list, uint sensorId, string valueType,
+        Func<AggregatedSensorDataItem, SensorDataItem, AggregatedSensorDataItem> transformer)
+    {
+        var locationId = Sensors[sensorId].LocationId;
+        foreach (var value in list)
+        {
+            var year = GetDateTime(value.Timestamp).Year;
+            if (!result.TryGetValue(year, out var yearData))
+            {
+                yearData = new Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>();
+                result[year] = yearData;
+            }
+
+            if (!yearData.TryGetValue(locationId, out var locationData))
+            {
+                locationData = new Dictionary<string, AggregatedSensorDataItem>();
+                yearData[locationId] = locationData;
+            }
+
+            if (!locationData.TryGetValue(valueType, out var valueTypeData))
+                valueTypeData = new AggregatedSensorDataItem(value, value.Value, value);
+            else
+                valueTypeData = transformer(valueTypeData, value);
+            locationData[valueType] = valueTypeData;
+        }
     }
 
     private SensorDataResult GetAggregatedSensorData(HashSet<uint> sensors, DateRange dateRange)
@@ -150,6 +200,14 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
             .ToList();
     }
 
+    private static List<SensorDataItem> BuildSensorDataMap(TimeSeriesCommands ts, string seriesName)
+    {
+        var range = ts.Range(seriesName, "-", "+");
+        return range
+            .Select(item => new SensorDataItem((long)item.Time.Value, item.Val))
+            .ToList();
+    }
+    
     private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange)
     {
         var db = _redisConnection.GetDatabase();

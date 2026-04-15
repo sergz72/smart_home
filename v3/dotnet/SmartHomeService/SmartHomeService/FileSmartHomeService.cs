@@ -196,20 +196,20 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
             .ToList();
     }
 
-    internal static IEnumerable<AggregatedSensorDataItem> ToSensorData(int date, SensorDataFileItem<AggregatedValues> item, int locationId, TimeZoneInfo timeZone)
+    internal static IEnumerable<AggregatedFileSensorDataItem> ToSensorData(int date, SensorDataFileItem<AggregatedValues> item, int locationId, TimeZoneInfo timeZone)
     {
         var idx = 0;
         foreach (var vt in item.ValueTypes)
         {
-            yield return (new AggregatedSensorDataItem(ValueTypes.ReverseMap[vt], locationId,
+            yield return (new AggregatedFileSensorDataItem(ValueTypes.ReverseMap[vt], locationId,
                 FileSmartHomeService.BuildTimestamp(date, 0, timeZone), item.Values[idx++]));
         }
     }
 }
 
-internal record AggregatedSensorDataItem(string ValueType, int LocationId, SensorDataItem Min, SensorDataItem Avg, SensorDataItem Max)
+internal record AggregatedFileSensorDataItem(string ValueType, int LocationId, SensorDataItem Min, SensorDataItem Avg, SensorDataItem Max)
 {
-    public AggregatedSensorDataItem(string valueType, int locationId, long timestamp, AggregatedValues itemValue):
+    public AggregatedFileSensorDataItem(string valueType, int locationId, long timestamp, AggregatedValues itemValue):
         this(valueType, locationId, new SensorDataItem(timestamp + itemValue.Min.Time, (double)itemValue.Min.Value / 100),
             new SensorDataItem(timestamp, (double)itemValue.Avg / 100), 
             new SensorDataItem(timestamp + itemValue.Max.Time, (double)itemValue.Max.Value / 100))
@@ -443,7 +443,7 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
         return result;
     }
 
-    private static List<SensorData> ToItemList(IEnumerable<IGrouping<int, AggregatedSensorDataItem>> items, int maxPoints)
+    private static List<SensorData> ToItemList(IEnumerable<IGrouping<int, AggregatedFileSensorDataItem>> items, int maxPoints)
     {
         return items.Select(item => new SensorData(item.Key, null, 
             new AggregatedSensorData(

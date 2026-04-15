@@ -44,11 +44,6 @@ public abstract class BaseSmartHomeService: ISmartHomeService
             .ConvertTimeFromUtc(DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime, TimeZone);
     }
     
-    public DateTime BuildDate(int date)
-    {
-        return TimeZoneInfo.ConvertTime(new DateTime(date / 10000, (date / 100) % 100, date % 100), TimeZone);
-    }
-
     public abstract LastSensorData GetLastSensorData();
 
     public abstract SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated);
@@ -89,8 +84,10 @@ public abstract class BaseSmartHomeService: ISmartHomeService
     {
         var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
         var now = TimeZoneInfo.ConvertTime(DateTime.Now, TimeZone);
-        var startDateTime = TimeZoneInfo.ConvertTimeToUtc(query.StartDate ?? query.StartDateOffset!.CalculateDate(now), TimeZone);
-        var endDateTime = TimeZoneInfo.ConvertTimeToUtc(query.Period?.CalculateDate(startDateTime) ?? now, TimeZone);
+        var startDateTime = query.StartDate == null
+            ? query.StartDateOffset!.CalculateDate(now)
+            : TimeZoneInfo.ConvertTime(new DateTime((DateOnly)query.StartDate, TimeOnly.MinValue), TimeZone);
+        var endDateTime = query.Period?.CalculateDate(startDateTime) ?? now;
         return new BaseDateRange(maxPoints, startDateTime, endDateTime);
     }
 
