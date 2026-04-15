@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::io::{Error, ErrorKind};
 use std::time::SystemTime;
-use chrono::{Datelike, DurationRound, MappedLocalTime, TimeDelta, TimeZone, Timelike};
+use chrono::{Datelike, DurationRound, MappedLocalTime, TimeDelta, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use postgres::NoTls;
 
@@ -43,10 +43,6 @@ fn main() -> Result<(), Error> {
         }
         i += 1;
     }
-    if postgres_db_name.is_empty() {
-        usage();
-        return Err(Error::new(ErrorKind::InvalidInput, "Missing postgres_db_name"));
-    }
     if timezone.is_empty() {
         usage();
         return Err(Error::new(ErrorKind::InvalidInput, "Missing timezone"));
@@ -67,11 +63,12 @@ fn main() -> Result<(), Error> {
             usage();
             return Err(Error::new(ErrorKind::InvalidInput, "Missing postgres_db_name"));
         }
-        Some(postgres::Client::connect(
+        let c = Some(postgres::Client::connect(
             &format!("postgresql://postgres@{}/{}", postgres_host_name, postgres_db_name), NoTls)
-            .map_err(|e| Error::new(ErrorKind::Other, e))?)
+            .map_err(|e| Error::new(ErrorKind::Other, e))?);
+        println!("Connected to postgres...");
+        c
     } else {None};
-    println!("Connected to postgres...");
     let redis_client = redis::Client::open(format!("redis://{}", redis_host_name))
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     let mut redis_connection = redis_client.get_connection()
@@ -319,7 +316,13 @@ fn run_daily_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, fro
         .arg("type=sensor")
         .query(redis_connection)
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    let from_timestamp = to_millis(tz, from, 0).unwrap();
+    let from_timestamp = if from > 0 {
+        to_millis(tz, from, 0).unwrap()
+    } else {
+        let now = Utc::now();
+        let date = tz.with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0).unwrap();
+        (date - TimeDelta::days(-from as i64)).timestamp_millis()
+    };
     println!("from_timestamp={}", from_timestamp);
     for value in results {
         println!("Building daily aggregations for sensor {}", value);
@@ -407,12 +410,15 @@ fn group_by<F>(data: Vec<(i64, f64)>, group_builder: F) -> HashMap<i64, Vec<(i64
     result
 }
 
-fn run_yearly_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, from_year: i32, dry_run: bool) -> Result<(), Error> {
+fn run_yearly_aggregations(tz: &Tz, redis_connection: &mut redis::Connection, mut from_year: i32, dry_run: bool) -> Result<(), Error> {
     let now = SystemTime::now();
     let results: Vec<String> = redis::cmd("TS.QUERYINDEX")
         .arg("type=sensor")
         .query(redis_connection)
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    if from_year < 0 {
+        from_year = (Utc::now() - TimeDelta::days(-from_year as i64)).year();
+    }
     let from_timestamp = to_millis(tz, from_year * 10000 + 0101, 0).unwrap();
     println!("from_timestamp={}", from_timestamp);
     for value in results {
