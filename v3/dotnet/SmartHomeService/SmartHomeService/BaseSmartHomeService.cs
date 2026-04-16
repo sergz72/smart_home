@@ -71,6 +71,14 @@ public abstract class BaseSmartHomeService: ISmartHomeService
         Locations = JsonSerializer.Deserialize<Dictionary<int, Location>>(locationsStream)
                      ?? throw new Exception("Invalid locations file");
     }
+
+    protected BaseSmartHomeService(string timeZone)
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+        TimeZoneName = timeZone;
+        Sensors = [];
+        Locations = [];
+    }
     
     protected HashSet<uint> GetSensors(string dataType)
     {
@@ -80,16 +88,16 @@ public abstract class BaseSmartHomeService: ISmartHomeService
             .ToHashSet();
     }
     
-    protected BaseDateRange BuildBaseDateRange(SmartHomeQuery query)
+    public BaseDateRange BuildBaseDateRange(SmartHomeQuery query)
     {
         var maxPoints = query.MaxPoints <= 0 ? 2000 : query.MaxPoints;
-        var now = TimeZoneInfo.ConvertTime(DateTime.Now, TimeZone);
+        var now = DateTime.UtcNow;
         var startDateTime = query.StartDate == null
             ? query.StartDateOffset!.CalculateDate(now)
-            : TimeZoneInfo.ConvertTime(new DateTime((DateOnly)query.StartDate, TimeOnly.MinValue), TimeZone);
+            : TimeZoneInfo.ConvertTimeToUtc(new DateTime((DateOnly)query.StartDate, TimeOnly.MinValue), TimeZone);
         var endDateTime = query.Period?.CalculateDate(startDateTime) ?? now;
         return new BaseDateRange(maxPoints, startDateTime, endDateTime);
     }
 
-    protected record BaseDateRange(int MaxPoints, DateTime StartDateTime, DateTime EndDateTime);
+    public record BaseDateRange(int MaxPoints, DateTime StartDateTime, DateTime EndDateTime);
 }

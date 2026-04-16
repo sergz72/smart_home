@@ -365,6 +365,12 @@ public sealed class LastSensorData: LastData<SensorDataItem>
         return ParseResponse(reader, SensorDataItem.ParseResponse,
             d => new LastSensorData(d));
     }
+    
+    public static LastSensorData ParseResponse(MemoryStream stream)
+    {
+        return ParseResponse(stream, SensorDataItem.ParseResponse,
+            d => new LastSensorData(d));
+    }
 }
 
 public sealed class LastAggregatedSensorData: LastData<AggregatedSensorDataItem>
@@ -442,6 +448,7 @@ public class LastData<T> where T: IDataSaver
 
     public void ToBinary(BinaryWriter writer)
     {
+        writer.Write((byte)Data.Count);
         foreach (var (locationId, lastDataByLocation) in Data)
         {
             writer.Write((byte)locationId);

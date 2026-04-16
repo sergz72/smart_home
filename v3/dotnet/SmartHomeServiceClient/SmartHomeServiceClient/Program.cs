@@ -20,7 +20,7 @@ var client = new SmartHomeClient(new NetworkServiceConfig(
 
 try
 {
-   ResponseStatistics statistics = new ResponseStatistics();
+   var statistics = new ResponseStatistics();
 
     switch (query)
     {
@@ -59,7 +59,7 @@ return;
     return (parts[0], parts[1]);
 }
 
-(DateTime?, DateOffset?) ParseDate(string dateStr)
+(DateOnly?, DateOffset?) ParseDate(string dateStr)
 {
     if (dateStr.StartsWith('-'))
     {
@@ -70,9 +70,9 @@ return;
     return (BuildDate(date), null);
 }
 
-DateTime BuildDate(int date)
+DateOnly BuildDate(int date)
 {
-    return new DateTime(date / 10000, (date / 100) % 100, date % 100);
+    return new DateOnly(date / 10000, (date / 100) % 100, date % 100);
 }
 
 DateOffset? ParsePeriod(string title, string? periodStr)
@@ -144,9 +144,12 @@ void PrintSensorDataResponse(SensorDataResult response)
         foreach (var sdata in data)
         {
             if (sdata.Raw != null)
-                Console.WriteLine("Location {0}: raw data count {1}", sdata.LocationId, sdata.Raw.Count);
+                Console.WriteLine("Location {0}: raw data count {1} minDate {2} maxDate {3}",
+                    sdata.LocationId, sdata.Raw.Count, sdata.Raw[0].Timestamp, sdata.Raw[^1].Timestamp);
             else
-                Console.WriteLine("Location {0}: aggregated data count {1}", sdata.LocationId, sdata.Aggregated!.Avg.Count);
+                Console.WriteLine("Location {0}: aggregated data count {1} minDate {2} maxDate {3}",
+                    sdata.LocationId, sdata.Aggregated!.Avg.Count, sdata.Aggregated.Avg[0].Timestamp,
+                    sdata.Aggregated.Avg[^1].Timestamp);
         }
     }
 }
