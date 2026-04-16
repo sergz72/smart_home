@@ -140,7 +140,8 @@ data class LastSensorDataResponse(val response: Map<Int, Map<String, SensorDataI
             val buffer = ByteBuffer.wrap(response.toByteArray()).order(ByteOrder.LITTLE_ENDIAN)
             val result = mutableMapOf<Int, Map<String, SensorDataItem>>()
             val valueTypeArray = ByteArray(4)
-            while (buffer.hasRemaining())
+            var count = buffer.get()
+            while (count-- > 0)
             {
                 val locationId = buffer.get()
                 var length = buffer.get()
