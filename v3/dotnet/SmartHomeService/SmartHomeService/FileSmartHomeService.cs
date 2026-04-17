@@ -205,6 +205,35 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
                 FileSmartHomeService.BuildTimestamp(date, 0, timeZone), item.Values[idx++]));
         }
     }
+
+    public LastAggregatedSensorData ToLastAggregatedSensorData(int year, ISmartHomeService service)
+    {
+        var result = Items
+            .GroupBy(i => service.GetLocationId(i.SensorId))
+            .Select(grp => (grp.Key, BuildValueTypeMap(year, service, grp)))
+            .ToDictionary();
+        return new LastAggregatedSensorData(result);
+    }
+
+    private static Dictionary<string, AggregatedSensorDataItem> BuildValueTypeMap(int year, ISmartHomeService service,
+        IGrouping<int, SensorDataFileItem<AggregatedValues>> grp)
+    {
+        var result = new Dictionary<string, AggregatedSensorDataItem>();
+        foreach (var item in grp)
+        {
+            var idx = 0;
+            foreach (var vt in item.ValueTypes)
+            {
+                if (vt == 0)
+                    break;
+                var v = item.Values[idx++];
+                result[ValueTypes.ReverseMap[vt]] = 
+                    new AggregatedSensorDataItem(v.Min.ToSensorDataItem(year, service), (double)v.Avg / 100, 
+                        v.Max.ToSensorDataItem(year, service));
+            }
+        }
+        return result;
+    }
 }
 
 internal record AggregatedFileSensorDataItem(string ValueType, int LocationId, SensorDataItem Min, SensorDataItem Avg, SensorDataItem Max)
@@ -222,6 +251,11 @@ public record struct AggregatedValue(uint Time, int Value)
     public override string ToString()
     {
         return SensorDataFileItem<int>.TimeToString(Time * 10) + "," + Value;
+    }
+
+    public SensorDataItem ToSensorDataItem(int year, ISmartHomeService service)
+    {
+        return new SensorDataItem(service.BuildTimestamp(year, (long)Time * 10), (double)Value / 100);
     }
 }
 
@@ -393,7 +427,15 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
 
     public override YearlySensorDataResult GetYearlySensorData()
     {
-        throw new NotImplementedException();
+        var result = new SortedDictionary<int, LastAggregatedSensorData>(Directory
+            .EnumerateFiles(_baseFolder, "*" + YearlyFileExtension)
+            .Select(name => (
+                int.Parse(Path.GetFileNameWithoutExtension(name)),
+                new AggregatedSensorEvents(File.ReadAllBytes(name)))
+            )
+            .Select(kv => (kv.Item1, kv.Item2.ToLastAggregatedSensorData(kv.Item1, this))) 
+            .ToDictionary());
+        return new YearlySensorDataResult(result);
     }
 
     private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange, IEnumerable<FileData> data)

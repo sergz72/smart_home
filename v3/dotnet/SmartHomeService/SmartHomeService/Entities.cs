@@ -230,6 +230,7 @@ public record Sensor(string Name, string DataType, int LocationId, int? DeviceId
 public interface ISmartHomeService
 {
     string GetLocationName(int locationId);
+    int GetLocationId(uint sensorId);
     bool IsExtLocation(int locationId);
     DateTime GetDateTime(long timestamp);
     LastSensorData GetLastSensorData();
@@ -239,6 +240,7 @@ public interface ISmartHomeService
     SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data);
     string GetValueType(string valueType);
     Locations GetLocations();
+    long BuildTimestamp(int year, long timeMs);
 }
 
 public static class Compressor

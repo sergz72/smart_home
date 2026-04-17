@@ -28,6 +28,11 @@ public abstract class BaseSmartHomeService: ISmartHomeService
         return Locations[locationId].Name;
     }
 
+    public int GetLocationId(uint sensorId)
+    {
+        return Sensors[sensorId].LocationId;
+    }
+    
     public bool IsExtLocation(int locationId)
     {
         return Locations[locationId].LocationType == "ext";
@@ -36,6 +41,13 @@ public abstract class BaseSmartHomeService: ISmartHomeService
     public Locations GetLocations()
     {
         return new Locations(Locations, TimeZoneName);
+    }
+
+    public long BuildTimestamp(int year, long timeMs)
+    {
+        var date = TimeZoneInfo.ConvertTimeToUtc(new DateTime(year, 1, 1, 0, 0, 0), TimeZone);
+        var timestamp = new DateTimeOffset(date).ToUnixTimeMilliseconds();
+        return timestamp + timeMs;
     }
 
     public DateTime GetDateTime(long timestamp)
