@@ -101,7 +101,7 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
         return 0;
     }
     
-    public override string ToString()
+    public string ToString(int? year)
     {
         var sb = new StringBuilder();
         sb.Append("EventTime=").Append(TimeToString(EventTimeMs));
@@ -111,7 +111,11 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
         {
             if (vt == 0)
                 break;
-            sb.Append(' ').Append(SmartHomeService.ValueTypes.ReverseMap[vt]).Append('=').Append(Values[idx++]);
+            var v = Values[idx++];
+            var vs = v is AggregatedValues av
+                ? av.ToString(year)
+                : v.ToString();
+            sb.Append(' ').Append(SmartHomeService.ValueTypes.ReverseMap[vt]).Append('=').Append(vs);
         }
         return sb.ToString();
     }
@@ -120,6 +124,14 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
     {
         var t = new TimeOnly(timeMs * TimeSpan.TicksPerMillisecond);
         return t.ToString("HH:mm:ss.fff");
+    }
+    
+    internal static string TimeToString(int? year, long timeMs)
+    {
+        if (year == null)
+            return TimeToString((uint)timeMs);
+        var dt = new DateTime((int)year, 1, 1);
+        return dt.AddMilliseconds(timeMs).ToString("dd MMM HH:mm:ss.fff");
     }
 }
 
@@ -257,6 +269,11 @@ public record struct AggregatedValue(uint Time, int Value)
         return SensorDataFileItem<int>.TimeToString(Time * 10) + "," + Value;
     }
 
+    public string ToString(int? year)
+    {
+        return SensorDataFileItem<int>.TimeToString(year, (long)Time * 10) + "," + Value;
+    }
+
     public SensorDataItem ToSensorDataItem(int year, ISmartHomeService service)
     {
         return new SensorDataItem(service.BuildTimestamp(year, (long)Time * 10), (double)Value / 100);
@@ -268,6 +285,11 @@ public record struct AggregatedValues(AggregatedValue Min, int Avg, AggregatedVa
     public override string ToString()
     {
         return "[min=" + Min + " avg=" + Avg + " max=" + Max + "]";
+    }
+    
+    public string ToString(int? year)
+    {
+        return "[min=" + Min.ToString(year) + " avg=" + Avg + " max=" + Max.ToString(year) + "]";
     }
 }
 

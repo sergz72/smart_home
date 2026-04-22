@@ -73,17 +73,24 @@ void Show(string fileName)
     if (fileName.EndsWith(FileSmartHomeService.AggregatedFileExtension))
     {
         var aData = new AggregatedSensorEvents(File.ReadAllBytes(fileName));
-        ShowData(aData);
+        ShowData(aData, null);
+        return;
+    }
+    if (fileName.EndsWith(FileSmartHomeService.YearlyFileExtension))
+    {
+        var aData = new AggregatedSensorEvents(File.ReadAllBytes(fileName));
+        var year = int.Parse(Path.GetFileNameWithoutExtension(fileName));
+        ShowData(aData, year);
         return;
     }
     var data = new RawSensorEvents(File.ReadAllBytes(fileName));
-    ShowData(data);
+    ShowData(data, null);
 }
 
-void ShowData<T>(SensorEvents<T> data)
+void ShowData<T>(SensorEvents<T> data, int? year)
 {
     foreach (var item in data.Items)
-        Console.WriteLine(item);
+        Console.WriteLine(item.ToString(year));
 }
 
 void Compare(string file1, string file2)
