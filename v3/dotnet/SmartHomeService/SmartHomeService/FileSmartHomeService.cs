@@ -167,6 +167,8 @@ public sealed class RawSensorEvents: SensorEvents<int>
         var idx = 0;
         foreach (var vt in item.ValueTypes)
         {
+            if (vt == 0)
+                break;
             yield return (ValueTypes.ReverseMap[vt], locationId,
                 new SensorDataItem(FileSmartHomeService.BuildTimestamp(date, item.EventTimeMs, timeZone), (double)item.Values[idx++] / 100));
         }
@@ -512,8 +514,10 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
     {
         var range = BuildBaseDateRange(query);
         var aggregated = (range.EndDateTime - range.StartDateTime).TotalMinutes / 5 > range.MaxPoints;
-        var (startDate, startTime) = SplitDate(range.StartDateTime);
-        var (endDate, endTime) = SplitDate(range.EndDateTime);
+        var startDateTime = TimeZoneInfo.ConvertTimeFromUtc(range.StartDateTime, TimeZone);
+        var endDateTime = TimeZoneInfo.ConvertTimeFromUtc(range.EndDateTime, TimeZone);
+        var (startDate, startTime) = SplitDate(startDateTime);
+        var (endDate, endTime) = SplitDate(endDateTime);
         return new DateRange(range.MaxPoints, aggregated, startDate, startTime, endDate, endTime);
     }
 
