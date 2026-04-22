@@ -8,7 +8,7 @@ using StackExchange.Redis;
 
 namespace SmartHomeService;
 
-public record RedisSmartHomeServiceConfiguration(string RedisConnectionString, string SensorsFile, string LocationsFile, string TimeZone);
+public record RedisSmartHomeServiceConfiguration(string RedisConnectionString = "", string SensorsFile = "", string LocationsFile = "", string TimeZone = "");
 
 public sealed class RedisSmartHomeService: BaseSmartHomeService
 {
@@ -21,7 +21,7 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
     private readonly Dictionary<string, HashSet<uint>> _sensorValueTypeMap;
     private readonly ConnectionMultiplexer _redisConnection;
 
-    private static RedisSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
+    internal static RedisSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
     {
         using var configurationStream = File.OpenRead(configFileName);
         return JsonSerializer.Deserialize<RedisSmartHomeServiceConfiguration>(configurationStream)

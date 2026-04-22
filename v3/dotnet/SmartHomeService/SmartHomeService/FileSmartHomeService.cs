@@ -317,8 +317,8 @@ internal class AggregatedValuesL
 }
 
 public record FileSmartHomeServiceConfiguration(
-    string BaseFolder, int KeyDivider, string SensorsFile, 
-    string LocationsFile, string TimeZone, string ValueTypesFile);
+    string BaseFolder = "", int KeyDivider = 0, string SensorsFile = "", 
+    string LocationsFile = "", string TimeZone = "", string ValueTypesFile = "");
 
 public sealed class FileSmartHomeService: BaseSmartHomeService
 {
@@ -331,7 +331,7 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
     private readonly string _baseFolder;
     private readonly int _keyDivider;
     
-    private static FileSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
+    internal static FileSmartHomeServiceConfiguration ReadConfiguration(string configFileName)
     {
         using var configurationStream = File.OpenRead(configFileName);
         return JsonSerializer.Deserialize<FileSmartHomeServiceConfiguration>(configurationStream)
@@ -369,6 +369,8 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
             {
                 var item = items.Items[i];
                 var sid = item.SensorId;
+                if (!sensors.Contains(sid))
+                    continue;
                 var locationId = Sensors[sid].LocationId;
                 var idx = 0;
                 foreach (var vt in item.ValueTypes)

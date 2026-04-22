@@ -9,7 +9,7 @@ namespace SmartHomeUI.Mac
         [STAThread]
         public static void Main(string[] args)
         {
-            var service = new RedisSmartHomeService(args[0]);
+            var service = ISmartHomeService.Create(args[0]);
             new Application(Eto.Platforms.Mac64).Run(new MainForm(service));
         }
     }

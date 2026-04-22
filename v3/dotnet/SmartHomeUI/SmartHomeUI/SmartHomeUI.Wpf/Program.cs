@@ -9,7 +9,7 @@ namespace SmartHomeUI.Wpf
         [STAThread]
         public static void Main(string[] args)
         {
-            var service = new RedisSmartHomeService(args[0]);
+            var service = ISmartHomeService.Create(args[0]);
             new Application(Eto.Platforms.Wpf).Run(new MainForm(service));
         }
     }

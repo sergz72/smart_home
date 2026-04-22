@@ -241,6 +241,17 @@ public interface ISmartHomeService
     string GetValueType(string valueType);
     Locations GetLocations();
     long BuildTimestamp(int year, long timeMs);
+
+    static ISmartHomeService Create(string configFileName)
+    {
+        var redisConfiguration = RedisSmartHomeService.ReadConfiguration(configFileName);
+        if (redisConfiguration.RedisConnectionString != "")
+            return new RedisSmartHomeService(redisConfiguration);
+        var fileConfiguration = FileSmartHomeService.ReadConfiguration(configFileName);
+        if (fileConfiguration.BaseFolder != "")
+            return new FileSmartHomeService(fileConfiguration);
+        throw new ArgumentException("Unknown configuration file format");
+    }
 }
 
 public static class Compressor
