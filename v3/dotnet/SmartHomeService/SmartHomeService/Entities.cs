@@ -35,6 +35,14 @@ public record AggregatedSensorDataItem(SensorDataItem Min, double Avg, SensorDat
         var max = SensorDataItem.ParseResponse(reader);
         return new AggregatedSensorDataItem(min, avg, max);
     }
+
+    public AggregatedSensorDataItem Add(AggregatedValues aggregatedValues, int year, ISmartHomeService service)
+    {
+        var min = aggregatedValues.Min.Value < Min.Value ? aggregatedValues.Min.ToSensorDataItem(year, service) : Min;
+        var avg = aggregatedValues.Avg + Avg;
+        var max = aggregatedValues.Max.Value > Max.Value ? aggregatedValues.Max.ToSensorDataItem(year, service) : Max;
+        return new AggregatedSensorDataItem(min, avg, max);
+    }
 }
 
 internal sealed class AggregatedSensorDataItemWithCounter: IDataSaver
@@ -51,7 +59,15 @@ internal sealed class AggregatedSensorDataItemWithCounter: IDataSaver
         _max = i.Max;
         _cnt = 1;
     }
-    
+
+    internal AggregatedSensorDataItemWithCounter(AggregatedValues v, int year, ISmartHomeService service)
+    {
+        _min = v.Min.ToSensorDataItem(year, service);
+        _sum = (double)v.Avg / 100;
+        _max = v.Max.ToSensorDataItem(year, service);
+        _cnt = 1;
+    }
+
     internal void Process(AggregatedSensorDataItem i)
     {
         if (i.Min.Value < _min.Value)
@@ -59,6 +75,16 @@ internal sealed class AggregatedSensorDataItemWithCounter: IDataSaver
         if (i.Max.Value > _max.Value)
             _max = i.Max;
         _sum += i.Avg;
+        _cnt++; 
+    }
+
+    public void Process(AggregatedValues v, int year, ISmartHomeService service)
+    {
+        if (v.Min.Value < _min.Value)
+            _min = v.Min.ToSensorDataItem(year, service);
+        if (v.Max.Value > _max.Value)
+            _max = v.Max.ToSensorDataItem(year, service);
+        _sum += (double)v.Avg / 100;
         _cnt++; 
     }
     

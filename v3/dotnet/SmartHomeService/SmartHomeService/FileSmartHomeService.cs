@@ -220,7 +220,7 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
     private static Dictionary<string, AggregatedSensorDataItem> BuildValueTypeMap(int year, ISmartHomeService service,
         IGrouping<int, SensorDataFileItem<AggregatedValues>> grp)
     {
-        var result = new Dictionary<string, AggregatedSensorDataItem>();
+        var result = new Dictionary<string, AggregatedSensorDataItemWithCounter>();
         foreach (var item in grp)
         {
             var idx = 0;
@@ -229,12 +229,14 @@ public sealed class AggregatedSensorEvents: SensorEvents<AggregatedValues>
                 if (vt == 0)
                     break;
                 var v = item.Values[idx++];
-                result[ValueTypes.ReverseMap[vt]] = 
-                    new AggregatedSensorDataItem(v.Min.ToSensorDataItem(year, service), (double)v.Avg / 100, 
-                        v.Max.ToSensorDataItem(year, service));
+                var vtype = ValueTypes.ReverseMap[vt];
+                if (result.TryGetValue(vtype, out var itemValue))
+                    itemValue.Process(v, year, service);
+                else
+                    result[vtype] = new AggregatedSensorDataItemWithCounter(v, year, service);
             }
         }
-        return result;
+        return result.Select(kv => (kv.Key, kv.Value.ToAggregatedSensorDataItem())).ToDictionary();
     }
 }
 
