@@ -114,7 +114,7 @@ public readonly record struct SensorDataFileItem<T>(uint TimeAndSensorId, ValueT
             var v = Values[idx++];
             var vs = v is AggregatedValues av
                 ? av.ToString(year)
-                : v.ToString();
+                : v!.ToString();
             sb.Append(' ').Append(SmartHomeService.ValueTypes.ReverseMap[vt]).Append('=').Append(vs);
         }
         return sb.ToString();
@@ -335,7 +335,7 @@ internal class AggregatedValuesL
     {
         if (_min.Value > values.Min.Value)
             _min = values.Min with { Time = values.Min.Time + offset };
-        else if (_max.Value < values.Max.Value)
+        if (_max.Value < values.Max.Value)
             _max = values.Max with { Time = values.Max.Time + offset };
         _sum += values.Avg;
         _cnt++;
