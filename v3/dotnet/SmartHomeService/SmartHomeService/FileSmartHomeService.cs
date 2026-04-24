@@ -503,7 +503,47 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
     
     public override void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun)
     {
-        throw new NotImplementedException();
+        if (dryRun)
+            logger.Info($"{messages.Count} messages will be inserted.");
+        var events = new Dictionary<int, RawSensorEvents>();
+        foreach (var msg in messages)
+        {
+            var (date, time) = SplitDate(msg.Dt.Dt);
+            if (!events.TryGetValue(date, out var rawEvents))
+            {
+                rawEvents = new RawSensorEvents();
+                events[date] = rawEvents;
+            }
+            var items = new List<ValueTypeValue<int>>();
+            if (dryRun)
+                logger.Info($"sensor_id={msg.SensorId} date={date} time={time}");
+            foreach (var message in msg.Messages)
+            {
+                var valueType = message.ValueType.PadRight(4);
+                var valueTypeId = ValueTypes.Map[valueType];
+                var value = message.Value;
+                if (dryRun) {
+                    logger.Info($"value_type=\"{valueType}\" value_type_id={valueTypeId} value={value}");
+                    continue;
+                }
+                items.Add(new ValueTypeValue<int>((byte)valueTypeId, value));
+            }
+            rawEvents.Items.Add(new SensorDataFileItem<int>((time << 8) | msg.SensorId, items));
+        }
+        foreach (var (date, rawEvents) in events)
+        {
+            var data = rawEvents.ToBinary();
+            var path = BuildFileName(date, _baseFolder, _keyDivider, RawFileExtension);
+            if (dryRun)
+                logger.Info($"date={date} message count={rawEvents.Items.Count} file name={path}");
+            else
+            {
+                var folder = Path.GetDirectoryName(path);
+                if (folder != null && !Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+                File.AppendAllBytes(path, data);
+            }
+        }
     }
     
     private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange, IEnumerable<FileData> data)

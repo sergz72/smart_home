@@ -285,7 +285,17 @@ public interface ISmartHomeService
     }
 }
 
-public record MessageDateTime(DateTime Dt, long? Timestamp);
+public record MessageDateTime(DateTime Dt, long? Timestamp)
+{
+    public long ToTimestampMillis(TimeZoneInfo timeZone)
+    {
+        if (Timestamp != null)
+            return (long)Timestamp;
+        var dt = TimeZoneInfo.ConvertTimeToUtc(Dt, timeZone);
+        return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
+    }
+}
+
 public record SensorMessage(string ValueType, int Value);
 public record SensorMessages(List<SensorMessage> Messages, uint SensorId, MessageDateTime Dt);
 

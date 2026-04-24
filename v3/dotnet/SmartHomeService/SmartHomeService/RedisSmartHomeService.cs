@@ -145,7 +145,25 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
 
     public override void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun)
     {
-        throw new NotImplementedException();
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        if (dryRun)
+            logger.Info($"{messages.Count} messages will be inserted.");
+        foreach (var msg in messages)
+        {
+            var timestamp = msg.Dt.ToTimestampMillis(TimeZone);
+            foreach (var message in msg.Messages)
+            {
+                var valueType = message.ValueType.PadRight(4);
+                var seriesName = msg.SensorId + ":" + valueType;
+                var value = (double)message.Value / 100;
+                if (dryRun) {
+                    logger.Info($"TS.ADD \"{seriesName}\" {timestamp} {value}");
+                    continue;
+                }
+                ts.Add(seriesName, new TsAddParamsBuilder().AddTimestamp(timestamp).AddValue(value).build());
+            }
+        }
     }
     
     private void ProcessList(Dictionary<int, Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>> result, 
