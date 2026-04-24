@@ -466,6 +466,46 @@ public sealed class FileSmartHomeService: BaseSmartHomeService
         return new YearlySensorDataResult(result);
     }
 
+    public override Dictionary<string, SensorTimestamp> GetSensorTimestamps()
+    {
+        var fromDate = DateTime.Now.AddDays(-7);
+        var from = fromDate.Year * 10000 + fromDate.Month * 100 + fromDate.Day;
+        
+        var data = new Dictionary<string, SensorTimestamp>();
+        var sensors = Sensors
+            .Where(s => s.Value.Enabled)
+            .Select(s => s.Key)
+            .ToHashSet();
+        foreach (var fileData in ReadFiles(_baseFolder, _keyDivider, from, null, RawFileExtension, true))
+        {
+            var items = new RawSensorEvents(fileData.Data);
+            if (items.Items.Count == 0)
+                continue;
+            for (var i = items.Items.Count - 1; i >= 0; i--)
+            {
+                var item = items.Items[i];
+                var sid = item.SensorId;
+                if (!sensors.Contains(sid))
+                    continue;
+                var sensorName = Sensors[sid].Name;
+                if (data.ContainsKey(sensorName))
+                    continue;
+                data[sensorName] = new SensorTimestamp(sid, BuildTimestamp(fileData.Key, item.EventTimeMs, TimeZone));
+                sensors.Remove(sid);
+                if (sensors.Count == 0)
+                    break;
+            }
+            if (sensors.Count == 0)
+                break;
+        }
+        return data;
+    }
+    
+    public override void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun)
+    {
+        throw new NotImplementedException();
+    }
+    
     private SensorDataResult GetRawSensorData(HashSet<uint> sensors, DateRange dateRange, IEnumerable<FileData> data)
     {
         var d = data.SelectMany(dt => new RawSensorEvents(dt.Data).Items.Select(item => (dt.Key, item)))

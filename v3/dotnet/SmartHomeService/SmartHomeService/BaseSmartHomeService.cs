@@ -62,6 +62,15 @@ public abstract class BaseSmartHomeService: ISmartHomeService
 
     public abstract YearlySensorDataResult GetYearlySensorData();
     
+    public abstract Dictionary<string, SensorTimestamp> GetSensorTimestamps();
+    
+    public abstract void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun);
+
+    public MessageDateTime GetCurrentDateTime()
+    {
+        throw new NotImplementedException();
+    }
+    
     public SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data)
     {
         return new SensorDataItemWithDate(GetDateTime(data.Timestamp), data.Value);

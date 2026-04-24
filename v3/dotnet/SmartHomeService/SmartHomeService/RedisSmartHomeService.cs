@@ -124,6 +124,30 @@ public sealed class RedisSmartHomeService: BaseSmartHomeService
         return new YearlySensorDataResult(new SortedDictionary<int, LastAggregatedSensorData>(dict));
     }
 
+    public override Dictionary<string, SensorTimestamp> GetSensorTimestamps()
+    {
+        var db = _redisConnection.GetDatabase();
+        var ts = db.TS();
+        var result = new Dictionary<string, SensorTimestamp>();
+        foreach (var v in ts.MGet(["type=sensor"], true))
+        {
+            var parts = v.key.Split(':');
+            var sensorId = uint.Parse(parts[0]);
+            var sensorName = Sensors[sensorId].Name;
+            if (!result.ContainsKey(sensorName))
+            {
+                var timestamp = (long)v.value.Time.Value;
+                result[sensorName] = new SensorTimestamp(sensorId, timestamp);
+            }
+        }
+        return result;
+    }
+
+    public override void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun)
+    {
+        throw new NotImplementedException();
+    }
+    
     private void ProcessList(Dictionary<int, Dictionary<int, Dictionary<string, AggregatedSensorDataItem>>> result, 
         List<SensorDataItem> list, uint sensorId, string valueType,
         Func<AggregatedSensorDataItem, SensorDataItem, AggregatedSensorDataItem> transformer)

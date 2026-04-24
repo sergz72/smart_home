@@ -253,6 +253,8 @@ public record Location(string Name, string LocationType)
 public record Sensor(string Name, string DataType, int LocationId, int? DeviceId,
     Dictionary<int, string> DeviceSensors, Dictionary<string, double> Offsets, bool Enabled);
 
+public record SensorTimestamp(uint Id, long Timestamp);
+
 public interface ISmartHomeService
 {
     string GetLocationName(int locationId);
@@ -260,6 +262,7 @@ public interface ISmartHomeService
     bool IsExtLocation(int locationId);
     DateTime GetDateTime(long timestamp);
     LastSensorData GetLastSensorData();
+    Dictionary<string, SensorTimestamp> GetSensorTimestamps();
     SensorDataResult GetSensorData(SmartHomeQuery sensorDataQuery, out bool aggregated);
     YearlySensorDataResult GetYearlySensorData();
     double ResponseTimeMs { get; }
@@ -267,6 +270,8 @@ public interface ISmartHomeService
     string GetValueType(string valueType);
     Locations GetLocations();
     long BuildTimestamp(int year, long timeMs);
+    void InsertMessages(List<SensorMessages> messages, Logger logger, bool dryRun);
+    MessageDateTime GetCurrentDateTime();
 
     static ISmartHomeService Create(string configFileName)
     {
@@ -279,6 +284,10 @@ public interface ISmartHomeService
         throw new ArgumentException("Unknown configuration file format");
     }
 }
+
+public record MessageDateTime(DateTime Dt, long? Timestamp);
+public record SensorMessage(string ValueType, int Value);
+public record SensorMessages(List<SensorMessage> Messages, uint SensorId, MessageDateTime Dt);
 
 public static class Compressor
 {
@@ -608,5 +617,19 @@ public sealed class Locations
         }
 
         return new Locations(locations, timeZone);
+    }
+}
+
+public record ServiceConfiguration(
+    RedisSmartHomeServiceConfiguration? RedisServiceConfiguration,
+    FileSmartHomeServiceConfiguration? FileServiceConfiguration)
+{
+    public ISmartHomeService BuildService()
+    {
+        if (RedisServiceConfiguration != null && RedisServiceConfiguration.RedisConnectionString.Length != 0)
+            return new RedisSmartHomeService(RedisServiceConfiguration);
+        if (FileServiceConfiguration != null && FileServiceConfiguration.BaseFolder.Length != 0)
+            return new FileSmartHomeService(FileServiceConfiguration);
+        throw new InvalidDataException("No valid Smart Home service configuration provided");
     }
 }

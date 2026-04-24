@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartHomeFetcher", "SmartHomeFetcher\SmartHomeFetcher.csproj", "{7D288C7D-16A2-402E-913D-FFA95A968E68}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartHomeService", "..\SmartHomeService\SmartHomeService\SmartHomeService.csproj", "{06336916-8A7D-482D-B29C-4472CF5CDF7D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7D288C7D-16A2-402E-913D-FFA95A968E68}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D288C7D-16A2-402E-913D-FFA95A968E68}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D288C7D-16A2-402E-913D-FFA95A968E68}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D288C7D-16A2-402E-913D-FFA95A968E68}.Release|Any CPU.Build.0 = Release|Any CPU
+		{06336916-8A7D-482D-B29C-4472CF5CDF7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{06336916-8A7D-482D-B29C-4472CF5CDF7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{06336916-8A7D-482D-B29C-4472CF5CDF7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{06336916-8A7D-482D-B29C-4472CF5CDF7D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
