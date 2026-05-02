@@ -49,6 +49,8 @@ void app_main(void) {
     else
       ESP_LOGE(LOG_TAG, "Message decrypt failed with code %d", rc);
   });
+  uint64_t mac_address = _ieee802154->deviceMacAddress();
+  ESP_LOGI(LOG_TAG, "This device IEEE802.15.4 MAC: 0x%llx", mac_address);
 
   ESP_ERROR_CHECK(common_nvs_init());
 
@@ -63,8 +65,6 @@ void app_main(void) {
   set_led_yellow();
 
   _ieee802154->initialize(false);
-  uint64_t mac_address = _ieee802154->deviceMacAddress();
-  ESP_LOGI(LOG_TAG, "This device IEEE802.15.4 MAC: 0x%llx", mac_address);
 
   while (true) {
     vTaskDelay(500 / portTICK_PERIOD_MS);

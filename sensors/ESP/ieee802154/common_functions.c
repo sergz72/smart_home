@@ -121,6 +121,11 @@ esp_err_t decrypt_payload(const uint64_t source_mac, uint8_t *payload, unsigned 
   return ESP_OK;
 }
 
+void increment_packet_counter(void)
+{
+  packet_counter++;
+}
+
 esp_err_t encrypt_payload(const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size)
 {
   *output_size = payload_size + 16 + 32;
@@ -138,6 +143,5 @@ esp_err_t encrypt_payload(const uint8_t *payload, const unsigned int payload_siz
   if (psa_mac_compute(psa_key, PSA_ALG_HMAC(PSA_ALG_SHA_256), payload, payload_size, o + payload_size + 16, 32, &hmac_length) != PSA_SUCCESS)
     return ESP_ERR_INVALID_STATE;
   *output = o;
-  packet_counter++;
   return ESP_OK;
 }

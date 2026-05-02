@@ -31,7 +31,10 @@ void transmitTask(void *pvParameters) {
       continue;
     }
     if (_ieee802154->transmit(main_config.host_mac_address, output, output_size))
+    {
+      increment_packet_counter();
       ESP_LOGI(LOG_TAG, "Transmit OK");
+    }
     else
       ESP_LOGE(LOG_TAG, "Transmit error");
     vTaskDelay(2000 / portTICK_PERIOD_MS);

@@ -8,6 +8,7 @@
 #define SERVER_ADDRESS_LENGTH 64
 #define AES_KEY_LENGTH 32
 #define DEVICE_MAPPINGS_SIZE 16
+#define MAIN_CONFIG_MAGIC 0x33
 
 typedef struct {
   char address[SERVER_ADDRESS_LENGTH];
@@ -47,6 +48,7 @@ esp_err_t common_nvs_init(void);
 esp_err_t crypto_init(void);
 esp_err_t decrypt_payload(uint64_t source_mac, uint8_t *payload, unsigned int payload_size, uint8_t **output, unsigned int *output_size, uint32_t *device_id);
 esp_err_t encrypt_payload(const uint8_t *payload, unsigned int payload_size, uint8_t **output, unsigned int *output_size);
+void increment_packet_counter(void);
 
 #ifdef __cplusplus
 }
