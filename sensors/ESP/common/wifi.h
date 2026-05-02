@@ -12,7 +12,15 @@
 
 extern wifi_config_t wifi_config;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int wifi_connect(void);
 void wifi_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //TEMP_HUMI_PRES_SENSOR_WIFI_H

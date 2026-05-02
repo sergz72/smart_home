@@ -23,6 +23,7 @@
 
 static const char *TAG = "env";
 
+#ifdef PIN_TSL2591_INT
 static const tsl2591_config tsl_config = {
   .integration_time_ms = 600,
   .als_interrupt_enable = 0,
@@ -32,9 +33,14 @@ static const tsl2591_config tsl_config = {
   .persistence_filter = AnyOutOfRange,
   .sleep_after_interrupt = 0,
 };
+#endif
 
 volatile static int currentTime, prevLevel;
+#ifdef USE_SCD4X
+scd4x_result result_scd4x;
+#else
 scd30_result result_scd30;
+#endif
 
 int16_t temp_val = 2510;
 uint16_t humi_val = 4020;
@@ -58,6 +64,7 @@ void init_env(void)
     while (1){}
   }
 
+#ifdef PIN_MISO
   rc = spi_master_init();
   if (rc != ESP_OK)
   {
@@ -65,6 +72,7 @@ void init_env(void)
     set_led_red();
     while (1){}
   }
+#endif
 
 #ifdef USE_CC1101
   if (cc1101Init())
@@ -75,7 +83,10 @@ void init_env(void)
   }
 #endif
 
+#ifndef USE_SCD4X
   scd30_init_sensor(60);
+#endif
+
 #ifdef USE_BH1750
   if (bh1750_set_measurement_time(254))
   {
@@ -190,9 +201,15 @@ static int measure_luminocity(void)
 
 int get_env(void)
 {
-  int rc = measure_luminocity();
+  int rc;
+#if defined(PIN_TSL2591_INT) || defined(USE_VEML7700) || defined(USE_BH1750)
+  rc = measure_luminocity();
   if (rc)
     return rc;
+#endif
+
+#ifdef USE_SCD4X
+#else
   rc = scd30_measure(&result_scd30);
   if (rc)
   {
@@ -203,6 +220,7 @@ int get_env(void)
   temp_val = (int16_t)(result_scd30.temperature * 100);
   humi_val = (int16_t)(result_scd30.humidity * 100);
   co2_level = (uint32_t)(result_scd30.co2 * 100);
+#endif
 
 #ifdef USE_CC1101
   get_ext_env();
