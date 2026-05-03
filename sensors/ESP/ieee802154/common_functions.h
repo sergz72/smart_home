@@ -45,17 +45,14 @@ void common_init(void);
 esp_err_t read_main_configuration(void);
 void set_wifi_configuration_from_main_configuration(void);
 esp_err_t common_nvs_init(void);
-esp_err_t crypto_init(void);
-esp_err_t decrypt_payload(uint64_t source_mac, uint8_t *payload, unsigned int payload_size, uint8_t **output, unsigned int *output_size, uint32_t *device_id);
-esp_err_t encrypt_payload(const uint8_t *payload, unsigned int payload_size, uint8_t **output, unsigned int *output_size);
 void increment_packet_counter(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-extern main_config_t main_config;
-
 #endif
+
+extern main_config_t main_config;
 
 #endif

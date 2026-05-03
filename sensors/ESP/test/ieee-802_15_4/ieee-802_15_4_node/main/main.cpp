@@ -1,11 +1,11 @@
 #include <Ieee802154.h>
-#include <cstring>
 #include <driver/gpio.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "led.h"
 #include "common_functions.h"
+#include "psa_crypto.h"
 
 #define LOG_TAG "node"
 
@@ -23,7 +23,7 @@ void transmitTask(void *pvParameters) {
   while (true) {
     uint8_t *output;
     unsigned int output_size;
-    esp_err_t rc = encrypt_payload(reinterpret_cast<uint8_t*>(&message), sizeof(ApplicationMessage), &output, &output_size);
+    psa_status_t rc = encrypt_payload_aes(reinterpret_cast<uint8_t*>(&message), sizeof(ApplicationMessage), &output, &output_size);
     if (rc != ESP_OK)
     {
       ESP_LOGE(LOG_TAG, "Encryption error %d", rc);

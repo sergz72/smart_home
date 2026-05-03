@@ -7,6 +7,7 @@
 #include "led.h"
 #include "wifi.h"
 #include "common_functions.h"
+#include "psa_crypto.h"
 
 #define LOG_TAG "main"
 
@@ -39,11 +40,11 @@ void app_main(void) {
     uint8_t *output;
     unsigned int output_size;
     uint32_t device_id;
-    esp_err_t rc = decrypt_payload(message.source_address, message.payload, message.payload_size, &output, &output_size, &device_id);
-    if (rc == ESP_OK)
+    psa_status_t rc = decrypt_payload(message.source_address, message.payload, message.payload_size, &output, &output_size, &device_id);
+    if (rc == PSA_SUCCESS)
     {
       auto *app = reinterpret_cast<ApplicationMessage*>(output);
-      ESP_LOGI(LOG_TAG, "Device id %d temperature: %f", device_id, app->temperature);
+      ESP_LOGI(LOG_TAG, "Output size %d, device id %d temperature: %f", output_size, device_id, app->temperature);
       free(output);
     }
     else
