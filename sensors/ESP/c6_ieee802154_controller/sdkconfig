@@ -3310,7 +3310,8 @@ CONFIG_MBEDTLS_PKCS1_V21=y
 # Stream Cipher
 #
 # default:
-# CONFIG_MBEDTLS_CHACHA20_C is not set
+# CONFIG_MBEDTLS_CHACHAPOLY_C is not set
+CONFIG_MBEDTLS_CHACHA20_C=y
 # end of Stream Cipher
 # end of mbedTLS
 

@@ -20,4 +20,6 @@ psa_status_t encrypt_payload_chacha(int key_id, const uint8_t *payload, unsigned
 }
 #endif
 
+extern int psa_error_step;
+
 #endif

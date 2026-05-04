@@ -35,7 +35,7 @@ static void send_to_server(uint8_t *payload, unsigned int payload_size, const ui
   psa_status_t rc = encrypt_payload_aes(KEY_SERVER, payload, payload_size, &output, &output_size, static_cast<uint32_t>(now), device_id);
   if (rc != PSA_SUCCESS)
   {
-    ESP_LOGE(LOG_TAG, "Encrypt payload error %d", rc);
+    ESP_LOGE(LOG_TAG, "Encrypt payload error %d step %d", rc, psa_error_step);
     return;
   }
   send_udp(output, output_size);
@@ -61,7 +61,7 @@ static esp_err_t scd_get(scd4x_result *result)
   rc = scd4x_power_down();
   if (rc != ESP_OK)
     ESP_LOGE(LOG_TAG, "scd4x_power_down failed\n");
-  ESP_LOGI(LOG_TAG, "CO2: %d\ntemperature: %d\nhumidity: %d\n", result->co2, result->temperature, result->humidity);
+  ESP_LOGI(LOG_TAG, "CO2: %d temperature: %d humidity: %d", result->co2, result->temperature, result->humidity);
   return ESP_OK;
 }
 
@@ -80,7 +80,14 @@ void app_main(void)
       vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
-  crypto_init();
+  psa_status_t rc = crypto_init();
+  if (rc != PSA_SUCCESS)
+  {
+    ESP_LOGE(LOG_TAG, "crypto_init failed with error %d error step %d", rc, psa_error_step);
+    set_led_red();
+    while (true)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
 
   set_led_white();
 

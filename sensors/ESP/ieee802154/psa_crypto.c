@@ -12,6 +12,8 @@ static mbedtls_svc_key_id_t psa_key_aes[2];
 static mbedtls_svc_key_id_t psa_key_chacha[2];
 static const psa_key_attributes_t psa_attributes_init = PSA_KEY_ATTRIBUTES_INIT;
 
+int psa_error_step;
+
 static mac_mapping_t *search_mac_mapping(const uint64_t mac_address)
 {
   for (int i = 0; i < DEVICE_MAPPINGS_SIZE; i++)
@@ -25,10 +27,11 @@ static mac_mapping_t *search_mac_mapping(const uint64_t mac_address)
   return nullptr;
 }
 
-psa_status_t init_keys( const uint8_t* key, const int idx)
+psa_status_t init_keys( const uint8_t* key, const int idx, int error_step)
 {
   psa_key_attributes_t psa_attributes = PSA_KEY_ATTRIBUTES_INIT;
 
+  psa_error_step = error_step;
   psa_set_key_usage_flags(&psa_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
   psa_set_key_algorithm(&psa_attributes, PSA_ALG_CTR);
   psa_set_key_type(&psa_attributes, PSA_KEY_TYPE_AES);
@@ -37,6 +40,7 @@ psa_status_t init_keys( const uint8_t* key, const int idx)
   psa_status_t rc = psa_import_key(&psa_attributes, key, 32, &psa_key_aes[idx]);
   if (rc != PSA_SUCCESS)
     return rc;
+  psa_error_step++;
 
   memcpy(&psa_attributes, &psa_attributes_init, sizeof(psa_attributes));
   psa_set_key_usage_flags(&psa_attributes, PSA_KEY_USAGE_SIGN_HASH);
@@ -47,6 +51,7 @@ psa_status_t init_keys( const uint8_t* key, const int idx)
   rc = psa_import_key(&psa_attributes, key, 32, &psa_key_hmac[idx]);
   if (rc != PSA_SUCCESS)
     return rc;
+  psa_error_step++;
 
   memcpy(&psa_attributes, &psa_attributes_init, sizeof(psa_attributes));
   psa_set_key_usage_flags(&psa_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
@@ -62,10 +67,10 @@ psa_status_t crypto_init(void)
   if (rc != PSA_SUCCESS)
     return rc;
 
-  rc = init_keys(main_config.payload_encryption_key, 0);
+  rc = init_keys(main_config.payload_encryption_key, KEY_PAYLOAD, 0);
   if (rc != PSA_SUCCESS)
     return rc;
-  return init_keys(main_config.server_parameters.aes_key, 1);
+  return init_keys(main_config.server_parameters.aes_key, KEY_SERVER, 10);
 }
 
 static psa_status_t decrypt(const mbedtls_svc_key_id_t key, psa_algorithm_t alg, const int iv_size, uint8_t*encrypted,
@@ -160,6 +165,7 @@ static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm
   if (rc != PSA_SUCCESS)
   {
     free(o);
+    psa_error_step = 1;
     return rc;
   }
   size_t output_len;
@@ -167,18 +173,21 @@ static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm
   if (rc != PSA_SUCCESS)
   {
     free(o);
+    psa_error_step = 2;
     return rc;
   }
   rc = psa_cipher_update(&operation, payload, payload_size, o + iv_size + 1, payload_size, &output_len);
   if (rc != PSA_SUCCESS)
   {
     free(o);
+    psa_error_step = 3;
     return rc;
   }
   rc = psa_cipher_finish(&operation, o + iv_size + 1 + output_len, 0, &output_len);
   if (rc != PSA_SUCCESS)
   {
     free(o);
+    psa_error_step = 4;
     return rc;
   }
   size_t hmac_length;
@@ -187,6 +196,7 @@ static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm
   if (rc != PSA_SUCCESS)
   {
     free(o);
+    psa_error_step = 5;
     return rc;
   }
   *output = o;

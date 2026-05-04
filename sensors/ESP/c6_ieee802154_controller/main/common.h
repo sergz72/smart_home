@@ -1,7 +1,9 @@
 #ifndef _COMMON_H
 #define _COMMON_H
 
-#define DEVICE_ID 1
+#define DEVICE_ID 2
+
+#define TEST
 
 #ifdef TEST
 #define SEND_INTERVAL 10000 // 10 seconds
