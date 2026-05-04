@@ -10,7 +10,6 @@
 static mbedtls_svc_key_id_t psa_key_hmac[2];
 static mbedtls_svc_key_id_t psa_key_aes[2];
 static mbedtls_svc_key_id_t psa_key_chacha[2];
-static uint32_t packet_counter;
 static const psa_key_attributes_t psa_attributes_init = PSA_KEY_ATTRIBUTES_INIT;
 
 static mac_mapping_t *search_mac_mapping(const uint64_t mac_address)
@@ -59,8 +58,6 @@ psa_status_t init_keys( const uint8_t* key, const int idx)
 }
 psa_status_t crypto_init(void)
 {
-  packet_counter = 1;
-
   psa_status_t rc = psa_crypto_init();
   if (rc != PSA_SUCCESS)
     return rc;
@@ -148,13 +145,8 @@ psa_status_t decrypt_payload(const int key_id, const uint64_t source_mac, uint8_
   return PSA_SUCCESS;
 }
 
-void increment_packet_counter(void)
-{
-  packet_counter++;
-}
-
 static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm_t alg, const mbedtls_svc_key_id_t key, const int key_id, const int iv_size,
-  const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size)
+  const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size, const uint32_t packet_counter)
 {
   *output_size = payload_size + iv_size + 33;
   uint8_t *o = malloc(*output_size);
@@ -202,15 +194,15 @@ static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm
 }
 
 psa_status_t encrypt_payload_aes(const int key_id, const uint8_t *payload, const unsigned int payload_size, uint8_t **output,
-  unsigned int *output_size)
+  unsigned int *output_size, uint32_t packet_counter, uint8_t byte0)
 {
-  return encrypt_payload(ENCRYPTION_AES, PSA_ALG_CTR, psa_key_aes[key_id], key_id, 16,
-    payload, payload_size, output, output_size);
+  return encrypt_payload(byte0 != 0 ? byte0 : ENCRYPTION_AES, PSA_ALG_CTR, psa_key_aes[key_id], key_id, 16,
+    payload, payload_size, output, output_size, packet_counter);
 }
 
 psa_status_t encrypt_payload_chacha(const int key_id, const uint8_t *payload, const unsigned int payload_size,
-  uint8_t **output, unsigned int *output_size)
+  uint8_t **output, unsigned int *output_size, uint32_t packet_counter, uint8_t byte0)
 {
-  return encrypt_payload(ENCRYPTION_CHACHA, PSA_ALG_STREAM_CIPHER, psa_key_chacha[key_id], key_id,
-    12, payload, payload_size, output, output_size);
+  return encrypt_payload(byte0 != 0 ? byte0 : ENCRYPTION_CHACHA, PSA_ALG_STREAM_CIPHER, psa_key_chacha[key_id], key_id,
+    12, payload, payload_size, output, output_size, packet_counter);
 }

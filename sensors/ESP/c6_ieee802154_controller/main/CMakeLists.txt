@@ -1,0 +1,16 @@
+idf_component_register(
+        SRCS "main.cpp"
+             "../../ieee802154/common_functions.c"
+             "../../ieee802154/psa_crypto.c"
+             "../../ieee802154/hal.c"
+             "../../ieee802154/ieee802154_net_client.c"
+             "../../common/led.c"
+             "../../common/wifi.c"
+             "../../common/scd4x.c"
+             "../../common/crc8.c"
+             "../../common/ntp.c"
+        INCLUDE_DIRS
+             "."
+             "../../common"
+             "../../ieee802154"
+)

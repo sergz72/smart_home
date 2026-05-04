@@ -12,6 +12,10 @@ typedef struct
   unsigned int co2;
 } scd4x_result;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 esp_err_t scd4x_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen); // should be defined in hal.c
 esp_err_t scd4x_write(uint8_t *data, size_t len); // should be defined in hal.c
 esp_err_t scd4x_read(uint8_t *data, size_t len); // should be defined in hal.c
@@ -20,5 +24,9 @@ esp_err_t scd4x_read_measurement (scd4x_result *result);
 esp_err_t scd4x_start_measurement(void);
 esp_err_t scd4x_power_down(void);
 void scd4x_wake_up(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
