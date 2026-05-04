@@ -19,7 +19,7 @@ static int test_aes(int key_id)
 {
   unsigned int output_size;
   uint8_t *output;
-  psa_status_t rc = encrypt_payload_aes(key_id, message, sizeof(message), &output, &output_size);
+  psa_status_t rc = encrypt_payload_aes(key_id, message, sizeof(message), &output, &output_size, 1, 0);
   if (rc != PSA_SUCCESS)
   {
     printf("AES encryption error %d\n", rc);
@@ -46,7 +46,7 @@ static int test_chacha(int key_id)
 {
   unsigned int output_size;
   uint8_t *output;
-  psa_status_t rc = encrypt_payload_chacha(key_id, message, sizeof(message), &output, &output_size);
+  psa_status_t rc = encrypt_payload_chacha(key_id, message, sizeof(message), &output, &output_size, 1, 0);
   if (rc != PSA_SUCCESS)
   {
     printf("Chahca encryption error %d\n", rc);
