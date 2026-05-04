@@ -40,7 +40,7 @@ void app_main(void) {
     uint8_t *output;
     unsigned int output_size;
     uint32_t device_id;
-    psa_status_t rc = decrypt_payload(message.source_address, message.payload, message.payload_size, &output, &output_size, &device_id);
+    psa_status_t rc = decrypt_payload(KEY_PAYLOAD, message.source_address, message.payload, message.payload_size, &output, &output_size, &device_id);
     if (rc == PSA_SUCCESS)
     {
       auto *app = reinterpret_cast<ApplicationMessage*>(output);

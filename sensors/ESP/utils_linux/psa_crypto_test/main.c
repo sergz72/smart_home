@@ -15,11 +15,11 @@ void fill_random(void *buf, size_t len)
   getrandom(buf, len, 0);
 }
 
-static int test_aes(void)
+static int test_aes(int key_id)
 {
   unsigned int output_size;
   uint8_t *output;
-  psa_status_t rc = encrypt_payload_aes(message, sizeof(message), &output, &output_size);
+  psa_status_t rc = encrypt_payload_aes(key_id, message, sizeof(message), &output, &output_size);
   if (rc != PSA_SUCCESS)
   {
     printf("AES encryption error %d\n", rc);
@@ -28,7 +28,7 @@ static int test_aes(void)
   unsigned int decrypted_size;
   uint8_t *decrypted;
   uint32_t device_id;
-  rc = decrypt_payload(main_config.mac_mappings[0].device_mac_address, output, output_size, &decrypted, &decrypted_size, &device_id);
+  rc = decrypt_payload(key_id, main_config.mac_mappings[0].device_mac_address, output, output_size, &decrypted, &decrypted_size, &device_id);
   if (rc != PSA_SUCCESS)
   {
     printf("AES decryption error %d\n", rc);
@@ -42,11 +42,11 @@ static int test_aes(void)
   return 0;
 }
 
-static int test_chacha(void)
+static int test_chacha(int key_id)
 {
   unsigned int output_size;
   uint8_t *output;
-  psa_status_t rc = encrypt_payload_chacha(message, sizeof(message), &output, &output_size);
+  psa_status_t rc = encrypt_payload_chacha(key_id, message, sizeof(message), &output, &output_size);
   if (rc != PSA_SUCCESS)
   {
     printf("Chahca encryption error %d\n", rc);
@@ -55,7 +55,7 @@ static int test_chacha(void)
   unsigned int decrypted_size;
   uint8_t *decrypted;
   uint32_t device_id;
-  rc = decrypt_payload(main_config.mac_mappings[0].device_mac_address, output, output_size, &decrypted, &decrypted_size, &device_id);
+  rc = decrypt_payload(key_id, main_config.mac_mappings[0].device_mac_address, output, output_size, &decrypted, &decrypted_size, &device_id);
   if (rc != PSA_SUCCESS)
   {
     printf("Chacha decryption error %d\n", rc);
@@ -74,12 +74,22 @@ int main(void)
   crypto_init();
   getrandom(message, sizeof(message), 0);
   getrandom(main_config.payload_encryption_key, sizeof(main_config.payload_encryption_key), 0);
+  getrandom(main_config.server_parameters.aes_key, sizeof(main_config.server_parameters.aes_key), 0);
   uint64_t mac;
   getrandom(&mac, sizeof(mac), 0);
   main_config.mac_mappings[0].device_id = 1;
   main_config.mac_mappings[0].device_mac_address = mac;
-  int rc = test_aes();
+  puts("KEY_PAYLOAD:");
+  int rc = test_aes(KEY_PAYLOAD);
   if (rc)
     return rc;
-  return test_chacha();
+  rc = test_chacha(KEY_PAYLOAD);
+  if (rc)
+    return rc;
+
+  puts("KEY_SERVER:");
+  rc = test_aes(KEY_SERVER);
+  if (rc)
+    return rc;
+  return test_chacha(KEY_SERVER);
 }

@@ -71,7 +71,7 @@ void transmitTask(Ieee802154 *_ieee802154) {
     _ieee802154->initialize();
     uint8_t *output;
     unsigned int output_size;
-    psa_status_t rc = encrypt_payload_aes(reinterpret_cast<uint8_t*>(&message), sizeof(ApplicationMessage), &output, &output_size);
+    psa_status_t rc = encrypt_payload_aes(KEY_PAYLOAD, reinterpret_cast<uint8_t*>(&message), sizeof(ApplicationMessage), &output, &output_size);
     if (rc != ESP_OK)
     {
       ESP_LOGE(LOG_TAG, "Encryption error %d", rc);

@@ -19,6 +19,6 @@ esp_err_t scd4x_read(uint8_t *data, size_t len); // should be defined in hal.c
 esp_err_t scd4x_read_measurement (scd4x_result *result);
 esp_err_t scd4x_start_measurement(void);
 esp_err_t scd4x_power_down(void);
-esp_err_t scd4x_wake_up(void);
+void scd4x_wake_up(void);
 
 #endif

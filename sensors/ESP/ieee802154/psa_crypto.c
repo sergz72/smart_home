@@ -7,9 +7,9 @@
 #define ENCRYPTION_AES    0
 #define ENCRYPTION_CHACHA 1
 
-static mbedtls_svc_key_id_t psa_key_hmac;
-static mbedtls_svc_key_id_t psa_key_aes;
-static mbedtls_svc_key_id_t psa_key_chacha;
+static mbedtls_svc_key_id_t psa_key_hmac[2];
+static mbedtls_svc_key_id_t psa_key_aes[2];
+static mbedtls_svc_key_id_t psa_key_chacha[2];
 static uint32_t packet_counter;
 static const psa_key_attributes_t psa_attributes_init = PSA_KEY_ATTRIBUTES_INIT;
 
@@ -26,22 +26,16 @@ static mac_mapping_t *search_mac_mapping(const uint64_t mac_address)
   return nullptr;
 }
 
-psa_status_t crypto_init(void)
+psa_status_t init_keys( const uint8_t* key, const int idx)
 {
   psa_key_attributes_t psa_attributes = PSA_KEY_ATTRIBUTES_INIT;
-
-  packet_counter = 1;
-
-  psa_status_t rc = psa_crypto_init();
-  if (rc != PSA_SUCCESS)
-    return rc;
 
   psa_set_key_usage_flags(&psa_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
   psa_set_key_algorithm(&psa_attributes, PSA_ALG_CTR);
   psa_set_key_type(&psa_attributes, PSA_KEY_TYPE_AES);
   psa_set_key_bits(&psa_attributes, 256);
   //psa_set_key_lifetime(&psa_attributes, PSA_KEY_LIFETIME_ESP_HMAC_VOLATILE);
-  rc = psa_import_key(&psa_attributes, main_config.payload_encryption_key, sizeof(main_config.payload_encryption_key), &psa_key_aes);
+  psa_status_t rc = psa_import_key(&psa_attributes, key, 32, &psa_key_aes[idx]);
   if (rc != PSA_SUCCESS)
     return rc;
 
@@ -51,7 +45,7 @@ psa_status_t crypto_init(void)
   psa_set_key_type(&psa_attributes, PSA_KEY_TYPE_HMAC);
   psa_set_key_bits(&psa_attributes, 256);
   //psa_set_key_lifetime(&psa_attributes, PSA_KEY_LIFETIME_ESP_HMAC_VOLATILE);
-  rc = psa_import_key(&psa_attributes, main_config.payload_encryption_key, sizeof(main_config.payload_encryption_key), &psa_key_hmac);
+  rc = psa_import_key(&psa_attributes, key, 32, &psa_key_hmac[idx]);
   if (rc != PSA_SUCCESS)
     return rc;
 
@@ -61,42 +55,41 @@ psa_status_t crypto_init(void)
   psa_set_key_type(&psa_attributes, PSA_KEY_TYPE_CHACHA20);
   psa_set_key_bits(&psa_attributes, 256);
   //psa_set_key_lifetime(&psa_attributes, PSA_KEY_LIFETIME_ESP_HMAC_VOLATILE);
-  return psa_import_key(&psa_attributes, main_config.payload_encryption_key, sizeof(main_config.payload_encryption_key), &psa_key_chacha);
+  return psa_import_key(&psa_attributes, key, 32, &psa_key_chacha[idx]);
+}
+psa_status_t crypto_init(void)
+{
+  packet_counter = 1;
+
+  psa_status_t rc = psa_crypto_init();
+  if (rc != PSA_SUCCESS)
+    return rc;
+
+  rc = init_keys(main_config.payload_encryption_key, 0);
+  if (rc != PSA_SUCCESS)
+    return rc;
+  return init_keys(main_config.server_parameters.aes_key, 1);
 }
 
-psa_status_t decrypt_aes(uint8_t*encrypted, unsigned int length, void *output)
+static psa_status_t decrypt(const mbedtls_svc_key_id_t key, psa_algorithm_t alg, const int iv_size, uint8_t*encrypted,
+  const unsigned int length, void *output)
 {
   psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
-  psa_status_t rc = psa_cipher_decrypt_setup(&operation, psa_key_aes, PSA_ALG_CTR);
+  psa_status_t rc = psa_cipher_decrypt_setup(&operation, key, alg);
   if (rc != PSA_SUCCESS)
     return rc;
   size_t output_len;
-  rc = psa_cipher_set_iv(&operation, encrypted, 16);
+  rc = psa_cipher_set_iv(&operation, encrypted, iv_size);
   if (rc != PSA_SUCCESS)
     return rc;
-  rc = psa_cipher_update(&operation, encrypted + 16, length, output, length, &output_len);
+  rc = psa_cipher_update(&operation, encrypted + iv_size, length, output, length, &output_len);
   if (rc != PSA_SUCCESS)
     return rc;
-  return psa_cipher_finish(&operation, encrypted + 16 + output_len, 0, &output_len);
+  return psa_cipher_finish(&operation, encrypted + iv_size + output_len, 0, &output_len);
 }
 
-psa_status_t decrypt_chacha(uint8_t*encrypted, unsigned int length, void *output)
-{
-  psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
-  psa_status_t rc = psa_cipher_decrypt_setup(&operation, psa_key_chacha, PSA_ALG_STREAM_CIPHER);
-  if (rc != PSA_SUCCESS)
-    return rc;
-  size_t output_len;
-  rc = psa_cipher_set_iv(&operation, encrypted, 12);
-  if (rc != PSA_SUCCESS)
-    return rc;
-  rc = psa_cipher_update(&operation, encrypted + 12, length, output, length, &output_len);
-  if (rc != PSA_SUCCESS)
-    return rc;
-  return psa_cipher_finish(&operation, encrypted + 12 + output_len, 0, &output_len);
-}
-
-psa_status_t decrypt_payload(const uint64_t source_mac, uint8_t *payload, unsigned int payload_size, uint8_t **output, unsigned int *output_size, uint32_t *device_id)
+psa_status_t decrypt_payload(const int key_id, const uint64_t source_mac, uint8_t *payload, unsigned int payload_size,
+  uint8_t **output, unsigned int *output_size, uint32_t *device_id)
 {
   mac_mapping_t *mapping = search_mac_mapping(source_mac);
   if (mapping == NULL)
@@ -117,7 +110,8 @@ psa_status_t decrypt_payload(const uint64_t source_mac, uint8_t *payload, unsign
     return PSA_ERROR_DATA_INVALID;
   uint8_t hmac[32];
   size_t hmac_length;
-  psa_status_t rc = psa_mac_compute(psa_key_hmac, PSA_ALG_HMAC(PSA_ALG_SHA_256), payload, payload_size - 32, hmac, sizeof(hmac), &hmac_length);
+  psa_status_t rc = psa_mac_compute(psa_key_hmac[key_id], PSA_ALG_HMAC(PSA_ALG_SHA_256), payload,
+    payload_size - 32, hmac, sizeof(hmac), &hmac_length);
   if (rc != PSA_SUCCESS)
     return rc;
   if (memcmp(hmac, payload + payload_size - 32, 32) != 0)
@@ -135,10 +129,10 @@ psa_status_t decrypt_payload(const uint64_t source_mac, uint8_t *payload, unsign
   switch (payload[0])
   {
     case ENCRYPTION_AES:
-      rc = decrypt_aes(payload + 1, payload_size, o);
+      rc = decrypt(psa_key_aes[key_id], PSA_ALG_CTR, 16, payload + 1, payload_size, o);
       break;
     case ENCRYPTION_CHACHA:
-      rc = decrypt_chacha(payload + 1, payload_size, o);
+      rc = decrypt(psa_key_chacha[key_id], PSA_ALG_STREAM_CIPHER, 12, payload + 1, payload_size, o);
       break;
     default:
       free(o);
@@ -159,43 +153,45 @@ void increment_packet_counter(void)
   packet_counter++;
 }
 
-psa_status_t encrypt_payload_aes(const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size)
+static psa_status_t encrypt_payload(const uint8_t encryption_type, psa_algorithm_t alg, const mbedtls_svc_key_id_t key, const int key_id, const int iv_size,
+  const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size)
 {
-  *output_size = payload_size + 16 + 33;
+  *output_size = payload_size + iv_size + 33;
   uint8_t *o = malloc(*output_size);
   if (o == NULL)
     return PSA_ERROR_INSUFFICIENT_MEMORY;
-  o[0] = ENCRYPTION_AES;
-  fill_random(o+1, 12);
-  memcpy(o + 13, &packet_counter, 4);
+  o[0] = encryption_type;
+  fill_random(o+1, iv_size - 4);
+  memcpy(o + iv_size - 3, &packet_counter, 4);
   psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
-  psa_status_t rc = psa_cipher_encrypt_setup(&operation, psa_key_aes, PSA_ALG_CTR);
+  psa_status_t rc = psa_cipher_encrypt_setup(&operation, key, alg);
   if (rc != PSA_SUCCESS)
   {
     free(o);
     return rc;
   }
   size_t output_len;
-  rc = psa_cipher_set_iv(&operation, o+1, 16);
+  rc = psa_cipher_set_iv(&operation, o+1, iv_size);
   if (rc != PSA_SUCCESS)
   {
     free(o);
     return rc;
   }
-  rc = psa_cipher_update(&operation, payload, payload_size, o + 17, payload_size, &output_len);
+  rc = psa_cipher_update(&operation, payload, payload_size, o + iv_size + 1, payload_size, &output_len);
   if (rc != PSA_SUCCESS)
   {
     free(o);
     return rc;
   }
-  rc = psa_cipher_finish(&operation, o + 17 + output_len, 0, &output_len);
+  rc = psa_cipher_finish(&operation, o + iv_size + 1 + output_len, 0, &output_len);
   if (rc != PSA_SUCCESS)
   {
     free(o);
     return rc;
   }
   size_t hmac_length;
-  rc = psa_mac_compute(psa_key_hmac, PSA_ALG_HMAC(PSA_ALG_SHA_256), o, payload_size + 17, o + payload_size + 17, 32, &hmac_length);
+  rc = psa_mac_compute(psa_key_hmac[key_id], PSA_ALG_HMAC(PSA_ALG_SHA_256), o,
+    payload_size + iv_size + 1, o + payload_size + iv_size + 1, 32, &hmac_length);
   if (rc != PSA_SUCCESS)
   {
     free(o);
@@ -205,48 +201,16 @@ psa_status_t encrypt_payload_aes(const uint8_t *payload, const unsigned int payl
   return PSA_SUCCESS;
 }
 
-psa_status_t encrypt_payload_chacha(const uint8_t *payload, const unsigned int payload_size, uint8_t **output, unsigned int *output_size)
+psa_status_t encrypt_payload_aes(const int key_id, const uint8_t *payload, const unsigned int payload_size, uint8_t **output,
+  unsigned int *output_size)
 {
-  *output_size = payload_size + 12 + 33;
-  uint8_t *o = malloc(*output_size);
-  if (o == NULL)
-    return PSA_ERROR_INSUFFICIENT_MEMORY;
-  o[0] = ENCRYPTION_CHACHA;
-  fill_random(o+1, 8);
-  memcpy(o + 9, &packet_counter, 4);
-  psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
-  psa_status_t rc = psa_cipher_encrypt_setup(&operation, psa_key_chacha, PSA_ALG_STREAM_CIPHER);
-  if (rc != PSA_SUCCESS)
-  {
-    free(o);
-    return rc;
-  }
-  size_t output_len;
-  rc = psa_cipher_set_iv(&operation, o+1, 12);
-  if (rc != PSA_SUCCESS)
-  {
-    free(o);
-    return rc;
-  }
-  rc = psa_cipher_update(&operation, payload, payload_size, o + 13, payload_size, &output_len);
-  if (rc != PSA_SUCCESS)
-  {
-    free(o);
-    return rc;
-  }
-  rc = psa_cipher_finish(&operation, o + 13 + output_len, 0, &output_len);
-  if (rc != PSA_SUCCESS)
-  {
-    free(o);
-    return rc;
-  }
-  size_t hmac_length;
-  rc = psa_mac_compute(psa_key_hmac, PSA_ALG_HMAC(PSA_ALG_SHA_256), o, payload_size + 13, o + payload_size + 13, 32, &hmac_length);
-  if (rc != PSA_SUCCESS)
-  {
-    free(o);
-    return rc;
-  }
-  *output = o;
-  return PSA_SUCCESS;
+  return encrypt_payload(ENCRYPTION_AES, PSA_ALG_CTR, psa_key_aes[key_id], key_id, 16,
+    payload, payload_size, output, output_size);
+}
+
+psa_status_t encrypt_payload_chacha(const int key_id, const uint8_t *payload, const unsigned int payload_size,
+  uint8_t **output, unsigned int *output_size)
+{
+  return encrypt_payload(ENCRYPTION_CHACHA, PSA_ALG_STREAM_CIPHER, psa_key_chacha[key_id], key_id,
+    12, payload, payload_size, output, output_size);
 }

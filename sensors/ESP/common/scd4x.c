@@ -73,25 +73,19 @@ esp_err_t scd4x_power_down(void)
   int rc = scd4x_write(data, 2);
   if (rc != ESP_OK)
   {
-    ESP_LOGE(TAG, "start measurements failed, code %d", rc);
+    ESP_LOGE(TAG, "power down failed, code %d", rc);
     return rc;
   }
   return ESP_OK;
 }
 
-esp_err_t scd4x_wake_up(void)
+void scd4x_wake_up(void)
 {
   unsigned char data[2];
   data[0] = 0x36;
   data[1] = 0xF6;
-  int rc = scd4x_write(data, 2);
-  if (rc != ESP_OK)
-  {
-    ESP_LOGE(TAG, "start measurements failed, code %d", rc);
-    return rc;
-  }
+  scd4x_write(data, 2);
   vTaskDelay (30 / portTICK_PERIOD_MS);
-  return ESP_OK;
 }
 
 static esp_err_t scd4x_get_status(uint16_t *status)
