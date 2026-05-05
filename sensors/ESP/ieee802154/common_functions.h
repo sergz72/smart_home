@@ -45,7 +45,6 @@ void common_init(void);
 esp_err_t read_main_configuration(void);
 void set_wifi_configuration_from_main_configuration(void);
 esp_err_t common_nvs_init(void);
-void increment_packet_counter(void);
 
 #ifdef __cplusplus
 }

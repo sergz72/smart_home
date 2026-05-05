@@ -4,6 +4,7 @@ idf_component_register(
              "../../ieee802154/psa_crypto.c"
              "../../ieee802154/hal.c"
              "../../ieee802154/ieee802154_net_client.c"
+             "../../ieee802154/events.c"
              "../../common/led.c"
              "../../common/wifi.c"
              "../../common/scd4x.c"
