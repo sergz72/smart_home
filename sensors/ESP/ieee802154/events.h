@@ -4,6 +4,22 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define VALUE_TYPE_CO2       0
+#define VALUE_TYPE_HUMI_INT  1
+#define VALUE_TYPE_ICC       2
+#define VALUE_TYPE_LUX_INT   3
+#define VALUE_TYPE_PRES      4
+#define VALUE_TYPE_PWR       4
+#define VALUE_TYPE_TEMP_INT  5
+#define VALUE_TYPE_VBAT      6
+#define VALUE_TYPE_VCC       7
+#define VALUE_TYPE_HUMI_EXT  8
+#define VALUE_TYPE_LUX_EXT   9
+#define VALUE_TYPE_TEMP_EXT  10
+#define VALUE_TYPE_HUMI_EXT2 11
+#define VALUE_TYPE_LUX_EXT2  12
+#define VALUE_TYPE_TEMP_EXT2 13
+
 #define MAX_VALUE_TYPES 8
 
 typedef struct

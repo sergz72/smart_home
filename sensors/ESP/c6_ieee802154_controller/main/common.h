@@ -11,6 +11,7 @@
 #define SEND_INTERVAL 300000 // 5 minutes
 #endif
 
+#define BUTTON_GPIO 9
 #define LED_GPIO 8
 #define LED_STRIP
 

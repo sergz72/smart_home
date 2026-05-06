@@ -8,6 +8,9 @@ extern "C" {
 #endif
 
 esp_err_t i2c_master_init(void);
+bool button_is_pressed(void);
+void initialise_button(void);
+int get_vbat(void);
 
 #ifdef __cplusplus
 }

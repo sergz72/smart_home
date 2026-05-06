@@ -13,16 +13,20 @@
 #include "ieee802154_net_client.h"
 #include "common.h"
 #include <scd4x.h>
-
-#define LOG_TAG "main"
+#include <events.h>
+#include "ieee802154_ble.h"
+#include "scd4x_functions.h"
 
 #define TIME_OFFSET 1777000000
+
+static const char *LOG_TAG = "main";
+static bool use_wifi;
 
 extern "C" {
 void app_main();
 }
 
-static void send_to_server(uint8_t *payload, unsigned int payload_size, const uint32_t device_id)
+static void send_to_server(const uint32_t device_id, const uint8_t *payload, unsigned int payload_size)
 {
   uint8_t *output;
   unsigned int output_size;
@@ -42,27 +46,39 @@ static void send_to_server(uint8_t *payload, unsigned int payload_size, const ui
   free(output);
 }
 
-static esp_err_t scd_get(scd4x_result *result)
+esp_err_t ble_callback(uint8_t *message, size_t message_length, uint8_t **response, size_t *response_length)
 {
-  scd4x_wake_up();
-  esp_err_t rc = scd4x_start_measurement();
-  if (rc != ESP_OK)
-  {
-    ESP_LOGE(LOG_TAG, "scd4x_start_measurement failed\n");
-    return rc;
-  }
-  vTaskDelay(6000 / portTICK_PERIOD_MS);
-  rc = scd4x_read_measurement(result);
-  if (rc != ESP_OK)
-  {
-    ESP_LOGE(LOG_TAG, "scd4x_read_measurement failed\n");
-    return rc;
-  }
-  rc = scd4x_power_down();
-  if (rc != ESP_OK)
-    ESP_LOGE(LOG_TAG, "scd4x_power_down failed\n");
-  ESP_LOGI(LOG_TAG, "CO2: %d temperature: %d humidity: %d", result->co2, result->temperature, result->humidity);
   return ESP_OK;
+}
+
+static int events_init()
+{
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  ESP_LOGI(LOG_TAG, "Heap free: %d bytes", info.total_free_bytes);
+  ESP_LOGI(LOG_TAG, "Heap free minimum: %d bytes", info.minimum_free_bytes);
+  ESP_LOGI(LOG_TAG, "Heap free largest block: %d bytes", info.largest_free_block);
+  size_t queue_size = info.total_free_bytes * 3 / 4;
+  if (queue_size > info.largest_free_block)
+    queue_size = info.largest_free_block;
+  ESP_LOGI(LOG_TAG, "Requesting queue size: %d bytes...", queue_size);
+  int rc = init_events(queue_size);
+  if (rc != 0)
+  {
+    ESP_LOGE(LOG_TAG, "Failed to initialize events queue: %d", rc);
+    return rc;
+  }
+  return 0;
+}
+
+static int event_add(uint32_t device_id, const uint8_t *message, int message_length)
+{
+  if (use_wifi)
+  {
+    send_to_server(device_id, message, message_length);
+    return 0;
+  }
+  return add_event(device_id, message, message_length);
 }
 
 void app_main(void)
@@ -89,8 +105,13 @@ void app_main(void)
       vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
-  set_led_white();
+  initialise_button();
+  set_led_green();
 
+  vTaskDelay(3000 / portTICK_PERIOD_MS);
+  use_wifi = !button_is_pressed();
+
+  set_led_white();
   ESP_ERROR_CHECK(read_main_configuration());
   set_wifi_configuration_from_main_configuration();
 
@@ -105,7 +126,7 @@ void app_main(void)
     if (rc == PSA_SUCCESS)
     {
       ESP_LOGI(LOG_TAG, "Message size %d, device id %d", output_size, device_id);
-      send_to_server(output, output_size, device_id);
+      event_add(device_id, output, static_cast<int>(output_size));
       free(output);
     }
     else
@@ -116,18 +137,31 @@ void app_main(void)
 
   ESP_ERROR_CHECK(common_nvs_init());
 
-  esp_coex_wifi_i154_enable();
-  wifi_init();
-  if (wifi_connect())
+  if (use_wifi)
+  {
+    esp_coex_wifi_i154_enable();
+    wifi_init();
+
+    if (events_init() != 0)
+    {
+      set_led_red();
+      while (true)
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+  }
+  if (!use_wifi || wifi_connect())
   {
     set_led_blue();
-    while (true)
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    ble_init(ble_callback);
   }
-  set_led_yellow();
-  obtain_time();
+  else
+  {
+    set_led_yellow();
+    obtain_time();
+    net_client_init();
+  }
+
   led_off();
-  net_client_init();
 
   _ieee802154->initialize(false);
 
@@ -138,7 +172,13 @@ void app_main(void)
     scd4x_result result;
     err = scd_get(&result);
     if (err == ESP_OK)
-      send_to_server(reinterpret_cast<uint8_t*>(&result), sizeof(result), DEVICE_ID);
+    {
+      uint8_t *output;
+      int output_size;
+      scd_event_convert(&result, &output, &output_size);
+      event_add(DEVICE_ID, output, output_size);
+      free(output);
+    }
     TickType_t time2 = xTaskGetTickCount();
     TickType_t ms = (time2 - time1) * portTICK_PERIOD_MS;
     if (ms < SEND_INTERVAL)

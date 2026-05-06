@@ -5,6 +5,8 @@ idf_component_register(
              "../../ieee802154/hal.c"
              "../../ieee802154/ieee802154_net_client.c"
              "../../ieee802154/events.c"
+             "../../ieee802154/ieee802154_ble.c"
+             "../../ieee802154/scd4x_functions.c"
              "../../common/led.c"
              "../../common/wifi.c"
              "../../common/scd4x.c"
