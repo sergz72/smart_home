@@ -6,6 +6,9 @@
 #include <shell.h>
 #include "board.h"
 #include "scd41_commands.h"
+#include "ds3231_commands.h"
+#include "ds1307_commands.h"
+#include "i2c_commands.h"
 
 #define LOG_TAG "main"
 
@@ -47,6 +50,9 @@ void app_main(void) {
 
   shell_init(printf, gets_);
   register_scd41_commands();
+  register_ds3231_commands();
+  register_ds1307_commands();
+  register_i2c_commands();
 
   getstring_init(command_line, sizeof(command_line), getch_, puts_);
 
