@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "board.h"
 
 #define VALUE_TYPE_CO2       0
 #define VALUE_TYPE_HUMI_INT  1
@@ -22,37 +23,31 @@
 
 #define MAX_VALUE_TYPES 8
 
-typedef struct
-{
-  uint8_t value_types[MAX_VALUE_TYPES];
-  uint32_t values[MAX_VALUE_TYPES];
-} sensor_event_t;
+#define EVENT_QUEUE_SIZE (EVENT_QUEUE_DAYS * EVENT_QUEUE_MAX_SENSORS * EVENT_QUEUE_MAX_EVENTS_PER_DAY)
 
 typedef struct
 {
   uint64_t timestampAndSensorId;
-  sensor_event_t event;
+  uint32_t values[MAX_VALUE_TYPES];
 } sensor_event_with_time_t;
 
 typedef struct
 {
-  size_t start_idx;
-  size_t num_events;
+  sensor_event_with_time_t *start;
+  int start_idx;
 } events_result_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int init_events(size_t queue_size_bytes);
-int delete_events(void);
+void init_events(void);
 int add_event(uint32_t device_id, const uint8_t *message, int message_length);
-int get_events_from(uint64_t timestamp, events_result_t *result);
-size_t get_event_queue_size(void);
-size_t get_event_queue_capacity(void);
+int get_events_from(unsigned int client_id, uint64_t timestamp, events_result_t *result);
+int get_event_queue_size(void);
 sensor_event_with_time_t *get_event_queue(void);
-size_t get_event_queue_top_idx(void);
-size_t get_event_queue_bottom_idx(void);
+int get_event_queue_top_idx(void);
+int get_event_queue_bottom_idx(void);
 sensor_event_with_time_t *get_bottom_event(void);
 
 #ifdef __cplusplus
