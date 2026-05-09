@@ -1,15 +1,18 @@
 #include "events.h"
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 
 static sensor_event_with_time_t event_queue[EVENT_QUEUE_SIZE];
 static sensor_event_with_time_t event_search_results[EVENT_QUEUE_MAX_CLIENTS][EVENT_QUEUE_MAX_EVENTS_PER_MESSAGE];
 static int event_queue_top_idx;
 static int event_queue_bottom_idx;
+static pthread_rwlock_t lock;
 
 void init_events(void)
 {
   event_queue_top_idx = event_queue_bottom_idx = 0;
+  pthread_rwlock_init(&lock, nullptr);
 }
 
 sensor_event_with_time_t *get_event_queue(void)
@@ -39,6 +42,7 @@ int add_event(const uint32_t device_id, const uint8_t *message, const int messag
   if (message_length <= 0 || message_length > MAX_VALUE_TYPES * sizeof(uint32_t) ||
       (message_length % sizeof(uint32_t) != 0))
     return 1;
+  pthread_rwlock_wrlock(&lock);
   sensor_event_with_time_t *bottom = &event_queue[event_queue_bottom_idx];
   memset(bottom, 0, sizeof(sensor_event_with_time_t));
   bottom->timestampAndSensorId = (get_time_ms() << 8) | device_id;
@@ -48,6 +52,7 @@ int add_event(const uint32_t device_id, const uint8_t *message, const int messag
     event_queue_bottom_idx = 0;
   if (event_queue_bottom_idx == event_queue_top_idx)
     event_queue_top_idx++;
+  pthread_rwlock_unlock(&lock);
   return 0;
 }
 
@@ -115,14 +120,19 @@ int get_events_from(const unsigned int client_id, const uint64_t timestamp, even
 {
   if (client_id >= EVENT_QUEUE_MAX_CLIENTS)
     return 0;
+  pthread_rwlock_rdlock(&lock);
   int start_idx = search_nearest(timestamp);
   if (start_idx == -1)
+  {
+    pthread_rwlock_unlock(&lock);
     return 0;
+  }
   int num_events = event_queue_bottom_idx > start_idx ? event_queue_bottom_idx - start_idx : EVENT_QUEUE_SIZE - start_idx;
   if (num_events > EVENT_QUEUE_MAX_EVENTS_PER_MESSAGE)
     num_events = EVENT_QUEUE_MAX_EVENTS_PER_MESSAGE;
   sensor_event_with_time_t *st = event_search_results[client_id];
   memcpy(st, &event_queue[start_idx], num_events * sizeof(sensor_event_with_time_t));
+  pthread_rwlock_unlock(&lock);
   result->start = st;
   result->start_idx = start_idx;
   return num_events;
