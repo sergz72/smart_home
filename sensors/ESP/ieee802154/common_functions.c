@@ -2,8 +2,13 @@
 #include <esp_partition.h>
 #include <nvs_flash.h>
 #include <string.h>
+#include "esp_log.h"
 #include "esp_random.h"
+#include "esp_sleep.h"
+#include "led.h"
 #include "wifi.h"
+
+#define TAG "common_functions"
 
 #define STORAGE_PARTITION_NAME "storage"
 #define MAIN_CONFIG_MAGIC 0x33
@@ -59,4 +64,16 @@ esp_err_t common_nvs_init(void)
     rc = nvs_flash_init();
   }
   return rc;
+}
+
+void register_timer_wakeup(uint64_t time)
+{
+  esp_err_t err = esp_sleep_enable_timer_wakeup(time);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "esp_sleep_enable_timer_wakeup failed with error %d", err);
+    set_led_red();
+    while (true)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
 }

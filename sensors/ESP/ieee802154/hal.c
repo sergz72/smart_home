@@ -8,6 +8,7 @@
 static i2c_master_bus_handle_t i2c_bus_handle;
 static i2c_master_dev_handle_t scd41_handle;
 
+#ifdef BUTTON_GPIO
 void initialise_button(void)
 {
   gpio_config_t io_conf = {0};
@@ -29,6 +30,7 @@ bool button_is_pressed(void)
   }
   return false;
 }
+#endif
 
 esp_err_t i2c_master_init(void)
 {

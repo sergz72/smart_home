@@ -45,6 +45,7 @@ void common_init(void);
 esp_err_t read_main_configuration(void);
 void set_wifi_configuration_from_main_configuration(void);
 esp_err_t common_nvs_init(void);
+void register_timer_wakeup(uint64_t time);
 
 #ifdef __cplusplus
 }

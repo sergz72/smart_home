@@ -8,11 +8,13 @@
 extern "C" {
 #endif
 
-esp_err_t scd_get(scd4x_result *result);
-int scd_event_convert(const scd4x_result *result, uint8_t **output, int *output_size);
+esp_err_t scd_get(scd4x_result *result, bool sleep);
+void scd_event_convert(const scd4x_result *result);
 
 #ifdef __cplusplus
 }
 #endif
+
+extern uint8_t scd_event[16];
 
 #endif

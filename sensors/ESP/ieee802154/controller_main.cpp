@@ -4,28 +4,38 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_coexist.h>
+#include "common.h"
 #include "led.h"
+#ifndef NO_WIFI
 #include "wifi.h"
+#include "ieee802154_net_client.h"
+#endif
 #include "common_functions.h"
 #include "psa_crypto.h"
 #include "hal.h"
 #include "ntp.h"
-#include "ieee802154_net_client.h"
-#include "common.h"
 #include <scd4x.h>
 #include <events.h>
 #include "ieee802154_ble.h"
 #include "scd4x_functions.h"
+//#include "esp_pm.h"
+//#include "esp_private/esp_clk.h"
+//#include "esp_sleep.h"
 
 #define TIME_OFFSET 1777000000
 
 static const char *LOG_TAG = "main";
+#ifndef NO_WIFI
 static bool use_wifi;
+#endif
+
+static uint64_t conn_timestamps[CONFIG_BT_NIMBLE_MAX_CONNECTIONS + 1];
 
 extern "C" {
 void app_main();
 }
 
+#ifndef NO_WIFI
 static void send_to_server(const uint32_t device_id, const uint8_t *payload, unsigned int payload_size)
 {
   uint8_t *output;
@@ -45,41 +55,56 @@ static void send_to_server(const uint32_t device_id, const uint8_t *payload, uns
   send_udp(output, output_size);
   free(output);
 }
-
-esp_err_t ble_callback(uint8_t *message, size_t message_length, uint8_t **response, size_t *response_length)
-{
-  return ESP_OK;
-}
-
-static int events_init()
-{
-  multi_heap_info_t info;
-  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  ESP_LOGI(LOG_TAG, "Heap free: %d bytes", info.total_free_bytes);
-  ESP_LOGI(LOG_TAG, "Heap free minimum: %d bytes", info.minimum_free_bytes);
-  ESP_LOGI(LOG_TAG, "Heap free largest block: %d bytes", info.largest_free_block);
-  size_t queue_size = info.total_free_bytes * 3 / 4;
-  if (queue_size > info.largest_free_block)
-    queue_size = info.largest_free_block;
-  ESP_LOGI(LOG_TAG, "Requesting queue size: %d bytes...", queue_size);
-  int rc = init_events(queue_size);
-  if (rc != 0)
-  {
-    ESP_LOGE(LOG_TAG, "Failed to initialize events queue: %d", rc);
-    return rc;
-  }
-  return 0;
-}
+#endif
 
 static int event_add(uint32_t device_id, const uint8_t *message, int message_length)
 {
+#ifndef NO_WIFI
   if (use_wifi)
   {
     send_to_server(device_id, message, message_length);
     return 0;
   }
+#endif
   return add_event(device_id, message, message_length);
 }
+
+static void ble_write(const uint16_t conn_handle, const uint64_t timestamp)
+{
+  conn_timestamps[conn_handle] = timestamp;
+}
+
+static uint16_t ble_read(const uint16_t conn_handle, uint8_t **data)
+{
+  events_result_t result;
+  int num_events = get_events_from(conn_handle, conn_timestamps[conn_handle], &result);
+  *data = reinterpret_cast<uint8_t*>(result.start);
+  conn_timestamps[conn_handle] = (result.start[num_events - 1].timestampAndSensorId >> 8) + 1;
+  return num_events * sizeof(sensor_event_with_time_t);
+}
+
+static void ble_connect(const uint16_t conn_handle)
+{
+  conn_timestamps[conn_handle] = 0;
+}
+
+static void ble_disconnect(const uint16_t conn_handle)
+{
+  conn_timestamps[conn_handle] = 0;
+}
+
+/*static esp_err_t power_save_init()
+{
+  int cur_cpu_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
+
+  esp_pm_config_t pm_config = {
+    .max_freq_mhz = cur_cpu_freq_mhz,
+    .min_freq_mhz = esp_clk_xtal_freq() / 1000000,
+    .light_sleep_enable = true
+  };
+
+  return esp_pm_configure(&pm_config);
+}*/
 
 void app_main(void)
 {
@@ -108,12 +133,16 @@ void app_main(void)
   initialise_button();
   set_led_green();
 
+#ifndef NO_WIFI
   vTaskDelay(3000 / portTICK_PERIOD_MS);
   use_wifi = !button_is_pressed();
+#endif
 
   set_led_white();
   ESP_ERROR_CHECK(read_main_configuration());
+#ifndef NO_WIFI
   set_wifi_configuration_from_main_configuration();
+#endif
 
   const auto _ieee802154 = new Ieee802154({.channel = main_config.channel, .pan_id = main_config.pan_id}, [](Ieee802154::Message message) {
     ESP_LOGI(LOG_TAG, "Got Message");
@@ -133,26 +162,47 @@ void app_main(void)
       ESP_LOGE(LOG_TAG, "Message decrypt failed with code %d", rc);
   });
   uint64_t mac_address = _ieee802154->deviceMacAddress();
+  ESP_LOGI(LOG_TAG, "Channel: %d, PAN ID: 0x%04x", main_config.channel, main_config.pan_id);
   ESP_LOGI(LOG_TAG, "This device IEEE802.15.4 MAC: 0x%llx", mac_address);
 
   ESP_ERROR_CHECK(common_nvs_init());
 
+  /*err = power_save_init();
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(LOG_TAG, "power_save_init failed with error %d", err);
+    set_led_red();
+    while (true)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+  esp_sleep_cpu_retention_init();*/
+
+#ifndef NO_WIFI
   if (use_wifi)
   {
     esp_coex_wifi_i154_enable();
     wifi_init();
-
-    if (events_init() != 0)
+    init_events();
+  }
+  if (!use_wifi || wifi_connect())
+  {
+    err = esp_wifi_stop();
+    if (err != ESP_OK)
+      ESP_LOGE(LOG_TAG, "esp_wifi_stop failed with error %d", err);
+    err = esp_wifi_deinit();
+    if (err != ESP_OK)
+      ESP_LOGE(LOG_TAG, "esp_wifi_deinit failed with error %d", err);
+#endif
+    err = ble_init(ble_write, ble_read, ble_connect, ble_disconnect);
+    if (err != ESP_OK)
     {
+      ESP_LOGE(LOG_TAG, "ble_init failed with error %d", err);
       set_led_red();
       while (true)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
-  }
-  if (!use_wifi || wifi_connect())
-  {
     set_led_blue();
-    ble_init(ble_callback);
+#ifndef NO_WIFI
   }
   else
   {
@@ -160,6 +210,7 @@ void app_main(void)
     obtain_time();
     net_client_init();
   }
+#endif
 
   led_off();
 
@@ -170,14 +221,11 @@ void app_main(void)
     TickType_t time1 = xTaskGetTickCount();
 
     scd4x_result result;
-    err = scd_get(&result);
+    err = scd_get(&result, false);
     if (err == ESP_OK)
     {
-      uint8_t *output;
-      int output_size;
-      scd_event_convert(&result, &output, &output_size);
-      event_add(DEVICE_ID, output, output_size);
-      free(output);
+      scd_event_convert(&result);
+      event_add(DEVICE_ID, scd_event, sizeof(scd_event));
     }
     TickType_t time2 = xTaskGetTickCount();
     TickType_t ms = (time2 - time1) * portTICK_PERIOD_MS;
