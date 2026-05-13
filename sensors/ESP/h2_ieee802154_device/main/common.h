@@ -12,4 +12,7 @@
 #define LED_GPIO 8
 #define LED_STRIP
 
+//#define USE_SHT4X
+#define USE_SCD4X
+
 #endif

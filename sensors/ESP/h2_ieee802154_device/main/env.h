@@ -1,0 +1,6 @@
+#ifndef H2_IEEE802154_DEVICE_ENV_H
+#define H2_IEEE802154_DEVICE_ENV_H
+
+#define SHT40_SENSOR_ADDR 0x44
+
+#endif

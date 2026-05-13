@@ -1,22 +1,29 @@
 #include "board.h"
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
+#include "common.h"
 #include <scd4x.h>
+#include "env.h"
+#include <sht4x.h>
+#ifdef DEVICE_ID
 #include <rtc_ds1307.h>
 #include <rtc_ds3231.h>
 #include <time.h>
-
-#include "common.h"
-#include <freertos/FreeRTOS.h>
 #include <sys/time.h>
-
 #include "esp_log.h"
+#endif
+#include <freertos/FreeRTOS.h>
 
+#ifdef DEVICE_ID
 static const char *TAG = "hal";
+#endif
 
 static i2c_master_bus_handle_t i2c_bus_handle;
 static i2c_master_dev_handle_t scd41_handle;
+static i2c_master_dev_handle_t sht41_handle;
+#ifdef DEVICE_ID
 static i2c_master_dev_handle_t rtc_handle;
+#endif
 
 #ifdef BUTTON_GPIO
 void initialise_button(void)
@@ -65,9 +72,18 @@ esp_err_t i2c_master_init(void)
   if (rc != ESP_OK)
     return rc;
 
+  dev_cfg.device_address = SHT40_SENSOR_ADDR;
+  rc = i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &sht41_handle);
+  if (rc != ESP_OK)
+    return rc;
+
+#ifdef DEVICE_ID
   dev_cfg.device_address = DS1307_I2C_ADDRESS >> 1;
 
   return i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &rtc_handle);
+#else
+  return ESP_OK;
+#endif
 }
 
 esp_err_t scd4x_write(uint8_t *data, size_t len)
@@ -86,6 +102,7 @@ esp_err_t scd4x_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen
                                       wlen, rdata, rlen, I2C_MASTER_TIMEOUT_MS);
 }
 
+#ifdef DEVICE_ID
 int i2c_ds1307_write(const unsigned char *data, int data_length)
 {
   return i2c_master_transmit(rtc_handle, data, data_length, I2C_MASTER_TIMEOUT_MS);
@@ -107,7 +124,25 @@ int i2c_ds3231_transfer(const unsigned char *wdata, int wdata_length, unsigned c
   return i2c_master_transmit_receive(rtc_handle, wdata,
                                       wdata_length, rdata, rdata_length, I2C_MASTER_TIMEOUT_MS);
 }
+#endif
 
+esp_err_t sht40_register_read(uint8_t *rdata, size_t rlen, uint8_t *data, size_t len)
+{
+  return i2c_master_transmit_receive(sht41_handle, rdata,
+                                      rlen, data, len, I2C_MASTER_TIMEOUT_MS);
+}
+
+esp_err_t sht40_read(uint8_t *data, size_t len)
+{
+  return i2c_master_receive(sht41_handle, data, len,I2C_MASTER_TIMEOUT_MS);
+}
+
+esp_err_t sht40_register_write(uint8_t *data, size_t len)
+{
+  return i2c_master_transmit(sht41_handle, data, len, I2C_MASTER_TIMEOUT_MS);
+}
+
+#ifdef DEVICE_ID
 esp_err_t set_time_from_rtc(void)
 {
   time_t now_t;
@@ -130,6 +165,7 @@ esp_err_t set_time_from_rtc(void)
   ESP_LOGI(TAG, "The current date/time is: %s", strftime_buf);
   return ESP_OK;
 }
+#endif
 
 int get_vbat(void)
 {

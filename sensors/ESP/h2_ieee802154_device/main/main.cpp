@@ -11,6 +11,8 @@
 #include "esp_sleep.h"
 #include "hal.h"
 #include "scd4x_functions.h"
+#include "sht4x_functions.h"
+#include <sht4x.h>
 //#include "esp_pm.h"
 //#include "esp_private/esp_clk.h"
 
@@ -55,16 +57,29 @@ void transmitTask(Ieee802154 *_ieee802154) {
     _ieee802154->teardown();
     register_timer_wakeup(SEND_INTERVAL * 1000);
     esp_light_sleep_start();
-    //vTaskDelay(6000 / portTICK_PERIOD_MS);
+#ifdef USE_SCD4X
     scd4x_result result;
     esp_err_t err = scd_get(&result, true);
+#endif
+#ifdef USE_SHT4X
+    short temperature;
+    unsigned short humidity;
+    esp_err_t err = sht4x_measure(&temperature, &humidity);
+    ESP_LOGI(LOG_TAG, "Temperature: %d, Humidity: %d", temperature, humidity);
+#endif
     if (err == ESP_OK)
     {
       _ieee802154->initialize(false);
-      scd_event_convert(&result);
       uint8_t *output;
       unsigned int output_size;
+#ifdef USE_SCD4X
+      scd_event_convert(&result);
       psa_status_t rc = encrypt_payload_aes(KEY_PAYLOAD, scd_event, sizeof(scd_event), &output, &output_size, packet_counter, 0);
+#endif
+#ifdef USE_SHT4X
+      sht_event_convert(temperature, humidity);
+      psa_status_t rc = encrypt_payload_aes(KEY_PAYLOAD, sht_event, sizeof(sht_event), &output, &output_size, packet_counter, 0);
+#endif
       if (rc != ESP_OK)
       {
         ESP_LOGE(LOG_TAG, "Encryption error %d", rc);
@@ -103,6 +118,17 @@ void app_main(void) {
     while (true)
       vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
+
+#ifdef USE_SHT4X
+  err = sht4x_init_sensor();
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(LOG_TAG, "sht4x_init_sensor failed with error %d", err);
+    set_led_red();
+    while (true)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+#endif
 
   psa_status_t rc = crypto_init();
   if (rc != PSA_SUCCESS)
