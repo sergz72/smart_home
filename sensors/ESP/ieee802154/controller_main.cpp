@@ -78,6 +78,8 @@ static uint16_t ble_read(const uint16_t conn_handle, uint8_t **data)
 {
   events_result_t result;
   int num_events = get_events_from(conn_handle, conn_timestamps[conn_handle], &result);
+  if (num_events == 0)
+    return 0;
   *data = reinterpret_cast<uint8_t*>(result.start);
   conn_timestamps[conn_handle] = (result.start[num_events - 1].timestampAndSensorId >> 8) + 1;
   return num_events * sizeof(sensor_event_with_time_t);
@@ -136,6 +138,15 @@ void app_main(void)
 #ifndef NO_WIFI
   vTaskDelay(3000 / portTICK_PERIOD_MS);
   use_wifi = !button_is_pressed();
+#else
+  err = set_time_from_rtc();
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(LOG_TAG, "set_time_from_rtc failed with error %d", err);
+    set_led_red();
+    while (true)
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
 #endif
 
   set_led_white();

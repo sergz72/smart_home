@@ -2,11 +2,21 @@
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include <scd4x.h>
+#include <rtc_ds1307.h>
+#include <rtc_ds3231.h>
+#include <time.h>
+
 #include "common.h"
 #include <freertos/FreeRTOS.h>
+#include <sys/time.h>
+
+#include "esp_log.h"
+
+static const char *TAG = "hal";
 
 static i2c_master_bus_handle_t i2c_bus_handle;
 static i2c_master_dev_handle_t scd41_handle;
+static i2c_master_dev_handle_t rtc_handle;
 
 #ifdef BUTTON_GPIO
 void initialise_button(void)
@@ -51,7 +61,13 @@ esp_err_t i2c_master_init(void)
     .scl_speed_hz = I2C_MASTER_FREQ_HZ
   };
 
-  return i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &scd41_handle);
+  rc = i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &scd41_handle);
+  if (rc != ESP_OK)
+    return rc;
+
+  dev_cfg.device_address = DS1307_I2C_ADDRESS >> 1;
+
+  return i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &rtc_handle);
 }
 
 esp_err_t scd4x_write(uint8_t *data, size_t len)
@@ -68,6 +84,51 @@ esp_err_t scd4x_command(uint8_t *wdata, size_t wlen, uint8_t *rdata, size_t rlen
 {
   return i2c_master_transmit_receive(scd41_handle, wdata,
                                       wlen, rdata, rlen, I2C_MASTER_TIMEOUT_MS);
+}
+
+int i2c_ds1307_write(const unsigned char *data, int data_length)
+{
+  return i2c_master_transmit(rtc_handle, data, data_length, I2C_MASTER_TIMEOUT_MS);
+}
+
+int i2c_ds1307_transfer(const unsigned char *wdata, int wdata_length, unsigned char *rdata, int rdata_length)
+{
+  return i2c_master_transmit_receive(rtc_handle, wdata,
+                                      wdata_length, rdata, rdata_length, I2C_MASTER_TIMEOUT_MS);
+}
+
+int i2c_ds3231_write(const unsigned char *data, int data_length)
+{
+  return i2c_master_transmit(rtc_handle, data, data_length, I2C_MASTER_TIMEOUT_MS);
+}
+
+int i2c_ds3231_transfer(const unsigned char *wdata, int wdata_length, unsigned char *rdata, int rdata_length)
+{
+  return i2c_master_transmit_receive(rtc_handle, wdata,
+                                      wdata_length, rdata, rdata_length, I2C_MASTER_TIMEOUT_MS);
+}
+
+esp_err_t set_time_from_rtc(void)
+{
+  time_t now_t;
+  struct tm timeinfo;
+  char strftime_buf[64];
+  rtc_data data;
+
+  esp_err_t err = ds3231_init(0);
+  if (err != ESP_OK)
+    return err;
+  err = ds3231_get(&data);
+  if (err != ESP_OK)
+    return err;
+  unsigned int t = rtc_to_binary(&data);
+  struct timeval now = { .tv_sec = t };
+  settimeofday(&now, NULL);
+  time(&now_t);
+  localtime_r(&now_t, &timeinfo);
+  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  ESP_LOGI(TAG, "The current date/time is: %s", strftime_buf);
+  return ESP_OK;
 }
 
 int get_vbat(void)

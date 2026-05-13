@@ -254,6 +254,8 @@ static int ble_svc_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, stru
     uint8_t *response;
     MODLOG_DFLT(INFO, "Callback for read");
     uint16_t length = callback_read(conn_handle, &response);
+    if (length == 0)
+      return 0;
     return os_mbuf_append(ctxt->om, response, length) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 
   case BLE_GATT_ACCESS_OP_WRITE_CHR:

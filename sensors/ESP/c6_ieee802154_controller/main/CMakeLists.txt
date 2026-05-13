@@ -12,8 +12,12 @@ idf_component_register(
              "../../common/scd4x.c"
              "../../common/crc8.c"
              "../../common/ntp.c"
+             "../../../ARM_CLION/common_lib/rtc/rtc_ds1307.c"
+             "../../../ARM_CLION/common_lib/rtc/rtc_ds3231.c"
+             "../../../ARM_CLION/common_lib/rtc/rtc_func.c"
         INCLUDE_DIRS
              "."
              "../../common"
              "../../ieee802154"
+             "../../../ARM_CLION/common_lib/rtc"
 )

@@ -1,8 +1,8 @@
 #ifndef _BOARD_H
 #define _BOARD_H
 
-#define PIN_SCL 0
-#define PIN_SDA 1
+#define PIN_SCL 11
+#define PIN_SDA 10
 
 #define I2C_MASTER_FREQ_HZ    100000
 #define I2C_MASTER_NUM        0
