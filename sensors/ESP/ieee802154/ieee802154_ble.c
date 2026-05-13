@@ -391,6 +391,13 @@ esp_err_t ble_init(ble_callback_write _callback_write, ble_callback_read _callba
     return ret;
   }
 
+  int rc = ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
+  if (rc != 0)
+  {
+    MODLOG_DFLT(ERROR, "Failed to set preferred MTU %d \n", rc);
+    return rc;
+  }
+
   /* Initialize the NimBLE host configuration. */
   ble_hs_cfg.reset_cb = ble_spp_server_on_reset;
   ble_hs_cfg.sync_cb = ble_spp_server_on_sync;
@@ -404,7 +411,6 @@ esp_err_t ble_init(ble_callback_write _callback_write, ble_callback_read _callba
   ble_hs_cfg.sm_our_key_dist = 0;
   ble_hs_cfg.sm_their_key_dist = 0;
 
-  int rc;
   /* Register custom service */
   rc = gatt_svr_init();
   if (rc != 0)

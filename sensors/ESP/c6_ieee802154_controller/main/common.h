@@ -25,4 +25,6 @@
 
 #define NO_WIFI
 
+#define USE_SCD4X
+
 #endif
