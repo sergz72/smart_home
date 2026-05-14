@@ -95,7 +95,7 @@ internal sealed class AggregatedSensorDataItemWithCounter: IDataSaver
 
     public void Save(BinaryWriter writer)
     {
-        throw new NotImplementedException();
+        throw new InvalidOperationException("AggregatedSensorDataItemWithCounter.Save should not be called");
     }
 }
 
@@ -281,6 +281,9 @@ public interface ISmartHomeService
         var fileConfiguration = FileSmartHomeService.ReadConfiguration(configFileName);
         if (fileConfiguration.BaseFolder != "")
             return new FileSmartHomeService(fileConfiguration);
+        var btConfiguration = BluetoothSmartHomeService.ReadConfiguration(configFileName);
+        if (btConfiguration.DeviceName != "")
+            return BluetoothSmartHomeService.BuildBluetoothSmartHomeServiceAsync(btConfiguration).Result;
         throw new ArgumentException("Unknown configuration file format");
     }
 }

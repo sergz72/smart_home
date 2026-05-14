@@ -6,8 +6,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Eto.Forms" Version="2.8.3"/>
-        <PackageReference Include="ScottPlot.Eto" Version="5.1.57" />
+        <PackageReference Include="Eto.Forms" Version="2.11.0" />
+        <PackageReference Include="ScottPlot.Eto" Version="5.1.58" />
     </ItemGroup>
 
     <ItemGroup>

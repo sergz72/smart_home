@@ -13,7 +13,8 @@ public abstract class BaseSmartHomeService: ISmartHomeService
         {"lux ", "Luminosity"},
         {"pwr ", "Power"},
         {"icc ", "Current"},
-        {"vcc ", "Voltage"}
+        {"vcc ", "Supply voltage"},
+        {"vbat", "Battery voltage"}
     };
     
     protected readonly Dictionary<uint, Sensor> Sensors;
@@ -68,7 +69,10 @@ public abstract class BaseSmartHomeService: ISmartHomeService
 
     public MessageDateTime GetCurrentDateTime()
     {
-        throw new NotImplementedException();
+        var dtUtc = DateTime.UtcNow;
+        var timestamp = new DateTimeOffset(dtUtc).ToUnixTimeMilliseconds();
+        var dt = TimeZoneInfo.ConvertTimeFromUtc(dtUtc, TimeZone);
+        return new MessageDateTime(dt, timestamp);
     }
     
     public SensorDataItemWithDate BuildSensorDataItemWithDate(SensorDataItem data)
